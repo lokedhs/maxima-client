@@ -20,15 +20,56 @@
   (:layouts (default (clim:vertically ()
                        text-content))))
 
+(clim:define-presentation-type maxima-expression ()
+  :inherit-from t)
+
+(clim:define-presentation-method clim:accept ((type maxima-expression) stream (view clim:textual-view) &key)
+  (let ((s (clim:accept 'string :stream stream :view view :prompt nil :history 'string)))
+    (let ((trimmed (string-trim " " s)))
+      (if (equal trimmed "")
+          nil
+          (string-to-maxima-expr s)))))
+
+(clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
+  (let ((output-record (make-expression-output-record stream obj)))
+    (clim:with-room-for-graphics (stream)
+      (clim:stream-add-output-record stream output-record))))
+
+(clim:define-presentation-type maxima-expression-or-command
+    (&key (command-table (clim:frame-command-table clim:*application-frame*)))
+  :inherit-from t)
+
+(clim:define-presentation-method clim:accept ((type maxima-expression-or-command) stream
+				                                                  (view clim:textual-view)
+				                                                  &key)
+  (let ((command-ptype `(clim:command :command-table ,command-table)))
+    (clim:with-input-context (`(or ,command-ptype form))
+        (object type event options)
+        (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
+	  (if (member initial-char clim:*command-dispatchers*)
+	      (progn
+		(clim:read-gesture :stream stream)
+		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
+	      (clim:accept 'maxima-expression :stream stream :view view :prompt nil :history 'string)))
+      (t
+       (funcall (cdar clim:*input-context*) object type event options)))))
+
+(clim:define-presentation-translator maxima-native-expr-to-expr (maxima-native-expr maxima-expression maxima-commands)
+    (object)
+  (maxima-native-expr/expr object))
+
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (multiple-value-bind (object type)
-      (let ((clim:*command-dispatchers* '(#\;)))
+      (let ((clim:*command-dispatchers* '(#\; #\:)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'string :stream stream :prompt nil :default "" :default-type 'string)))
+          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default "" :default-type 'string)))
     (log:info "Got input: object=~s, type=~s" object type)
-    (let ((expression (string-trim " " object)))
-      (unless (equal expression "")
-        `(maxima-eval ,expression)))))
+    (cond
+      ((eq type 'maxima-expression)
+       (when object
+         `(maxima-eval ,object)))
+      ((and (listp type) (eq (car type) 'clim:command))
+       object))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -41,25 +82,23 @@
   (format stream "maxima> "))
 
 (defun maxima-client ()
-  (let ((frame (clim:make-application-frame 'maxima-main-frame)))
+  (let ((frame (clim:make-application-frame 'maxima-main-frame
+                                            :width 900
+                                            :height 600)))
     (clim:run-frame-top-level frame)))
 
-(clim:define-command (maxima-eval :name "Run command" :menu t :command-table maxima-commands)
-    ((cmd 'string :prompt "command"))
-  (log:info "eval command. form=~s" cmd)
-  (let* ((form (with-input-from-string (s (format nil "~a;~%" cmd))
-                 (maxima::dbm-read s nil nil))))
-    (assert (and (listp form)
-                 (= (length form) 3)
-                 (equal (first form) '(maxima::displayinput))
-                 (null (second form))))
-    #-nil
-    (let* ((result (maxima::toplevel-macsyma-eval (third form)))
-           (output-record (make-expression-output-record *standard-output* result)))
-      (clim:with-room-for-graphics (*standard-output*)
-        (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
-          (clim:stream-add-output-record *standard-output* output-record))))
-    #+nil
-    (let* ((result (maxima::toplevel-macsyma-eval (third form)))
-           (expr (make-instance 'maxima-native-expr :expr result)))
-      (write expr :stream *standard-output*))))
+(defun string-to-maxima-expr (string)
+  (with-input-from-string (s (format nil "~a;~%" string))
+    (let ((form (maxima::dbm-read s nil nil)))
+      (assert (and (listp form)
+                   (= (length form) 3)
+                   (equal (first form) '(maxima::displayinput))
+                   (null (second form))))
+      (third form))))
+
+(clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
+    ((cmd 'maxima-expression :prompt "expression"))
+  (let* ((result (maxima::meval* cmd)))
+    (let ((obj (make-instance 'maxima-native-expr :expr result)))
+      (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+green+)
+        (present-to-stream obj *standard-output*)))))

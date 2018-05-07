@@ -12,4 +12,5 @@
                         :components ((:file "package")
                                      (:file "util")
                                      (:file "renderer")
-                                     (:file "cmdline")))))
+                                     (:file "cmdline")
+                                     (:file "plot2d")))))

@@ -388,6 +388,9 @@
         output-record))))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view t) &key)
+  (log:info "In PRESENT. Transform = ~s" (clim:sheet-transformation *standard-output*))
   (let* ((expr (maxima-native-expr/expr obj))
          (output-record (make-expression-output-record stream expr)))
-    (clim:stream-add-output-record stream output-record)))
+    (clim:with-room-for-graphics (stream)
+      (clim:with-identity-transformation (stream)
+        (clim:stream-add-output-record stream output-record)))))
