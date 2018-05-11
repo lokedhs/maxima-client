@@ -261,8 +261,6 @@
             ;; Draw X-label
             (draw-centered-text stream x-label left-margin (+ left-margin w) (+ h 16))
             ;; Draw y-label, if it exists
-            ;; The Y-label is disabled because text transformations are still a mess
-            #+nil
             (when y-label
               (multiple-value-bind (width)
                   (clim:text-size stream y-label)
