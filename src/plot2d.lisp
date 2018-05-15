@@ -280,7 +280,7 @@
           (clim:with-room-for-graphics (stream)
             (clim:with-identity-transformation (stream)
               (clim:draw-rectangle* stream left-margin 0 (+ left-margin w) h :filled nil)
-              ;; If the zero-axis is vibile, draw it
+              ;; If the zero-axis is visible, draw it
               (when (< min-y 0 max-y)
                 (clim:draw-line* stream left-margin (y-to-pos 0) (+ left-margin w) (y-to-pos 0)
                                  :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
