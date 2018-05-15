@@ -2,6 +2,7 @@
 
 (defvar *font-roman* '("Latin Modern Math" "Regular"))
 (defvar *font-italic* '("Noto Serif" "Italic"))
+(defvar *font-fixed* '("Source Code Pro" "Regular"))
 (defvar *draw-boxes* nil)
 
 (defvar *aligned-rendering-pos*)
@@ -47,6 +48,12 @@
 (defmacro with-italic-text-style ((stream) &body body)
   `(clim:with-text-style (,stream (clim:make-text-style (first *font-italic*)
                                                         (second *font-italic*)
+                                                        *font-size*))
+     ,@body))
+
+(defmacro with-fix-text-style ((stream) &body body)
+  `(clim:with-text-style (,stream (clim:make-text-style (first *font-fixed*)
+                                                        (second *font-fixed*)
                                                         *font-size*))
      ,@body))
 
@@ -370,6 +377,10 @@
     (aligned-spacing 5)
     (render-aligned () (render-formatted stream "]"))))
 
+(defun render-string (stream string)
+  (with-fix-text-style (stream)
+    (render-formatted stream "~s" string)))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -391,6 +402,7 @@
       (etypecase fixed
         (number (render-formatted stream "~a" fixed))
         (symbol (render-symbol stream fixed))
+        (string (render-string stream fixed))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
                   (let ((output-record (clim:with-output-to-output-record (stream)
