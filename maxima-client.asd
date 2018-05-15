@@ -5,6 +5,7 @@
   :description "Maxima CLIM client"
   :depends-on (:alexandria
                :mcclim
+               :trivial-gray-streams
                :log4cl
                :maxima)
   :components ((:module src

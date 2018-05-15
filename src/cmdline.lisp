@@ -98,7 +98,17 @@
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-expression :prompt "expression"))
-  (let* ((result (maxima::meval* cmd)))
-    (let ((obj (make-instance 'maxima-native-expr :expr result)))
-      (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+green+)
-        (present-to-stream obj *standard-output*)))))
+  (let ((maxima-stream (make-instance 'maxima-output)))
+    (let ((eval-ret (catch 'maxima::macsyma-quit
+                      (let ((result (let ((*standard-output* maxima-stream))
+                                      (maxima::meval* cmd))))
+                        (log:info "Result: ~s" result)
+                        (let ((obj (make-instance 'maxima-native-expr :expr result)))
+                          (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
+                            (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
+                              (present-to-stream obj *standard-output*))))))))
+      (when (eq eval-ret 'maxima::maxima-error)
+        (present-to-stream (make-instance 'maxima-error
+                                          :cmd cmd
+                                          :content (maxima-stream-text maxima-stream))
+                           *standard-output*)))))

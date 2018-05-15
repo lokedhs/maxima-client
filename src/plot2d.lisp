@@ -246,7 +246,8 @@
          (num-decimals (max (- (floor (log d 10))) 0)))
     (log:info "graph-min=~s graph-max=~s d=~s min=~s max=~s" graph-min graph-max d min max)
     (loop
-      for x from graph-min by d
+      ;; The tick marks starts at graph-min, but this value may be less than min
+      for x from (+ graph-min (* d (ceiling (/ (- min graph-min) d)))) by d
       while (and
              (<= x max)
              (<= x (+ graph-max (* d 0.5))))

@@ -80,6 +80,9 @@
   `(setf *aligned-rendering-pos* (%aligned-render-and-move *aligned-rendering-stream* *aligned-rendering-pos*
                                                            (lambda () ,@body))))
 
+(defun aligned-spacing (spacing)
+  (incf *aligned-rendering-pos* spacing))
+
 (defun render-aligned-string (fmt &rest args)
   (render-aligned ()
     (clim:draw-text* *aligned-rendering-stream* (apply #'format nil fmt args) 0 0)))
@@ -156,15 +159,17 @@
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (let ((*readtable* *invert-readtable*)) (princ-to-string sym))))
-         (if (eql (aref n 0) #\$)
+         (if (or (eql (aref n 0) #\$)
+                 (eql (aref n 0) #\%))
              (with-italic-text-style (stream)
                (render-formatted stream "~a" (subseq n 1)))
              (render-formatted stream "~s" sym))))))
 
-(defun render-negation (stream expr)
+(defun render-negation (stream expr spacing)
   (log:info "Render negation: ~s" expr)
   (with-aligned-rendering (stream)
-    (render-aligned-string "-")
+    (render-aligned-string "~c" #\MINUS_SIGN)
+    (aligned-spacing spacing)
     (let ((*lop* 'maxima::mminus))
       (render-aligned () (render-maxima-expression stream expr)))))
 
@@ -172,14 +177,17 @@
   (log:info "render plus: ~s" exprs)
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
+      (unless first
+        (aligned-spacing 2))
       (cond ((and (listp expr)
                   (alexandria:length= (length expr) 2)
                   (listp (car expr))
                   (eq (caar expr) 'maxima::mminus))
-             (render-aligned () (render-negation stream (second expr))))
+             (render-aligned () (render-negation stream (second expr) 2)))
             (t
              (unless first
-               (render-aligned-string "+"))
+               (render-aligned-string "+")
+               (aligned-spacing 2))
              (render-aligned () (render-maxima-expression stream expr)))))))
 
 (defun render-times (stream exprs)
@@ -349,14 +357,27 @@
                           :line-thickness 2)
         (clim:stream-add-output-record stream exp)))))
 
+(defun render-mlist (stream exprs)
+  (with-aligned-rendering (stream)
+    (render-aligned () (render-formatted stream "["))
+    (aligned-spacing 5)
+    (loop
+      for expr in exprs
+      for first = t then nil
+      unless first
+        do (render-aligned-string ", ")
+      do (render-aligned () (render-maxima-expression stream expr)))
+    (aligned-spacing 5)
+    (render-aligned () (render-formatted stream "]"))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
-             (log:info "checking fixed = ~s" fixed)
              (case (caar fixed)
+               (maxima::mlist (render-mlist stream (cdr fixed)))
                (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
                (maxima::rat (render-quotient stream (second fixed) (third fixed)))
                (maxima::mplus (render-plus stream (cdr fixed)))
-               (maxima::mminus (render-negation stream (second fixed)))
+               (maxima::mminus (render-negation stream (second fixed) 2))
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
@@ -388,7 +409,6 @@
         output-record))))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view t) &key)
-  (log:info "In PRESENT. Transform = ~s" (clim:sheet-transformation *standard-output*))
   (let* ((expr (maxima-native-expr/expr obj))
          (output-record (make-expression-output-record stream expr)))
     (clim:with-room-for-graphics (stream)
