@@ -354,15 +354,18 @@
                (let ((*lop* 'maxima::mparen))
                  (render-maxima-expression stream expr)))))
     (dimension-bind (exp :height height :x x :y y :bottom bottom :right right)
+      (log:info "x=~s" x)
       (let* ((angle 0.2)
              (hg 0.4)
              (hg-angle 0.4)
-             (hg-height (* height hg)))
-        (clim:draw-design stream (clim:make-polyline* (list (- x (* height angle) (* hg-height hg-angle)) (- bottom hg-height)
-                                                            (- x (* height angle)) bottom
-                                                            x y
-                                                            right y))
+             (hg-height (* height hg))
+             (x-offset (+ (* height angle) (* hg-height hg-angle))))
+        (clim:draw-design stream (clim:make-polyline* (list x (- bottom hg-height)
+                                                            (+ x (* hg-height hg-angle)) bottom
+                                                            (+ x x-offset) y
+                                                            (+ right x-offset) y))
                           :line-thickness 2)
+        (move-rec exp x-offset 0)
         (clim:stream-add-output-record stream exp)))))
 
 (defun render-mlist (stream exprs)
