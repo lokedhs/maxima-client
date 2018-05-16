@@ -108,14 +108,14 @@
                             (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
                               (present-to-stream obj *standard-output*))))))))
       (let ((content (maxima-stream-text maxima-stream)))
-       (if (eq eval-ret 'maxima::maxima-error)
-           (present-to-stream (make-instance 'maxima-error
-                                             :cmd cmd
-                                             :content content)
-                              *standard-output*)
-           ;; ELSE: Normal evaluation, log the output if there was any
-           (when (plusp (length content))
-             (log:info "Output from command: ~s" content)))))))
+        (if (eq eval-ret 'maxima::maxima-error)
+            (present-to-stream (make-instance 'maxima-error
+                                              :cmd cmd
+                                              :content content)
+                               *standard-output*)
+            ;; ELSE: Normal evaluation, log the output if there was any
+            (when (plusp (length content))
+              (log:info "Output from command: ~s" content)))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()
