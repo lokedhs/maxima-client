@@ -20,6 +20,21 @@
   (:layouts (default (clim:vertically ()
                        text-content))))
 
+(defclass labelled-expression ()
+  ((tag :initarg :tag
+          :reader labelled-expression/tag)
+   (expr  :initarg :expr
+          :reader labelled-expression/expr)))
+
+(clim:define-presentation-method clim:present (obj (type labelled-expression) stream (view t) &key)
+  (let* ((name (format-sym-name (labelled-expression/tag obj)))
+         (s (if (and (plusp (length name))
+                     (eql (aref name 0) #\$))
+                (subseq name 1)
+                name)))
+    (format stream "(~a)" s))
+  (present-to-stream (labelled-expression/expr obj) stream))
+
 (clim:define-presentation-type maxima-expression ()
   :inherit-from t)
 
@@ -60,7 +75,7 @@
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (multiple-value-bind (object type)
-      (let ((clim:*command-dispatchers* '(#\; #\:)))
+      (let ((clim:*command-dispatchers* '(#\:)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
           (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default "" :default-type 'string)))
     (log:info "Got input: object=~s, type=~s" object type)
@@ -79,7 +94,13 @@
 
 (defun print-listener-prompt (stream frame)
   (declare (ignore frame))
-  (format stream "maxima> "))
+  ;; It would be more logical to put this in the ACCEPT method, but by
+  ;; then the prompt has already been printed, so we'll update it here
+  ;; instead.
+  (when (or (not (maxima::checklabel maxima::$inchar))
+	    (not (maxima::checklabel maxima::$outchar)))
+    (incf maxima::$linenum))
+  (format stream "~a " (maxima::main-prompt)))
 
 (defun maxima-client ()
   (let ((frame (clim:make-application-frame 'maxima-main-frame
@@ -98,24 +119,31 @@
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-expression :prompt "expression"))
-  (let ((maxima-stream (make-instance 'maxima-output)))
-    (let ((eval-ret (catch 'maxima::macsyma-quit
-                      (let ((result (let ((*standard-output* maxima-stream))
-                                      (maxima::meval* cmd))))
-                        (log:info "Result: ~s" result)
-                        (let ((obj (make-instance 'maxima-native-expr :expr result)))
-                          (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
-                            (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
-                              (present-to-stream obj *standard-output*))))))))
+  (let ((c-tag (maxima::makelabel maxima::$inchar)))
+    (setf (symbol-value c-tag) cmd)
+    (let* ((maxima-stream (make-instance 'maxima-output))
+           (eval-ret (catch 'maxima::macsyma-quit
+                       (let ((result (let ((*standard-output* maxima-stream))
+                                       (maxima::meval* cmd))))
+                         (log:info "Result: ~s" result)
+                         (let ((d-tag (maxima::makelabel maxima::$outchar)))
+                           (setf (symbol-value d-tag) result)
+                           (let ((obj (make-instance 'maxima-native-expr :expr result)))
+                             (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
+                               (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
+                                 (present-to-stream (make-instance 'labelled-expression
+                                                                   :tag d-tag
+                                                                   :expr obj)
+                                                    *standard-output*)))))))))
       (let ((content (maxima-stream-text maxima-stream)))
-        (if (eq eval-ret 'maxima::maxima-error)
-            (present-to-stream (make-instance 'maxima-error
-                                              :cmd cmd
-                                              :content content)
-                               *standard-output*)
-            ;; ELSE: Normal evaluation, log the output if there was any
-            (when (plusp (length content))
-              (log:info "Output from command: ~s" content)))))))
+        (cond ((eq eval-ret 'maxima::maxima-error)
+               (present-to-stream (make-instance 'maxima-error
+                                                 :cmd cmd
+                                                 :content content)
+                                  *standard-output*))
+              (t
+               (when (plusp (length content))
+                 (log:info "Output from command: ~s" content))))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()

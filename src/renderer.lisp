@@ -15,6 +15,10 @@
                                    (setf (readtable-case readtable) :invert)
                                    readtable))
 
+(defun format-sym-name (sym) 
+  (let ((*readtable* *invert-readtable*))
+    (princ-to-string sym)))
+
 (defclass maxima-native-expr ()
   ((expr :initarg :expr
          :reader maxima-native-expr/expr)))
@@ -166,7 +170,7 @@
   (case sym
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))
-    (t (let ((n (let ((*readtable* *invert-readtable*)) (princ-to-string sym))))
+    (t (let ((n (format-sym-name sym)))
          (if (or (eql (aref n 0) #\$)
                  (eql (aref n 0) #\%))
              (with-font (stream (if roman-font *font-roman* *font-italic*))
