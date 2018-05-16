@@ -39,16 +39,17 @@
           (clim:draw-rectangle* stream x y (1- right) (1- bottom) :filled nil)))
       rec))
 
+(defmacro with-font ((stream font) &body body)
+  (alexandria:once-only (stream font)
+    `(clim:with-text-style (,stream (clim:make-text-style (first ,font) (second ,font) *font-size*))
+       ,@body)))
+
 (defmacro with-roman-text-style ((stream) &body body)
-  `(clim:with-text-style (,stream (clim:make-text-style (first *font-roman*)
-                                                        (second *font-roman*)
-                                                        *font-size*))
+  `(with-font (,stream *font-roman*)
      ,@body))
 
 (defmacro with-italic-text-style ((stream) &body body)
-  `(clim:with-text-style (,stream (clim:make-text-style (first *font-italic*)
-                                                        (second *font-italic*)
-                                                        *font-size*))
+  `(with-font (,stream *font-italic*)
      ,@body))
 
 (defmacro with-fix-text-style ((stream) &body body)
@@ -161,14 +162,14 @@
           (clim:stream-add-output-record stream bottom)
           (clim:draw-line* stream 0 (- y centre) max-width (- y centre)))))))
 
-(defun render-symbol (stream sym)
+(defun render-symbol (stream sym &key roman-font)
   (case sym
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (let ((*readtable* *invert-readtable*)) (princ-to-string sym))))
          (if (or (eql (aref n 0) #\$)
                  (eql (aref n 0) #\%))
-             (with-italic-text-style (stream)
+             (with-font (stream (if roman-font *font-roman* *font-italic*))
                (render-formatted stream "~a" (subseq n 1)))
              (render-formatted stream "~s" sym))))))
 
@@ -259,7 +260,7 @@
 
 (defun render-function (stream name exprs)
   (with-aligned-rendering (stream)
-    (render-aligned () (render-symbol stream (car name)))
+    (render-aligned () (render-symbol stream (car name) :roman-font t))
     (let ((params (clim:with-output-to-output-record (stream)
                     (with-aligned-rendering (stream)
                       (loop
