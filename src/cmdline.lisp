@@ -42,8 +42,48 @@
 (clim:define-presentation-type maxima-expression ()
   :inherit-from t)
 
+(clim:define-presentation-type plain-text ()
+  :inherit-from 'string)
+
+(defun read-plain-text (stream
+                        &key
+                          (input-wait-handler clim:*input-wait-handler*)
+		          (pointer-button-press-handler clim:*pointer-button-press-handler*)
+		          click-only)
+  (declare (ignore click-only))
+  (let ((result (make-array 1
+			    :adjustable t
+			    :fill-pointer 0
+			    :element-type 'character)))
+    (loop for first-char = t then nil
+	  for gesture = (clim:read-gesture
+			 :stream stream
+			 :input-wait-handler input-wait-handler
+			 :pointer-button-press-handler
+			 pointer-button-press-handler)
+	  do (cond ((or (null gesture)
+			(clim:activation-gesture-p gesture)
+			(typep gesture 'clim:pointer-button-event)
+			(clim:delimiter-gesture-p gesture))
+		    (loop-finish))
+		   ((characterp gesture)
+		    (vector-push-extend gesture result))
+		   (t nil))
+	  finally (progn
+		    (when gesture
+		      (clim:unread-gesture gesture :stream stream))
+		    (return (subseq result 0))))))
+
+(clim:define-presentation-method clim:accept ((type plain-text) stream (view clim:textual-view)
+                                                                &key (default nil defaultp)
+                                                                (default-type type))
+  (let ((result (read-plain-text stream)))
+    (cond ((and (zerop (length result)) defaultp)
+           (values default default-type))
+          (t (values result type)))))
+
 (clim:define-presentation-method clim:accept ((type maxima-expression) stream (view clim:textual-view) &key)
-  (let ((s (clim:accept 'string :stream stream :view view :prompt nil :history 'string)))
+  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil :history 'string)))
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           nil
@@ -69,7 +109,7 @@
 	      (progn
 		(clim:read-gesture :stream stream)
 		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (clim:accept 'maxima-expression :stream stream :view view :prompt nil :history 'string)))
+	      (clim:accept 'maxima-expression :stream stream :view view :prompt nil :history 'maxima-expression)))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
