@@ -347,6 +347,6 @@
                                 (setq curr nil))
                          else
                            do (progn
-                                (push (x-to-pos x) curr)
-                                (push (y-to-pos y) curr))
+                                (push (round (x-to-pos x)) curr)
+                                (push (round (y-to-pos y)) curr))
                          finally (draw-list))))))))))))
