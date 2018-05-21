@@ -93,7 +93,7 @@
                                                            (lambda () ,@body))))
 
 (defun aligned-spacing (spacing)
-  (incf *aligned-rendering-pos* spacing))
+  (incf *aligned-rendering-pos* (* (char-width *aligned-rendering-stream*) spacing)))
 
 (defun render-aligned-string (fmt &rest args)
   (render-aligned ()
@@ -135,9 +135,15 @@
 
 (defun char-height (stream)
   (multiple-value-bind (width height)
-      (clim:text-size stream "A")
+      (clim:text-size stream "M")
     (declare (ignore width))
     height))
+
+(defun char-width (stream)
+  (multiple-value-bind (width height)
+      (clim:text-size stream "M")
+    (declare (ignore height))
+    width))
 
 (defun char-descent (stream char)
   (multiple-value-bind (width height x y baseline)
@@ -190,16 +196,16 @@
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
       (unless first
-        (aligned-spacing 2))
+        (aligned-spacing 0.2))
       (cond ((and (listp expr)
                   (alexandria:length= (length expr) 2)
                   (listp (car expr))
                   (eq (caar expr) 'maxima::mminus))
-             (render-aligned () (render-negation stream (second expr) 2)))
+             (render-aligned () (render-negation stream (second expr) 0.2)))
             (t
              (unless first
                (render-aligned-string "+")
-               (aligned-spacing 2))
+               (aligned-spacing 0.2))
              (render-aligned () (render-maxima-expression stream expr)))))))
 
 (defun render-times (stream exprs)
@@ -330,6 +336,7 @@
             (when sym2
               (let ((variable (clim:with-output-to-output-record (stream)
                                 (with-aligned-rendering (stream)
+                                  (aligned-spacing 0.5)
                                   (render-aligned () (with-italic-text-style (stream)
                                                        (render-formatted stream "d")))
                                   (render-aligned () (render-maxima-expression stream sym2))))))
@@ -375,14 +382,14 @@
 (defun render-mlist (stream exprs)
   (with-aligned-rendering (stream)
     (render-aligned () (render-formatted stream "["))
-    (aligned-spacing 5)
+    (aligned-spacing 0.5)
     (loop
       for expr in exprs
       for first = t then nil
       unless first
         do (render-aligned-string ", ")
       do (render-aligned () (render-maxima-expression stream expr)))
-    (aligned-spacing 5)
+    (aligned-spacing 0.5)
     (render-aligned () (render-formatted stream "]"))))
 
 (defun render-string (stream string)
@@ -396,7 +403,7 @@
                (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
                (maxima::rat (render-quotient stream (second fixed) (third fixed)))
                (maxima::mplus (render-plus stream (cdr fixed)))
-               (maxima::mminus (render-negation stream (second fixed) 2))
+               (maxima::mminus (render-negation stream (second fixed) 0.2))
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
