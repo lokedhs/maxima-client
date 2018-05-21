@@ -51,28 +51,26 @@
 		          (pointer-button-press-handler clim:*pointer-button-press-handler*)
 		          click-only)
   (declare (ignore click-only))
-  (let ((result (make-array 1
-			    :adjustable t
-			    :fill-pointer 0
-			    :element-type 'character)))
-    (loop for first-char = t then nil
-	  for gesture = (clim:read-gesture
-			 :stream stream
-			 :input-wait-handler input-wait-handler
-			 :pointer-button-press-handler
-			 pointer-button-press-handler)
-	  do (cond ((or (null gesture)
-			(clim:activation-gesture-p gesture)
-			(typep gesture 'clim:pointer-button-event)
-			(clim:delimiter-gesture-p gesture))
-		    (loop-finish))
-		   ((characterp gesture)
-		    (vector-push-extend gesture result))
-		   (t nil))
-	  finally (progn
-		    (when gesture
-		      (clim:unread-gesture gesture :stream stream))
-		    (return (subseq result 0))))))
+  (let ((result (make-array 1 :adjustable t :fill-pointer 0 :element-type 'character)))
+    (loop
+      for first-char = t then nil
+      for gesture = (clim:read-gesture :stream stream
+		                       :input-wait-handler input-wait-handler
+		                       :pointer-button-press-handler
+		                       pointer-button-press-handler)
+      do (log:info "got gesture: ~s" gesture)
+      do (cond ((or (null gesture)
+		    (clim:activation-gesture-p gesture)
+		    (typep gesture 'clim:pointer-button-event)
+		    (clim:delimiter-gesture-p gesture))
+		(loop-finish))
+	       ((characterp gesture)
+		(vector-push-extend gesture result))
+	       (t nil))
+      finally (progn
+		(when gesture
+		  (clim:unread-gesture gesture :stream stream))
+		(return (subseq result 0))))))
 
 (clim:define-presentation-method clim:accept ((type plain-text) stream (view clim:textual-view)
                                                                 &key (default nil defaultp)
