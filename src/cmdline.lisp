@@ -163,9 +163,10 @@
     ((cmd 'maxima-expression :prompt "expression"))
   (let ((c-tag (maxima::makelabel maxima::$inchar)))
     (setf (symbol-value c-tag) cmd)
-    (let* ((maxima-stream (make-instance 'maxima-output))
+    (let* ((maxima-stream (make-instance 'maxima-io :clim-stream *standard-output*))
            (eval-ret (catch 'maxima::macsyma-quit
-                       (let ((result (let ((*standard-output* maxima-stream))
+                       (let ((result (let ((*standard-output* maxima-stream)
+                                           (*standard-input* maxima-stream))
                                        (maxima::meval* cmd))))
                          (log:info "Result: ~s" result)
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
