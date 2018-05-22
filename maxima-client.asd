@@ -7,6 +7,7 @@
                :mcclim
                :trivial-gray-streams
                :log4cl
+               :lambda-fiddle
                :maxima)
   :components ((:module src
                         :serial t
@@ -14,5 +15,6 @@
                                      (:file "util")
                                      (:file "renderer")
                                      (:file "output")
+                                     (:file "queries")
                                      (:file "cmdline")
                                      (:file "plot2d")))))

@@ -58,7 +58,6 @@
 		                       :input-wait-handler input-wait-handler
 		                       :pointer-button-press-handler
 		                       pointer-button-press-handler)
-      do (log:info "got gesture: ~s" gesture)
       do (cond ((or (null gesture)
 		    (clim:activation-gesture-p gesture)
 		    (typep gesture 'clim:pointer-button-event)
@@ -81,11 +80,18 @@
           (t (values result type)))))
 
 (clim:define-presentation-method clim:accept ((type maxima-expression) stream (view clim:textual-view) &key)
-  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil :history 'string)))
+  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil)))
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           nil
           (string-to-maxima-expr s)))))
+
+(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
+  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil)))
+    (let ((trimmed (string-trim " " s)))
+      (if (equal trimmed "")
+          nil
+          (make-instance 'maxima-native-expr :src trimmed :expr (string-to-maxima-expr s))))))
 
 (clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
   (let ((output-record (make-expression-output-record stream obj)))
@@ -100,14 +106,14 @@
 				                                                  (view clim:textual-view)
 				                                                  &key)
   (let ((command-ptype `(clim:command :command-table ,command-table)))
-    (clim:with-input-context (`(or ,command-ptype form))
+    (clim:with-input-context (`(or ,command-ptype maxima-native-expr))
         (object type event options)
         (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
 	  (if (member initial-char clim:*command-dispatchers*)
 	      (progn
 		(clim:read-gesture :stream stream)
-		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (clim:accept 'maxima-expression :stream stream :view view :prompt nil :history 'maxima-expression)))
+		(clim:accept command-ptype :stream stream :view view :prompt nil :history nil))
+	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history nil)))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
@@ -119,12 +125,15 @@
   (multiple-value-bind (object type)
       (let ((clim:*command-dispatchers* '(#\:)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default "" :default-type 'string)))
+          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default "" :default-type 'maxima-native-expr)))
     (log:info "Got input: object=~s, type=~s" object type)
     (cond
+      ((null object)
+       nil)
       ((eq type 'maxima-expression)
-       (when object
-         `(maxima-eval ,object)))
+       `(maxima-eval ,object))
+      ((eq type 'maxima-native-expr)
+       `(maxima-eval ,(maxima-native-expr/expr object)))
       ((and (listp type) (eq (car type) 'clim:command))
        object))))
 
@@ -150,22 +159,15 @@
                                             :height 600)))
     (clim:run-frame-top-level frame)))
 
-(defun string-to-maxima-expr (string)
-  (with-input-from-string (s (format nil "~a;~%" string))
-    (let ((form (maxima::dbm-read s nil nil)))
-      (assert (and (listp form)
-                   (= (length form) 3)
-                   (equal (first form) '(maxima::displayinput))
-                   (null (second form))))
-      (third form))))
-
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-expression :prompt "expression"))
   (let ((c-tag (maxima::makelabel maxima::$inchar)))
     (setf (symbol-value c-tag) cmd)
     (let* ((maxima-stream (make-instance 'maxima-io :clim-stream *standard-output*))
            (eval-ret (catch 'maxima::macsyma-quit
-                       (let ((result (let ((*standard-output* maxima-stream)
+                       (let ((result (let ((*use-clim-retrieve* t)
+                                           (*current-stream* *standard-output*)
+                                           (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
                                        (maxima::meval* cmd))))
                          (log:info "Result: ~s" result)

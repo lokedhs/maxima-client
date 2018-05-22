@@ -20,8 +20,19 @@
     (princ-to-string sym)))
 
 (defclass maxima-native-expr ()
-  ((expr :initarg :expr
+  ((src :initarg :src
+        :initform nil)
+   (expr :initarg :expr
          :reader maxima-native-expr/expr)))
+
+(defmethod print-object ((obj maxima-native-expr) stream)
+  (print-unreadable-object (obj stream :type t)
+    (with-slots (src expr) obj
+      (format stream "SRC ~s EXPR ~s" src expr))))
+
+(defun maxima-native-expr/src (expr)
+  (or (slot-value expr 'src)
+      (maxima-expr-as-string (maxima-native-expr/expr expr))))
 
 (defun set-rec-position (output-record x y)
   (dimension-bind (output-record :x old-x :y old-y)
@@ -178,7 +189,6 @@
              (render-formatted stream "~s" sym))))))
 
 (defun render-negation (stream expr spacing)
-  (log:info "Render negation: ~s" expr)
   (with-aligned-rendering (stream)
     (render-aligned-string "~c" #\MINUS_SIGN)
     (aligned-spacing spacing)
@@ -186,7 +196,6 @@
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun render-plus (stream exprs)
-  (log:info "render plus: ~s" exprs)
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
       (unless first
@@ -358,7 +367,6 @@
                (let ((*lop* 'maxima::mparen))
                  (render-maxima-expression stream expr)))))
     (dimension-bind (exp :height height :x x :y y :bottom bottom :right right)
-      (log:info "x=~s" x)
       (let* ((angle 0.2)
              (hg 0.4)
              (hg-angle 0.4)
@@ -418,15 +426,20 @@
                     (wrap-with-parens stream output-record))
                   (render-inner fixed)))))))
 
+(defmacro make-rendered-output-record ((stream) &body body)
+  (alexandria:with-gensyms (output-record)
+    `(let ((*font-size* 14))
+       (with-roman-text-style (stream)
+         (let ((,output-record (clim:with-output-to-output-record (,stream)
+                                 (with-paren-op
+                                   ,@body))))
+           (setf (clim:output-record-position ,output-record) (values 0 0))
+           ,output-record)))))
+
 (defun make-expression-output-record (stream expr)
   (log:info "Making output record for expr: ~s" expr)
-  (let ((*font-size* 14))
-    (with-roman-text-style (stream)
-      (let ((output-record (clim:with-output-to-output-record (stream)
-                             (with-paren-op
-                               (render-maxima-expression stream expr)))))
-        (setf (clim:output-record-position output-record) (values 0 0))
-        output-record))))
+  (make-rendered-output-record (stream)
+    (render-maxima-expression stream expr)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view t) &key)
   (let* ((expr (maxima-native-expr/expr obj))

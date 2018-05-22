@@ -44,3 +44,19 @@
                      ,@(if height-sym `((,height-sym ,height))))
                  ,(make-position-form)))
             (make-position-form))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Maxima utils
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun string-to-maxima-expr (string)
+  (with-input-from-string (s (format nil "~a;~%" string))
+    (let ((form (maxima::dbm-read s nil nil)))
+      (assert (and (listp form)
+                   (= (length form) 3)
+                   (equal (first form) '(maxima::displayinput))
+                   (null (second form))))
+      (third form))))
+
+(defun maxima-expr-as-string (expr)
+  (coerce (maxima::mstring expr) 'string))
