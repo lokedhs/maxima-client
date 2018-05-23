@@ -34,7 +34,7 @@
                 name)))
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-y :center)
+        (clim:formatting-cell (stream :align-y :center :min-width 75)
           (format stream "(~a)" s))
         (clim:formatting-cell (stream :align-y :center)
           (present-to-stream (labelled-expression/expr obj) stream))))))
