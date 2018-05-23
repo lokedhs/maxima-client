@@ -45,6 +45,8 @@
 (clim:define-presentation-type plain-text ()
   :inherit-from 'string)
 
+(clim:define-presentation-type maxima-empty-input ())
+
 (defun read-plain-text (stream
                         &key
                           (input-wait-handler clim:*input-wait-handler*)
@@ -80,14 +82,14 @@
           (t (values result type)))))
 
 (clim:define-presentation-method clim:accept ((type maxima-expression) stream (view clim:textual-view) &key)
-  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil)))
+  (let ((s (read-plain-text stream)))
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           nil
           (string-to-maxima-expr s)))))
 
 (clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
-  (let ((s (clim:accept 'plain-text :stream stream :view view :prompt nil)))
+  (let ((s (read-plain-text stream)))
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           nil
@@ -102,9 +104,29 @@
     (&key (command-table (clim:frame-command-table clim:*application-frame*)))
   :inherit-from t)
 
-(clim:define-presentation-method clim:accept ((type maxima-expression-or-command) stream
-				                                                  (view clim:textual-view)
-				                                                  &key)
+;;; As an alternative to the below method, the it is possible to create a presentation method
+;;; specialised on string-stream that creates a plain-text representation of an expression
+#+nil
+(clim:define-presentation-method clim:present (obj (type maxima-native-expr) (stream string-stream) (view t) &key)
+  (let ((expr (maxima-native-expr/expr obj)))
+    (format stream "~a" (maxima-expr-as-string expr))))
+
+(defmethod drei::presentation-replace-input ((stream drei::drei-input-editing-mixin) object
+                                             (type (eql 'maxima-native-expr)) view
+                                             &rest args
+                                             &key
+                                               (buffer-start (drei::input-position stream))
+                                               rescan
+                                               query-identifier
+                                               (for-context-type type))
+  (declare (ignore query-identifier rescan for-context-type buffer-start))
+  (climi::with-keywords-removed (args (:type :view :query-identifier :for-context-type))
+    (apply #'clim:replace-input stream (maxima-native-expr/src object) args)))
+
+(clim:define-presentation-method clim:accept ((type maxima-expression-or-command)
+                                              stream
+				              (view clim:textual-view)
+				              &key)
   (let ((command-ptype `(clim:command :command-table ,command-table)))
     (clim:with-input-context (`(or ,command-ptype maxima-native-expr))
         (object type event options)
@@ -112,8 +134,8 @@
 	  (if (member initial-char clim:*command-dispatchers*)
 	      (progn
 		(clim:read-gesture :stream stream)
-		(clim:accept command-ptype :stream stream :view view :prompt nil :history nil))
-	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history nil)))
+		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
+	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history 'maxima-native-expr)))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
@@ -125,11 +147,11 @@
   (multiple-value-bind (object type)
       (let ((clim:*command-dispatchers* '(#\:)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default "" :default-type 'maxima-native-expr)))
+          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default nil :default-type 'maxima-empty-input)))
     (log:info "Got input: object=~s, type=~s" object type)
     (cond
       ((null object)
-       nil)
+       `(maxima-eval (values)))
       ((eq type 'maxima-expression)
        `(maxima-eval ,object))
       ((eq type 'maxima-native-expr)
