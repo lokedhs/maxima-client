@@ -45,6 +45,9 @@
                  ,(make-position-form)))
             (make-position-form))))))
 
+(defun clamp (n min max)
+  (min (max n min) max))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

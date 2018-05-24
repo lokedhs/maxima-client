@@ -19,7 +19,11 @@
                 :accessor standard-plot/options)
    (data        :initarg :data
                 :initform nil
-                :accessor standard-plot/data)))
+                :accessor standard-plot/data)
+   (max-y       :initarg :max-y
+                :reader standard-plot/max-y)
+   (min-y       :initarg :min-y
+                :reader standard-plot/min-y)))
 
 (defun recompute-plot (plot)
   (let ((fun (standard-plot/fun plot))
@@ -83,12 +87,13 @@
                    (setf (getf options :ylabel) "y"))
                   (t
                    (setq label (coerce (maxima::mstring v) 'string))
-                   (if (< (length label) 80)
-                       (setf (getf options :ylabel) label))))))
+                   (when (< (length label) 80)
+                     (setf (getf options :ylabel) label))))))
         ;;
         ;; Parse the given options into the options list
         (setq options (maxima::plot-options-parser extra-options options))
-        (when (getf options :y) (setf (getf options :ybounds) (getf options :y)))
+        (when (getf options :y)
+          (setf (getf options :ybounds) (getf options :y)))
         ;;
         ;; Remove axes labels when no box is used in gnuplot
         (when (and (member :box options) (not (getf options :box))
@@ -131,12 +136,14 @@
           (setf (standard-plot/options plot) options)
           (setf (standard-plot/data plot) points-lists))))))
 
-(defun plot2d-impl (fun variable lower-bound upper-bound)
+(defun plot2d-impl (fun variable lower-bound upper-bound max-y min-y)
   (let ((p (make-instance 'standard-plot
                           :fun fun
                           :variable variable
                           :lower-bound lower-bound
-                          :upper-bound upper-bound)))
+                          :upper-bound upper-bound
+                          :max-y max-y
+                          :min-y min-y)))
     (recompute-plot p)
     p))
 
@@ -151,12 +158,16 @@
     ((expression 'maxima-expression :prompt "Expression")
      (variable 'maxima-expression :prompt "Variable")
      (lower-bound 'maxima-expression :prompt "Lower bound")
-     (upper-bound 'maxima-expression :prompt "Upper bound"))
-  (let ((start (maxima::meval* lower-bound))
-        (end (maxima::meval* upper-bound)))
-    (declare (ignore start end))
-    (let ((plot (plot2d-impl (maxima::meval* expression) variable lower-bound upper-bound)))
-      (present-to-stream plot *standard-output*))))
+     (upper-bound 'maxima-expression :prompt "Upper bound")
+     &key
+     (max-y 'maxima-expression :prompt "Max Y")
+     (min-y 'maxima-expression :prompt "Min Y"))
+  (let ((plot (plot2d-impl (maxima::meval* expression) variable
+                           (maxima::coerce-float lower-bound)
+                           (maxima::coerce-float upper-bound)
+                           (maxima::coerce-float max-y)
+                           (maxima::coerce-float min-y))))
+    (present-to-stream plot *standard-output*)))
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
@@ -264,89 +275,101 @@
          (y-label (getf options :ylabel))
          (colours (getf options :color))
          (char-height (char-height stream)))
-    (multiple-value-bind (max-y min-y)
+    (multiple-value-bind (max-y-dimension min-y-dimension)
         (find-dimensions-for-datasets data)
-      (destructuring-bind (min-x-bound max-x-bound)
-          (getf options :x)
-        (labels ((x-to-pos (x)
-                   (+ left-margin
-                      (* (/ (- x min-x-bound)
-                            (- max-x-bound min-x-bound))
-                         w)))
-                 (y-to-pos (y)
-                   (- h (* (/ (- y min-y)
-                              (- max-y min-y))
-                           h))))
-          (clim:with-room-for-graphics (stream)
-            (clim:with-identity-transformation (stream)
-              (clim:draw-rectangle* stream left-margin 0 (+ left-margin w) h :filled nil)
-              ;; If the zero-axis is visible, draw it
-              (when (< min-y 0 max-y)
-                (clim:draw-line* stream left-margin (y-to-pos 0) (+ left-margin w) (y-to-pos 0)
-                                 :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
-              (when (< min-x-bound 0 max-x-bound)
-                (clim:draw-line* stream (x-to-pos 0) 0 (x-to-pos 0) h
-                                 :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
-              ;; Draw X-axis tick marks
-              (draw-tick-marks min-x-bound max-x-bound 6
-                               (lambda (x num-decimals)
-                                 (let ((string (if (zerop num-decimals)
-                                                   (format nil "~d" x)
-                                                   (format nil "~,vf" num-decimals x))))
-                                   (multiple-value-bind (width)
-                                       (clim:text-size stream string)
-                                     (let ((pos (x-to-pos x)))
-                                       (clim:draw-line* stream pos h pos (- h tick-height))
-                                       (clim:draw-text* stream
-                                                        string
-                                                        (- pos (/ width 2))
-                                                        (+ h (* char-height 2))))))))
-              ;; Draw X-label
-              (draw-centered-text stream x-label left-margin (+ left-margin w) (+ h (* char-height 4)))
-              ;; Draw y-label, if it exists
-              (let ((max-width 0))
-                (draw-tick-marks min-y max-y 6
-                                 (lambda (y num-decimals)
+      (let ((max-y (or (standard-plot/max-y obj) max-y-dimension))
+            (min-y (or (standard-plot/min-y obj) min-y-dimension)))
+        (destructuring-bind (min-x-bound max-x-bound)
+            (getf options :x)
+          (labels ((x-to-pos (x)
+                     (+ left-margin
+                        (* (/ (- x min-x-bound)
+                              (- max-x-bound min-x-bound))
+                           w)))
+                   (y-to-pos (y)
+                     (- h (* (/ (- y min-y)
+                                (- max-y min-y))
+                             h))))
+            (clim:with-room-for-graphics (stream)
+              (clim:with-identity-transformation (stream)
+                (clim:draw-rectangle* stream left-margin 0 (+ left-margin w) h :filled nil)
+                ;; If the zero-axis is visible, draw it
+                (when (< min-y 0 max-y)
+                  (clim:draw-line* stream left-margin (y-to-pos 0) (+ left-margin w) (y-to-pos 0)
+                                   :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
+                (when (< min-x-bound 0 max-x-bound)
+                  (clim:draw-line* stream (x-to-pos 0) 0 (x-to-pos 0) h
+                                   :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
+                ;; Draw X-axis tick marks
+                (draw-tick-marks min-x-bound max-x-bound 6
+                                 (lambda (x num-decimals)
                                    (let ((string (if (zerop num-decimals)
-                                                     (format nil "~d" y)
-                                                     (format nil "~,vf" num-decimals y))))
+                                                     (format nil "~d" x)
+                                                     (format nil "~,vf" num-decimals x))))
                                      (multiple-value-bind (width)
                                          (clim:text-size stream string)
-                                       (let ((yp (y-to-pos y)))
-                                         (clim:draw-line* stream left-margin yp (+ left-margin 5) yp)
+                                       (let ((pos (x-to-pos x)))
+                                         (clim:draw-line* stream pos h pos (- h tick-height))
                                          (clim:draw-text* stream
                                                           string
-                                                          (- left-margin width 5)
-                                                          (+ yp (/ char-height 2)))
-                                         (setq max-width (max max-width width)))))))
-                (when y-label
-                  (multiple-value-bind (width)
-                      (clim:text-size stream y-label)
-                    (let ((baseline-to-edge 5))
-                      (clim:draw-text* stream y-label (- left-margin baseline-to-edge (/ width 2)) (/ h 2)
-                                       :transformation (clim:make-rotation-transformation* (- (/ pi 2))
-                                                                                           (- left-margin
-                                                                                              baseline-to-edge
-                                                                                              max-width)
-                                                                                           (/ h 2)))))))
-              ;; Draw the datasets
-              (loop
-                for i from 0
-                for dataset in data
-                for colour = (maxima-to-clim-colour (nth (mod i (length colours)) colours))
-                do (let ((curr nil))
-                     (labels ((draw-list ()
-                                (when curr
-                                  (clim:draw-design stream (clim:make-polyline* (reverse curr))
-                                                    :ink colour))))
-                       (loop
-                         for (x y) on dataset by #'cddr
-                         if (eq x 'maxima::moveto)
-                           do (progn
-                                (draw-list)
-                                (setq curr nil))
-                         else
-                           do (progn
-                                (push (round (x-to-pos x)) curr)
-                                (push (round (y-to-pos y)) curr))
-                         finally (draw-list))))))))))))
+                                                          (- pos (/ width 2))
+                                                          (+ h (* char-height 2))))))))
+                ;; Draw X-label
+                (draw-centered-text stream x-label left-margin (+ left-margin w) (+ h (* char-height 4)))
+                ;; Draw y-label, if it exists
+                (let ((max-width 0))
+                  (draw-tick-marks min-y max-y 6
+                                   (lambda (y num-decimals)
+                                     (let ((string (if (zerop num-decimals)
+                                                       (format nil "~d" y)
+                                                       (format nil "~,vf" num-decimals y))))
+                                       (multiple-value-bind (width)
+                                           (clim:text-size stream string)
+                                         (let ((yp (y-to-pos y)))
+                                           (clim:draw-line* stream left-margin yp (+ left-margin 5) yp)
+                                           (clim:draw-text* stream
+                                                            string
+                                                            (- left-margin width 5)
+                                                            (+ yp (/ char-height 2)))
+                                           (setq max-width (max max-width width)))))))
+                  (when y-label
+                    (multiple-value-bind (width)
+                        (clim:text-size stream y-label)
+                      (let ((baseline-to-edge 5))
+                        (clim:draw-text* stream y-label (- left-margin baseline-to-edge (/ width 2)) (/ h 2)
+                                         :transformation (clim:make-rotation-transformation* (- (/ pi 2))
+                                                                                             (- left-margin
+                                                                                                baseline-to-edge
+                                                                                                max-width)
+                                                                                             (/ h 2)))))))
+                ;; Draw the datasets
+                (loop
+                  for i from 0
+                  for dataset in data
+                  for colour = (maxima-to-clim-colour (nth (mod i (length colours)) colours))
+                  do (let ((curr nil))
+                       (labels ((draw-list ()
+                                  (when (and curr (cdr curr))
+                                    (clim:draw-design stream (clim:make-polyline* (reverse curr))
+                                                      :ink colour))
+                                  (setq curr nil))
+                                (push-points (x y)
+                                  (push (round (x-to-pos x)) curr)
+                                  (push (round (y-to-pos y)) curr)))
+                         (loop
+                           with prev-outside = nil
+                           for (x y) on dataset by #'cddr
+                           for outside = (if (and (numberp y) (or (< y min-y) (> y max-y)))
+                                             (list x y)
+                                             nil)
+                           if (or (and outside prev-outside) (eq x 'maxima::moveto))
+                             do (draw-list)
+                           else
+                             do (let ((new-y (clamp y min-y max-y)))
+                                  (when prev-outside
+                                    (destructuring-bind (prev-x prev-y)
+                                        prev-outside
+                                      (push-points prev-x prev-y)))
+                                  (push-points x new-y))
+                           do (setq prev-outside outside)
+                           finally (draw-list)))))))))))))

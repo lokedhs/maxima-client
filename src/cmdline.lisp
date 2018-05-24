@@ -15,6 +15,7 @@
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+)))
+  (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
@@ -215,3 +216,17 @@
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()
   (clim:frame-exit clim:*application-frame*))
+
+(clim:make-command-table 'maxima-menubar-command-table
+                         :errorp nil
+                         :menu '(("File" :menu maxima-file-command-table)
+                                 ("Plot" :menu maxima-plot-command-table)))
+
+(clim:make-command-table 'maxima-file-command-table
+                         :errorp nil
+                         :menu '(("Quit" :command maxima-quit)))
+
+(clim:make-command-table 'maxima-plot-command-table
+                         :errorp nil
+                         :menu '(("Discrete" :command plot2d-with-range)
+                                 ("Plot examle" :command plot2d-demo)))
