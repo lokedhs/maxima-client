@@ -52,6 +52,31 @@
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define-condition maxima-expr-parse-error (error)
+  ((src     :type string
+            :initarg :src
+            :reader maxima-expr-parse-error/src)
+   (message :type string
+            :initarg :message
+            :reader maxima-expr-parse-error/message))
+  (:report (lambda (condition stream)
+             (format stream "Parse error:~%~a"
+                     (maxima-expr-parse-error/message condition)))))
+
+(defmacro with-maxima-error-handler (handler &rest body)
+  (alexandria:once-only (handler)
+    (alexandria:with-gensyms (maxima-stream eval-ret result)
+      `(let* ((,maxima-stream (make-instance 'maxima-output))
+              (,result nil)
+              (,eval-ret (catch 'maxima::macsyma-quit
+                           (setq ,result (let ((*standard-output* ,maxima-stream))
+                                           (progn ,@body)))
+                           nil)))
+         (if ,eval-ret
+             (funcall ,handler ,eval-ret (string-trim (format nil " ~c" #\Newline) (maxima-stream-text ,maxima-stream)))
+             ,result)))))
+
+#+nil
 (defun string-to-maxima-expr (string)
   (with-input-from-string (s (format nil "~a;~%" string))
     (let ((form (maxima::dbm-read s nil nil)))
@@ -61,5 +86,26 @@
                    (null (second form))))
       (third form))))
 
+(defun string-to-maxima-expr (string)
+  (with-maxima-error-handler
+      (lambda (type text)
+        (declare (ignore type))
+        (error 'maxima-expr-parse-error :src string :message text))
+    (with-input-from-string (s (format nil "~a;~%" string))
+      (let ((form (maxima::dbm-read s nil nil)))
+        (assert (and (listp form)
+                     (= (length form) 3)
+                     (equal (first form) '(maxima::displayinput))
+                     (null (second form))))
+        (third form)))))
+
+(defun string-to-native-expr (string)
+  (let ((maxima-expr (string-to-maxima-expr string)))
+    (make-instance 'maxima-native-expr :src string :expr maxima-expr)))
+
 (defun maxima-expr-as-string (expr)
   (coerce (maxima::mstring expr) 'string))
+
+(defun maxima-native-expr-as-float (expr)
+  (and expr
+       (maxima::coerce-float (maxima-native-expr/expr expr))))

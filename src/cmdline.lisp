@@ -2,11 +2,6 @@
 
 (clim:define-command-table maxima-commands)
 
-(defclass maxima-interactor-view (clim:textual-view)
-  ())
-
-(defparameter +listener-view+ (make-instance 'maxima-interactor-view))
-
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
@@ -39,9 +34,6 @@
           (format stream "(~a)" s))
         (clim:formatting-cell (stream :align-y :center)
           (present-to-stream (labelled-expression/expr obj) stream))))))
-
-(clim:define-presentation-type maxima-expression ()
-  :inherit-from t)
 
 (clim:define-presentation-type plain-text ()
   :inherit-from 'string)
@@ -82,12 +74,12 @@
            (values default default-type))
           (t (values result type)))))
 
-(clim:define-presentation-method clim:accept ((type maxima-expression) stream (view clim:textual-view) &key)
+(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
   (let ((s (read-plain-text stream)))
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           nil
-          (string-to-maxima-expr s)))))
+          (make-instance 'maxima-native-expr :src s :expr (string-to-maxima-expr s))))))
 
 (clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
   (let ((s (read-plain-text stream)))
@@ -96,6 +88,7 @@
           nil
           (make-instance 'maxima-native-expr :src trimmed :expr (string-to-maxima-expr s))))))
 
+#+nil
 (clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
   (let ((output-record (make-expression-output-record stream obj)))
     (clim:with-room-for-graphics (stream)
@@ -112,6 +105,7 @@
   (let ((expr (maxima-native-expr/expr obj)))
     (format stream "~a" (maxima-expr-as-string expr))))
 
+#+nil
 (defmethod drei::presentation-replace-input ((stream drei::drei-input-editing-mixin) object
                                              (type (eql 'maxima-native-expr)) view
                                              &rest args
@@ -140,9 +134,15 @@
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
-(clim:define-presentation-translator maxima-native-expr-to-expr (maxima-native-expr maxima-expression maxima-commands)
+(clim:define-presentation-translator maxima-to-plain-text (maxima-native-expr plain-text maxima-commands)
     (object)
-  (maxima-native-expr/expr object))
+  (log:info "Converting to text: ~s" object)
+  (maxima-native-expr/src object))
+
+(clim:define-presentation-translator plain-text-to-maxima (plain-text maxima-native-expr maxima-commands)
+    (object)
+  (log:info "Converting to maxima expr: ~s" object)
+  (string-to-native-expr object))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (multiple-value-bind (object type)
@@ -152,11 +152,9 @@
     (log:info "Got input: object=~s, type=~s" object type)
     (cond
       ((null object)
-       `(maxima-eval (values)))
-      ((eq type 'maxima-expression)
-       `(maxima-eval ,object))
+       nil)
       ((eq type 'maxima-native-expr)
-       `(maxima-eval ,(maxima-native-expr/expr object)))
+       `(maxima-eval ,object))
       ((and (listp type) (eq (car type) 'clim:command))
        object))))
 
@@ -183,7 +181,7 @@
     (clim:run-frame-top-level frame)))
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
-    ((cmd 'maxima-expression :prompt "expression"))
+    ((cmd 'maxima-native-expr :prompt "expression"))
   (let ((c-tag (maxima::makelabel maxima::$inchar)))
     (setf (symbol-value c-tag) cmd)
     (let* ((maxima-stream (make-instance 'maxima-io :clim-stream *standard-output*))
@@ -192,7 +190,7 @@
                                            (*current-stream* *standard-output*)
                                            (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
-                                       (maxima::meval* cmd))))
+                                       (maxima::meval* (maxima-native-expr/expr cmd)))))
                          (log:info "Result: ~s" result)
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setf (symbol-value d-tag) result)

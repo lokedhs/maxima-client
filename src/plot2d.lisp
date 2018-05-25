@@ -155,24 +155,25 @@
   (log:info "value=~s, type=~s, size=~s" value type size))
 
 (clim:define-command (plot2d-with-range :name "Plot 2D" :menu t :command-table maxima-commands)
-    ((expression 'maxima-expression :prompt "Expression")
-     (variable 'maxima-expression :prompt "Variable")
-     (lower-bound 'maxima-expression :prompt "Lower bound")
-     (upper-bound 'maxima-expression :prompt "Upper bound")
+    ((expression 'maxima-native-expr :prompt "Expression")
+     (variable 'maxima-native-expr :prompt "Variable")
+     (lower-bound 'maxima-native-expr :prompt "Lower bound")
+     (upper-bound 'maxima-native-expr :prompt "Upper bound")
      &key
-     (max-y 'maxima-expression :prompt "Max Y")
-     (min-y 'maxima-expression :prompt "Min Y"))
-  (let ((plot (plot2d-impl (maxima::meval* expression) variable
-                           (maxima::coerce-float lower-bound)
-                           (maxima::coerce-float upper-bound)
-                           (maxima::coerce-float max-y)
-                           (maxima::coerce-float min-y))))
+     (max-y 'maxima-native-expr :prompt "Max Y")
+     (min-y 'maxima-native-expr :prompt "Min Y"))
+  (let ((plot (plot2d-impl (maxima::meval* (maxima-native-expr/expr expression))
+                           (maxima-native-expr/expr variable)
+                           (maxima-native-expr-as-float lower-bound)
+                           (maxima-native-expr-as-float upper-bound)
+                           (maxima-native-expr-as-float max-y)
+                           (maxima-native-expr-as-float min-y))))
     (present-to-stream plot *standard-output*)))
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
-  (plot2d-with-range (string-to-maxima-expr "sin(x)") (string-to-maxima-expr "x")
-                     (string-to-maxima-expr "0") (string-to-maxima-expr "%pi*2")))
+  (plot2d-with-range (string-to-native-expr "sin(x)") (string-to-native-expr "x")
+                     (string-to-native-expr "0") (string-to-native-expr "%pi*2")))
 
 #|
   Typical options:

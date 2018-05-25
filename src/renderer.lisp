@@ -15,6 +15,14 @@
                                    (setf (readtable-case readtable) :invert)
                                    readtable))
 
+(defclass maxima-renderer-view ()
+  ())
+
+(defclass maxima-interactor-view (maxima-renderer-view clim:textual-view)
+  ())
+
+(defparameter +listener-view+ (make-instance 'maxima-interactor-view))
+
 (defun format-sym-name (sym) 
   (let ((*readtable* *invert-readtable*))
     (princ-to-string sym)))
@@ -450,9 +458,12 @@
   (make-rendered-output-record (stream)
     (render-maxima-expression stream expr)))
 
-(clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view t) &key)
+(clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view maxima-renderer-view) &key)
   (let* ((expr (maxima-native-expr/expr obj))
          (output-record (make-expression-output-record stream expr)))
     (clim:with-room-for-graphics (stream)
       (clim:with-identity-transformation (stream)
         (clim:stream-add-output-record stream output-record)))))
+
+(clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view clim:textual-view) &key)
+  (format stream "~a" (maxima-native-expr/src obj)))
