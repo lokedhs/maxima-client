@@ -119,7 +119,7 @@
     (clim:draw-text* *aligned-rendering-stream* (apply #'format nil fmt args) 0 0)))
 
 (defun render-formatted (stream fmt &rest args)
-  (with-aligned-rendering (stream)
+  (with-aligned-rendering (stream)`
     (apply #'render-aligned-string fmt args)))
 
 (defmacro with-paren-op (&body body)
@@ -467,3 +467,11 @@
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view clim:textual-view) &key)
   (format stream "~a" (maxima-native-expr/src obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun render-error-message (stream message)
+  (let ((size (clim:text-style-size (clim:medium-text-style stream))))
+    (clim:surrounding-output-with-border (stream :ink clim:+black+ :line-thickness 1)
+      (clim:with-drawing-options (stream :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
+        (format stream "~a~%" message)))))

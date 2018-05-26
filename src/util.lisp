@@ -52,7 +52,12 @@
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-condition maxima-expr-parse-error (error)
+(define-condition maxima-native-error (error)
+  ())
+
+(defgeneric maxima-native-error/message (condition))
+
+(define-condition maxima-expr-parse-error (maxima-native-error)
   ((src     :type string
             :initarg :src
             :reader maxima-expr-parse-error/src)

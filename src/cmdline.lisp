@@ -51,8 +51,7 @@
       for first-char = t then nil
       for gesture = (clim:read-gesture :stream stream
 		                       :input-wait-handler input-wait-handler
-		                       :pointer-button-press-handler
-		                       pointer-button-press-handler)
+		                       :pointer-button-press-handler pointer-button-press-handler)
       do (cond ((or (null gesture)
 		    (clim:activation-gesture-p gesture)
 		    (typep gesture 'clim:pointer-button-event)
@@ -67,26 +66,27 @@
 		(return (subseq result 0))))))
 
 (clim:define-presentation-method clim:accept ((type plain-text) stream (view clim:textual-view)
-                                                                &key (default nil defaultp)
+                                                                &key
+                                                                (default nil defaultp)
                                                                 (default-type type))
   (let ((result (read-plain-text stream)))
-    (cond ((and (zerop (length result)) defaultp)
+    (log:info "Got string from reading plain-text: ~s" result)
+    (cond ((and (equal result "") defaultp)
            (values default default-type))
           (t (values result type)))))
 
-(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
+(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view)
+                                                                        &key
+                                                                        (default nil defaultp)
+                                                                        (default-type type))
   (let ((s (read-plain-text stream)))
+    (log:info "Got string from reading native expr: ~s" s)
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
-          nil
+          (if defaultp
+              (values default default-type)
+              nil)
           (make-instance 'maxima-native-expr :src s :expr (string-to-maxima-expr s))))))
-
-(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view) &key)
-  (let ((s (read-plain-text stream)))
-    (let ((trimmed (string-trim " " s)))
-      (if (equal trimmed "")
-          nil
-          (make-instance 'maxima-native-expr :src trimmed :expr (string-to-maxima-expr s))))))
 
 #+nil
 (clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
@@ -145,18 +145,22 @@
   (string-to-native-expr object))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
-  (multiple-value-bind (object type)
-      (let ((clim:*command-dispatchers* '(#\:)))
-        (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default nil :default-type 'maxima-empty-input)))
-    (log:info "Got input: object=~s, type=~s" object type)
-    (cond
-      ((null object)
-       nil)
-      ((eq type 'maxima-native-expr)
-       `(maxima-eval ,object))
-      ((and (listp type) (eq (car type) 'clim:command))
-       object))))
+  (handler-case
+      (multiple-value-bind (object type)
+          (let ((clim:*command-dispatchers* '(#\:)))
+            (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
+              (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default nil :default-type 'maxima-empty-input)))
+        (log:info "Got input: object=~s, type=~s" object type)
+        (cond
+          ((null object)
+           nil)
+          ((eq type 'maxima-native-expr)
+           `(maxima-eval ,object))
+          ((and (listp type) (eq (car type) 'clim:command))
+           object)))
+    (maxima-native-error (condition)
+      (render-error-message stream (format nil "~a" condition))
+      nil)))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
