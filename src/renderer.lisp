@@ -119,7 +119,7 @@
     (clim:draw-text* *aligned-rendering-stream* (apply #'format nil fmt args) 0 0)))
 
 (defun render-formatted (stream fmt &rest args)
-  (with-aligned-rendering (stream)`
+  (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
 
 (defmacro with-paren-op (&body body)
