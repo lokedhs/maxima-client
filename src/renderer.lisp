@@ -287,6 +287,14 @@
           (set-rec-position right-paren (+ left-paren-width width) pos)
           (clim:stream-add-output-record stream right-paren))))))
 
+(defmacro with-wrapped-parens ((stream) &body body)
+  (alexandria:once-only (stream)
+    (alexandria:with-gensyms (rec)
+      `(let ((,rec (clim:with-output-to-output-record (,stream)
+                     (with-paren-op
+                       ,@body))))
+         (wrap-with-parens ,stream ,rec)))))
+
 (defun render-function (stream name exprs)
   (with-aligned-rendering (stream)
     (render-aligned () (render-symbol stream (car name) :roman-font t))
@@ -320,7 +328,8 @@
                    (with-paren-op
                      (render-maxima-expression stream to))))
          (exp    (clim:with-output-to-output-record (stream)
-                   (let ((*lop* 'maxima::%sum))
+                   (let ((*lop* 'maxima::%sum)
+                         (*rop* 'maxima::mparen))
                      (render-maxima-expression stream f)))))
     (dimension-bind (exp :height exp-height)
       (destructuring-bind (sigma sigma-ascent sigma-descent)
@@ -438,9 +447,8 @@
         (string (render-string stream fixed))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
-                  (let ((output-record (clim:with-output-to-output-record (stream)
-                                         (render-inner fixed))))
-                    (wrap-with-parens stream output-record))
+                  (with-wrapped-parens (stream)
+                    (render-inner fixed))
                   (render-inner fixed)))))))
 
 (defmacro make-rendered-output-record ((stream) &body body)
