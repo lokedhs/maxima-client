@@ -265,27 +265,26 @@
   (render-plain stream 4 #\= a b))
 
 (defun wrap-with-parens (stream output-record)
-  (dimension-bind (output-record :y y :width width :height height)
-    (clim:rectangle-size output-record)
-    (let ((left-paren (clim:with-output-to-output-record (stream)
-                        (with-roman-text-style (stream)
-                          (clim:with-text-size (stream height)
-                            (render-formatted stream "(")))))
-          (right-paren (clim:with-output-to-output-record (stream)
-                         (with-roman-text-style (stream)
-                           (clim:with-text-size (stream height)
-                             (render-formatted stream ")"))))))
-      (let ((pos y))
-        (multiple-value-bind (left-paren-width)
-            (clim:rectangle-size left-paren)
-          (set-rec-position left-paren 0 pos)
-          (clim:stream-add-output-record stream left-paren)
-          ;;
-          (move-rec output-record left-paren-width 0)
-          (clim:stream-add-output-record stream output-record)
-          ;;
-          (set-rec-position right-paren (+ left-paren-width width) pos)
-          (clim:stream-add-output-record stream right-paren))))))
+  (dimension-bind (output-record :x x :y y :width width :height height)
+    (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
+        (clim:with-drawing-options (stream :text-size height)
+          (render-and-measure-string stream "("))
+      (let ((right-paren (clim:with-output-to-output-record (stream)
+                           (clim:with-drawing-options (stream :text-size height)
+                             (clim:draw-text* stream ")" 0 0)))))
+        (dimension-bind (left-paren :width left-paren-width)
+          (let* ((centre (+ (/ height 2) y))
+                 (p-centre (- left-paren-descent
+                              (/ (+ left-paren-ascent left-paren-descent) 2)))
+                 (p-offset (- centre p-centre)))
+            (move-rec left-paren x p-offset)
+            (clim:stream-add-output-record stream left-paren)
+            ;;
+            (move-rec output-record left-paren-width 0)
+            (clim:stream-add-output-record stream output-record)
+            ;;
+            (move-rec right-paren (+ x left-paren-width width) p-offset)
+            (clim:stream-add-output-record stream right-paren)))))))
 
 (defmacro with-wrapped-parens ((stream) &body body)
   (alexandria:once-only (stream)
@@ -295,18 +294,23 @@
                        ,@body))))
          (wrap-with-parens ,stream ,rec)))))
 
-(defun render-function (stream name exprs)
+(defun render-param-list (stream prefix-renderer params)
   (with-aligned-rendering (stream)
-    (render-aligned () (render-symbol stream (car name) :roman-font t))
+    (render-aligned () (funcall prefix-renderer stream))
     (let ((params (clim:with-output-to-output-record (stream)
                     (with-aligned-rendering (stream)
                       (loop
-                        for expr in exprs
+                        for expr in params
                         for first = t then nil
                         unless first
                           do (render-aligned-string ", ")
                         do (render-aligned () (render-maxima-expression stream expr)))))))
       (render-aligned () (wrap-with-parens stream params)))))
+
+(defun render-function (stream name exprs)
+  (render-param-list stream
+                     (lambda (stream) (render-symbol stream (car name) :roman-font t))
+                     exprs))
 
 (defun render-and-measure-string (stream string &optional (x 0) (y 0))
   (multiple-value-bind (width height final-x final-y baseline)
@@ -423,6 +427,27 @@
   (with-fix-text-style (stream)
     (render-formatted stream "~s" string)))
 
+(defun render-mdefine (stream f definition)
+  (let ((function-name (car f))
+        (function-args (cdr f)))
+    ;; FUNCTION-NAME should always be a list of a singlr symbol which
+    ;; is the name of the function. For now, we'll just bail if it
+    ;; isn't, but perhaps there are situations where some more complex
+    ;; stucture can be passed in. If that's the case, we should
+    ;; probably just call RENDER-MAXIMA-EXPRESSION on it.
+    (with-aligned-rendering (stream)
+      (render-aligned () (render-param-list stream
+                                            (lambda (stream)
+                                              (unless (and (alexandria:sequence-of-length-p function-name 1)
+                                                           (symbolp (car function-name)))
+                                                (error "Unexpected content in function name: ~s" function-name))
+                                              (render-symbol stream (car function-name) :roman-font t))
+                                            function-args))
+      (aligned-spacing 0.5)
+      (render-aligned-string ":=")
+      (aligned-spacing 0.5)
+      (render-aligned () (render-maxima-expression stream definition)))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -434,6 +459,7 @@
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
+               (maxima::mdefine (render-mdefine stream (second fixed) (third fixed)))
                (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%integrate (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%product (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
