@@ -86,7 +86,7 @@
           (if defaultp
               (values default default-type)
               nil)
-          (make-instance 'maxima-native-expr :src s :expr (string-to-maxima-expr s))))))
+          (string-to-native-expr trimmed)))))
 
 #+nil
 (clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
