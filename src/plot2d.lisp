@@ -7,145 +7,29 @@
     v))
 
 (defclass standard-plot ()
-  ((fun         :initarg :fun
-                :reader standard-plot/fun)
-   (vairable    :initarg :variable
-                :reader standard-plot/variable)
-   (lower-bound :initarg :lower-bound
-                :reader standard-plot/lower-bound)
-   (upper-bound :initarg :upper-bound
-                :reader standard-plot/upper-bound)
-   (options     :initform nil
-                :accessor standard-plot/options)
-   (data        :initarg :data
-                :initform nil
-                :accessor standard-plot/data)
-   (max-y       :initarg :max-y
-                :reader standard-plot/max-y)
-   (min-y       :initarg :min-y
-                :reader standard-plot/min-y)))
+  ((data    :initarg :data
+            :initform nil
+            :accessor standard-plot/data)
+   (options :initarg :options
+            :initform nil
+            :accessor standard-plot/options)
+   (max-x   :initarg :max-x
+            :initform nil
+            :accessor standard-plot/max-x)
+   (min-x   :initarg :min-x
+            :initform nil
+            :accessor standard-plot/min-x)
+   (max-y   :initarg :max-y
+            :initform nil
+            :accessor standard-plot/max-y)
+   (min-y   :initarg :min-y
+            :initform nil
+            :accessor standard-plot/min-y)))
 
-(defun recompute-plot (plot)
-  (let ((fun (standard-plot/fun plot))
-        (variable (standard-plot/variable plot))
-        (lower-bound (standard-plot/lower-bound plot))
-        (upper-bound (standard-plot/upper-bound plot)))
-
-    (let ((options (copy-tree maxima::*plot-options*))
-          extra-options
-          (range `((maxima::mlist) ,variable ,lower-bound ,upper-bound)))
-
-      ;; From maxima: A single parametric or discrete plot is placed inside a maxima list
-      (when (and (consp fun)
-                 (or (eq (second fun) 'maxima::$parametric) (eq (second fun) 'maxima::$discrete)))
-        (setq fun `((mlist) ,fun)))
-      ;; If at this point fun is not a maxima list, it is then a single function
-      (unless (maxima::$listp fun) (setq fun `((maxima::mlist) ,fun)))
-      ;; 2- Get names for the two axis and values for xmin and xmax if needed.
-      (let ((no-range-required t)
-            small huge)
-        (setq small (- (/ most-positive-double-float 1024)))
-        (setq huge (/ most-positive-double-float 1024))
-        ;; FIXME: maxima really loves its plists
-        (setf (getf options :ybounds) (list small huge))
-        ;; Loop over all functions that should be plotted
-        (dolist (subfun (rest fun))
-          (if (not (maxima::$listp subfun))
-              (setq no-range-required nil))) 
-        (unless no-range-required
-          (setq range (maxima::check-range range))
-          (setf (getf options :xlabel) (maxima::ensure-string (second range)))
-          (setf (getf options :x) (cddr range)))
-        (when no-range-required
-          ;; Make the default ranges on X nd Y large so parametric plots
-          ;; don't get prematurely clipped. Don't use most-positive-flonum
-          ;; because draw2d will overflow.
-          (setf (getf options :xbounds) (list small huge))
-          (when range
-            ;; second argument was really a plot option, not a range
-            (setq extra-options (cons range extra-options))))
-        ;;
-        ;; When only one function is being plotted:
-        ;; If a simple function use, its name for the vertical axis.
-        ;; If parametric, give the axes the names of the two parameters.
-        ;; If discrete points, name the axes x and y.
-        (when (= (length fun) 2)
-          (let ((v (second fun)) label)
-            (cond ((atom v) 
-                   (setq label (coerce (maxima::mstring v) 'string))
-                   (if (< (length label) 80)
-                       (setf (getf options :ylabel) label)))
-                  ((eq (second v) 'maxima::$parametric)
-                   (setq label (coerce (maxima::mstring (third v)) 'string))
-                   (if (< (length label) 80)
-                       (setf (getf options :xlabel) label))
-                   (setq label (coerce (maxima::mstring (fourth v)) 'string))
-                   (if (< (length label) 80)
-                       (setf (getf options :ylabel) label)))
-                  ((eq (second v) 'maxima::$discrete)
-                   (setf (getf options :xlabel) "x")
-                   (setf (getf options :ylabel) "y"))
-                  (t
-                   (setq label (coerce (maxima::mstring v) 'string))
-                   (when (< (length label) 80)
-                     (setf (getf options :ylabel) label))))))
-        ;;
-        ;; Parse the given options into the options list
-        (setq options (maxima::plot-options-parser extra-options options))
-        (when (getf options :y)
-          (setf (getf options :ybounds) (getf options :y)))
-        ;;
-        ;; Remove axes labels when no box is used in gnuplot
-        (when (and (member :box options) (not (getf options :box))
-	           (not (eq (getf options :plot_format) 'maxima::$xmaxima)))
-          (remf options :xlabel)
-          (remf options :ylabel))
-        ;;
-        ;; Check x bounds
-        (let ((xmin (first (getf options :x))) (xmax (second (getf options :x))))
-          (when (and (getf options :logx) xmin xmax)
-            (if (> xmax 0)
-                (when (<= xmin 0)
-                  (let ((revised-xmin (/ xmax 1000)))
-                    (maxima::mtell (intl:gettext "plot2d: lower bound must be positive when 'logx' in effect.~%plot2d: assuming lower bound = ~M instead of ~M") revised-xmin xmin)
-                    (setf (getf options :x) (list revised-xmin xmax))
-                    (setq range `((mlist) ,(second range) ,revised-xmin ,xmax))))
-                (maxima::merror (intl:gettext "plot2d: upper bound must be positive when 'logx' in effect; found: ~M") xmax))))
-        ;;
-        ;; Check y bounds
-        (let ((ymin (first (getf options :y)))
-              (ymax (second (getf options :y))))
-          (when (and (getf options :logy) ymin ymax)
-            (if (> ymax 0)
-                (when (<= ymin 0)
-                  (let ((revised-ymin (/ ymax 1000)))
-                    (maxima::mtell (intl:gettext "plot2d: lower bound must be positive when 'logy' in effect.~%plot2d: assuming lower bound = ~M instead of ~M") revised-ymin ymin)
-                    (setf (getf options :y) (list revised-ymin ymax))))
-                (maxima::merror (intl:gettext "plot2d: upper bound must be positive when 'logy' in effect; found: ~M") ymax))))
-        ;;
-        ;; FIXME: use of a global variable here
-        (setq maxima::*plot-realpart* (getf options :plot_realpart))
-        ;;
-        ;; Compute points to plot for each element of FUN.
-        ;; If no plottable points are found, return immediately from $PLOT2D
-        (let ((points-lists (mapcar #'(lambda (f) (cdr (maxima::draw2d f range options))) (cdr fun))))
-          (when (every #'null points-lists)
-            (maxima::mtell (intl:gettext "plot2d: nothing to plot.~%"))
-            (return-from recompute-plot))
-          ;;
-          (setf (standard-plot/options plot) options)
-          (setf (standard-plot/data plot) points-lists))))))
-
-(defun plot2d-impl (fun variable lower-bound upper-bound max-y min-y)
-  (let ((p (make-instance 'standard-plot
-                          :fun fun
-                          :variable variable
-                          :lower-bound lower-bound
-                          :upper-bound upper-bound
-                          :max-y max-y
-                          :min-y min-y)))
-    (recompute-plot p)
-    p))
+(defun clim-plot2d-backend (points-lists options)
+  (log:info "clim plotter: n: ~s, options: ~s" (length points-lists) options)
+  (let ((plot (make-instance 'standard-plot :data points-lists :options options)))
+    (present-to-stream plot *current-stream*)))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
     ((value 'string :prompt "Value")
@@ -154,6 +38,7 @@
      (size 'string :prompt "Size"))
   (log:info "value=~s, type=~s, size=~s" value type size))
 
+#+nil
 (clim:define-command (plot2d-with-range :name "Plot 2D" :menu t :command-table maxima-commands)
     ((expression 'maxima-native-expr :prompt "Expression")
      (variable 'maxima-native-expr :prompt "Variable")
@@ -162,6 +47,7 @@
      &key
      (max-y 'maxima-native-expr :prompt "Max Y")
      (min-y 'maxima-native-expr :prompt "Min Y"))
+  #+nil
   (let ((plot (plot2d-impl (maxima::meval* (maxima-native-expr/expr expression))
                            (maxima-native-expr/expr variable)
                            (maxima-native-expr-as-float lower-bound)
@@ -172,6 +58,7 @@
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
+  #+nil
   (plot2d-with-range (string-to-native-expr "sin(x)") (string-to-native-expr "x")
                      (string-to-native-expr "0") (string-to-native-expr "%pi*2")))
 
@@ -203,15 +90,22 @@
                       collect (loop
                                 with max-y = nil
                                 with min-y = nil
+                                with max-x = nil
+                                with min-x = nil
                                 for points on dataset by #'cddr
+                                for x = (car points)
                                 for y = (cadr points)
                                 when (numberp y)
                                   do (progn
                                        (setf max-y (if max-y (max max-y y) y))
-                                       (setf min-y (if min-y (min min-y y) y)))
-                                finally (return (list max-y min-y))))))
-    (values (reduce #'max (remove nil (mapcar #'car dimensions)))
-            (reduce #'min (remove nil (mapcar #'cadr dimensions))))))
+                                       (setf min-y (if min-y (min min-y y) y))
+                                       (setf max-x (if max-x (max max-x x) x))
+                                       (setf min-x (if min-x (min min-x x) x)))
+                                finally (return (list max-y min-y max-x min-x))))))
+    (values (reduce #'max (remove nil (mapcar #'first dimensions)))
+            (reduce #'min (remove nil (mapcar #'second dimensions)))
+            (reduce #'max (remove nil (mapcar #'third dimensions)))
+            (reduce #'min (remove nil (mapcar #'fourth dimensions))))))
 
 (defun draw-centered-text (stream text left right y)
   (multiple-value-bind (width)
@@ -276,33 +170,37 @@
          (y-label (getf options :ylabel))
          (colours (getf options :color))
          (char-height (char-height stream)))
-    (multiple-value-bind (max-y-dimension min-y-dimension)
+    (multiple-value-bind (max-y-dimension min-y-dimension max-x-dimension min-x-dimension)
         (find-dimensions-for-datasets data)
       (let ((max-y (or (standard-plot/max-y obj) max-y-dimension))
-            (min-y (or (standard-plot/min-y obj) min-y-dimension)))
-        (destructuring-bind (min-x-bound max-x-bound)
-            (getf options :x)
+            (min-y (or (standard-plot/min-y obj) min-y-dimension))
+            (max-x (or (standard-plot/max-x obj) max-x-dimension))
+            (min-x (or (standard-plot/min-x obj) min-x-dimension)))
+        (let ((max-y-bound max-y)
+              (min-y-bound min-y)
+              (max-x-bound max-x)
+              (min-x-bound min-x))
           (labels ((x-to-pos (x)
                      (+ left-margin
                         (* (/ (- x min-x-bound)
                               (- max-x-bound min-x-bound))
                            w)))
                    (y-to-pos (y)
-                     (- h (* (/ (- y min-y)
-                                (- max-y min-y))
+                     (- h (* (/ (- y min-y-bound)
+                                (- max-y-bound min-y-bound))
                              h))))
             (clim:with-room-for-graphics (stream)
               (clim:with-identity-transformation (stream)
                 (clim:draw-rectangle* stream left-margin 0 (+ left-margin w) h :filled nil)
                 ;; If the zero-axis is visible, draw it
-                (when (< min-y 0 max-y)
+                (when (< min-y-bound 0 max-y-bound)
                   (clim:draw-line* stream left-margin (y-to-pos 0) (+ left-margin w) (y-to-pos 0)
                                    :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
                 (when (< min-x-bound 0 max-x-bound)
                   (clim:draw-line* stream (x-to-pos 0) 0 (x-to-pos 0) h
                                    :line-thickness 1 :line-dashes '(1 2) :line-cap-shape :square))
                 ;; Draw X-axis tick marks
-                (draw-tick-marks min-x-bound max-x-bound 6
+                (draw-tick-marks min-x-bound max-x-bound 8
                                  (lambda (x num-decimals)
                                    (let ((string (if (zerop num-decimals)
                                                      (format nil "~d" x)
@@ -319,7 +217,7 @@
                 (draw-centered-text stream x-label left-margin (+ left-margin w) (+ h (* char-height 4)))
                 ;; Draw y-label, if it exists
                 (let ((max-width 0))
-                  (draw-tick-marks min-y max-y 6
+                  (draw-tick-marks min-y-bound max-y-bound 8
                                    (lambda (y num-decimals)
                                      (let ((string (if (zerop num-decimals)
                                                        (format nil "~d" y)
@@ -360,13 +258,13 @@
                          (loop
                            with prev-outside = nil
                            for (x y) on dataset by #'cddr
-                           for outside = (if (and (numberp y) (or (< y min-y) (> y max-y)))
+                           for outside = (if (and (numberp y) (or (< y min-y-bound) (> y max-y-bound)))
                                              (list x y)
                                              nil)
                            if (or (and outside prev-outside) (eq x 'maxima::moveto))
                              do (draw-list)
                            else
-                             do (let ((new-y (clamp y min-y max-y)))
+                             do (let ((new-y (clamp y min-y-bound max-y-bound)))
                                   (when prev-outside
                                     (destructuring-bind (prev-x prev-y)
                                         prev-outside

@@ -179,6 +179,12 @@
   (format stream "~a " (maxima::main-prompt)))
 
 (defun maxima-client ()
+  ;; This variable is needed sometimes inside Maxima, but it's not set by default
+  (unless (boundp 'maxima::*maxima-tempdir*)
+    (setq maxima::*maxima-tempdir* #p"/tmp/"))
+  ;; Set up default plot options
+  (setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
+  ;;
   (let ((frame (clim:make-application-frame 'maxima-main-frame
                                             :width 900
                                             :height 600)))

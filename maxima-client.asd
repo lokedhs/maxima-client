@@ -17,4 +17,5 @@
                                      (:file "output")
                                      (:file "queries")
                                      (:file "cmdline")
+                                     (:file "maxima-plot")
                                      (:file "plot2d")))))

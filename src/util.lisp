@@ -52,6 +52,9 @@
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defvar *use-clim-retrieve* nil)
+(defvar *current-stream* nil)
+
 (define-condition maxima-native-error (error)
   ())
 
@@ -80,6 +83,21 @@
          (if ,eval-ret
              (funcall ,handler ,eval-ret (string-trim (format nil " ~c" #\Newline) (maxima-stream-text ,maxima-stream)))
              ,result)))))
+
+(defmacro wrap-function (name args &body body)
+  (let ((new-fn-name (intern (concatenate 'string "CLIM-" (symbol-name name))))
+        (wrapped-fn-name (intern (concatenate 'string "WRAPPED-" (symbol-name name))))
+        (old-fn-ptr (intern (concatenate 'string "*OLD-FN-" (symbol-name name) "*"))))
+    `(progn
+       (defvar ,old-fn-ptr nil)
+       (defun ,new-fn-name ,args ,@body)
+       (defun ,wrapped-fn-name ,args
+         (if *use-clim-retrieve*
+             (,new-fn-name ,@(lambda-fiddle:extract-lambda-vars args))
+             (funcall ,old-fn-ptr ,@(lambda-fiddle:extract-lambda-vars args))))
+       (unless ,old-fn-ptr
+         (setq ,old-fn-ptr (symbol-function ',name))
+         (setf (symbol-function ',name) #',wrapped-fn-name)))))
 
 #+nil
 (defun string-to-maxima-expr (string)
