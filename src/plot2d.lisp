@@ -7,28 +7,36 @@
     v))
 
 (defclass standard-plot ()
-  ((data    :initarg :data
-            :initform nil
-            :accessor standard-plot/data)
-   (options :initarg :options
-            :initform nil
-            :accessor standard-plot/options)
-   (max-x   :initarg :max-x
-            :initform nil
-            :accessor standard-plot/max-x)
-   (min-x   :initarg :min-x
-            :initform nil
-            :accessor standard-plot/min-x)
-   (max-y   :initarg :max-y
-            :initform nil
-            :accessor standard-plot/max-y)
-   (min-y   :initarg :min-y
-            :initform nil
-            :accessor standard-plot/min-y)))
+  ((caller-fun           :initarg :caller-fun)
+   (caller-range         :initarg :caller-range)
+   (caller-extra-options :initarg :caller-extra-options)
+   (data                 :initarg :data
+                         :initform nil
+                         :accessor standard-plot/data)
+   (options              :initarg :options
+                         :initform nil
+                         :accessor standard-plot/options)
+   (max-x                :initarg :max-x
+                         :initform nil
+                         :accessor standard-plot/max-x)
+   (min-x                :initarg :min-x
+                         :initform nil
+                         :accessor standard-plot/min-x)
+   (max-y                :initarg :max-y
+                         :initform nil
+                         :accessor standard-plot/max-y)
+   (min-y                :initarg :min-y
+                         :initform nil
+                         :accessor standard-plot/min-y)))
 
-(defun clim-plot2d-backend (points-lists options)
+(defun clim-plot2d-backend (caller-fun caller-range caller-extra-options points-lists options)
   (log:info "clim plotter: n: ~s, options: ~s" (length points-lists) options)
-  (let ((plot (make-instance 'standard-plot :data points-lists :options options)))
+  (let ((plot (make-instance 'standard-plot
+                             :caller-fun caller-fun
+                             :caller-range caller-range
+                             :caller-extra-options caller-extra-options
+                             :data points-lists
+                             :options options)))
     (present-to-stream plot *current-stream*)))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
@@ -42,16 +50,19 @@
     ((expression 'maxima-native-expr :prompt "Expression")
      (variable 'maxima-native-expr :prompt "Variable")
      (lower-bound 'maxima-native-expr :prompt "Lower bound")
-     (upper-bound 'maxima-native-expr :prompt "Upper bound")
-     &key
-     (max-y 'maxima-native-expr :prompt "Max Y")
-     (min-y 'maxima-native-expr :prompt "Min Y"))
+     (upper-bound 'maxima-native-expr :prompt "Upper bound"))
   (let ((plot2d-expression `((maxima::$plot2d) ,(maxima-native-expr/expr expression)
                              ((maxima::mlist)
                               ,(maxima-native-expr/expr variable)
                               ,(maxima-native-expr-as-float lower-bound)
                               ,(maxima-native-expr-as-float upper-bound)))))
     (maxima-eval (make-instance 'maxima-native-expr :expr plot2d-expression))))
+
+(clim:define-command (zoom-in :name "Zoom by" :menu t :command-table maxima-commands)
+    ((plot standard-plot :prompt "Plot")
+     &key
+     (amount integer :prompt "Amount"))
+  (log:info "Zooming ~s by ~s" plot amount))
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
@@ -154,7 +165,7 @@
              (<= x (+ graph-max (* d 0.5))))
       do (funcall draw-fn x num-decimals))))
 
-(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view t) &key)
+(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
   (let* ((w 500)
          (h 300)
          (left-margin 50)
@@ -267,3 +278,4 @@
                                   (push-points x new-y))
                            do (setq prev-outside outside)
                            finally (draw-list)))))))))))))
+

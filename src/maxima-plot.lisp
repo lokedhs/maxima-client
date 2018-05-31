@@ -10,7 +10,10 @@
   (apply #'cplot2d fun range extra-options))
 
 (defun cplot2d (fun &optional range &rest extra-options)
-  (let (($display2d nil) (*plot-realpart* *plot-realpart*)
+  (let ((orig-fun fun)
+        (orig-range range)
+        (orig-extra-options extra-options)
+        ($display2d nil) (*plot-realpart* *plot-realpart*)
         (options (copy-tree *plot-options*)) (i 0)
         output-file gnuplot-term gnuplot-out-file file points-lists)
 
@@ -136,7 +139,7 @@
     ;; old function $plot2dopen incorporated here
     (case (getf options :plot_format)
       ($clim
-       (maxima-client::clim-plot2d-backend points-lists options))
+       (maxima-client::clim-plot2d-backend orig-fun orig-range orig-extra-options points-lists options))
       ($xmaxima
        (when (getf options :ps_file)
          (setq output-file (list (getf options :ps_file))))
