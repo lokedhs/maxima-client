@@ -85,19 +85,30 @@
              ,result)))))
 
 (defmacro wrap-function (name args &body body)
-  (let ((new-fn-name (intern (concatenate 'string "CLIM-" (symbol-name name))))
-        (wrapped-fn-name (intern (concatenate 'string "WRAPPED-" (symbol-name name))))
-        (old-fn-ptr (intern (concatenate 'string "*OLD-FN-" (symbol-name name) "*"))))
-    `(progn
-       (defvar ,old-fn-ptr nil)
-       (defun ,new-fn-name ,args ,@body)
-       (defun ,wrapped-fn-name ,args
-         (if *use-clim-retrieve*
-             (,new-fn-name ,@(lambda-fiddle:extract-lambda-vars args))
-             (funcall ,old-fn-ptr ,@(lambda-fiddle:extract-lambda-vars args))))
-       (unless ,old-fn-ptr
-         (setq ,old-fn-ptr (symbol-function ',name))
-         (setf (symbol-function ',name) #',wrapped-fn-name)))))
+  (let* ((new-fn-name (intern (concatenate 'string "CLIM-" (symbol-name name))))
+         (wrapped-fn-name (intern (concatenate 'string "WRAPPED-" (symbol-name name))))
+         (old-fn-ptr (intern (concatenate 'string "*OLD-FN-" (symbol-name name) "*")))
+         (rest-var (lambda-fiddle:rest-lambda-var args))
+         (forward-call-args (let ((standard-args (append (lambda-fiddle:required-lambda-vars args)
+                                                         (lambda-fiddle:optional-lambda-vars args)))
+                                  (keyword-args (loop
+                                                  for kw in (lambda-fiddle:key-lambda-vars args)
+                                                  append (list (intern (symbol-name kw) "KEYWORD") kw))))
+                              (if rest-var
+                                  (append standard-args keyword-args (list rest-var))
+                                  (append standard-args keyword-args)))))
+    (labels ((forward (fn)
+               `(,(if rest-var 'apply 'funcall) ,fn ,@forward-call-args)))
+      `(progn
+         (defvar ,old-fn-ptr nil)
+         (defun ,new-fn-name ,args ,@body)
+         (defun ,wrapped-fn-name ,args
+           (if *use-clim-retrieve*
+               ,(forward `(function ,new-fn-name))
+               ,(forward old-fn-ptr)))
+         (unless ,old-fn-ptr
+           (setq ,old-fn-ptr (symbol-function ',name))
+           (setf (symbol-function ',name) #',wrapped-fn-name))))))
 
 #+nil
 (defun string-to-maxima-expr (string)

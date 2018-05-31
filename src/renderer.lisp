@@ -412,7 +412,7 @@
                                                             (+ x (* hg-height hg-angle)) bottom
                                                             (+ x x-offset) y
                                                             (+ right x-offset) y))
-                          :line-thickness 2)
+                          :line-thickness 1)
         (move-rec exp x-offset 0)
         (clim:stream-add-output-record stream exp)))))
 

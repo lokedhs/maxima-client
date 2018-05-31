@@ -6,7 +6,10 @@
       ;; ELSE: Call into the old implementation
       (funcall *OLD-FN-CHECK-OPTION-FORMAT* option)))
 
-(defun $cplot2d (fun &optional range &rest extra-options)
+(maxima-client::wrap-function $plot2d (fun &optional range &rest extra-options)
+  (apply #'cplot2d fun range extra-options))
+
+(defun cplot2d (fun &optional range &rest extra-options)
   (let (($display2d nil) (*plot-realpart* *plot-realpart*)
         (options (copy-tree *plot-options*)) (i 0)
         output-file gnuplot-term gnuplot-out-file file points-lists)
@@ -117,7 +120,7 @@
           (mapcar #'(lambda (f) (cdr (draw2d f range options))) (cdr fun)))
     (when (= (count-if #'(lambda (x) x) points-lists) 0)
       (mtell (intl:gettext "plot2d: nothing to plot.~%"))
-      (return-from $cplot2d))
+      (return-from cplot2d))
 
     (setq gnuplot-term (getf options :gnuplot_term))
     (setf gnuplot-out-file (getf options :gnuplot_out_file))
