@@ -38,7 +38,6 @@
      (size 'string :prompt "Size"))
   (log:info "value=~s, type=~s, size=~s" value type size))
 
-#+nil
 (clim:define-command (plot2d-with-range :name "Plot 2D" :menu t :command-table maxima-commands)
     ((expression 'maxima-native-expr :prompt "Expression")
      (variable 'maxima-native-expr :prompt "Variable")
@@ -47,20 +46,16 @@
      &key
      (max-y 'maxima-native-expr :prompt "Max Y")
      (min-y 'maxima-native-expr :prompt "Min Y"))
-  #+nil
-  (let ((plot (plot2d-impl (maxima::meval* (maxima-native-expr/expr expression))
-                           (maxima-native-expr/expr variable)
-                           (maxima-native-expr-as-float lower-bound)
-                           (maxima-native-expr-as-float upper-bound)
-                           (maxima-native-expr-as-float max-y)
-                           (maxima-native-expr-as-float min-y))))
-    (present-to-stream plot *standard-output*)))
+  (let ((plot2d-expression `((maxima::$plot2d) ,(maxima-native-expr/expr expression)
+                             ((maxima::mlist)
+                              ,(maxima-native-expr/expr variable)
+                              ,(maxima-native-expr-as-float lower-bound)
+                              ,(maxima-native-expr-as-float upper-bound)))))
+    (maxima-eval (make-instance 'maxima-native-expr :expr plot2d-expression))))
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
-  #+nil
-  (plot2d-with-range (string-to-native-expr "sin(x)") (string-to-native-expr "x")
-                     (string-to-native-expr "0") (string-to-native-expr "%pi*2")))
+  (maxima-eval (string-to-native-expr "plot2d(sin(x),[x,0,%pi*2])")))
 
 #|
   Typical options:

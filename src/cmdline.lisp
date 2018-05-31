@@ -237,4 +237,5 @@
 (clim:make-command-table 'maxima-plot-command-table
                          :errorp nil
                          :menu '(("Discrete" :command plot2d-with-range)
+                                 ("Parametric" :command plot2d-with-range)
                                  ("Plot examle" :command plot2d-demo)))
