@@ -113,10 +113,10 @@
             (reduce #'max (remove nil (mapcar #'third dimensions)))
             (reduce #'min (remove nil (mapcar #'fourth dimensions))))))
 
-(defun draw-centered-text (stream text left right y)
+(defun draw-centered-text (stream text x y)
   (multiple-value-bind (width)
       (clim:text-size stream text)
-    (clim:draw-text* stream text (+ (/ (+ (- right left) width) 2) left) y)))
+    (clim:draw-text* stream text (- x (/ width 2)) y)))
 
 (defun maxima-to-clim-colour (colour)
   (case colour
@@ -165,6 +165,11 @@
              (<= x (+ graph-max (* d 0.5))))
       do (funcall draw-fn x num-decimals))))
 
+(defun format-with-decimals (n num-decimals)
+  (if (zerop num-decimals)
+      (format nil "~d" n)
+      (format nil "~,vf" num-decimals n)))
+
 (clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
   (let* ((w 500)
          (h 300)
@@ -208,9 +213,7 @@
                 ;; Draw X-axis tick marks
                 (draw-tick-marks min-x-bound max-x-bound 8
                                  (lambda (x num-decimals)
-                                   (let ((string (if (zerop num-decimals)
-                                                     (format nil "~d" x)
-                                                     (format nil "~,vf" num-decimals x))))
+                                   (let ((string (format-with-decimals x num-decimals)))
                                      (multiple-value-bind (width)
                                          (clim:text-size stream string)
                                        (let ((pos (x-to-pos x)))
@@ -220,14 +223,12 @@
                                                           (- pos (/ width 2))
                                                           (+ h (* char-height 2))))))))
                 ;; Draw X-label
-                (draw-centered-text stream x-label left-margin (+ left-margin w) (+ h (* char-height 4)))
-                ;; Draw y-label, if it exists
+                (draw-centered-text stream x-label (+ (/ w 2) left-margin) (+ h (* char-height 4)))
+                ;; Draw Y-axis ticks
                 (let ((max-width 0))
                   (draw-tick-marks min-y-bound max-y-bound 8
                                    (lambda (y num-decimals)
-                                     (let ((string (if (zerop num-decimals)
-                                                       (format nil "~d" y)
-                                                       (format nil "~,vf" num-decimals y))))
+                                     (let ((string (format-with-decimals y num-decimals)))
                                        (multiple-value-bind (width)
                                            (clim:text-size stream string)
                                          (let ((yp (y-to-pos y)))
@@ -237,15 +238,14 @@
                                                             (- left-margin width 5)
                                                             (+ yp (/ char-height 2)))
                                            (setq max-width (max max-width width)))))))
+                  ;; Draw y-label, if it exists
                   (when y-label
                     (multiple-value-bind (width)
                         (clim:text-size stream y-label)
-                      (let ((baseline-to-edge 5))
-                        (clim:draw-text* stream y-label (- left-margin baseline-to-edge (/ width 2)) (/ h 2)
+                      (let ((pos (- left-margin 30)))
+                        (clim:draw-text* stream y-label (- pos (/ width 2)) (/ h 2)
                                          :transformation (clim:make-rotation-transformation* (- (/ pi 2))
-                                                                                             (- left-margin
-                                                                                                baseline-to-edge
-                                                                                                max-width)
+                                                                                             pos
                                                                                              (/ h 2)))))))
                 ;; Draw the datasets
                 (loop
@@ -277,5 +277,19 @@
                                       (push-points prev-x prev-y)))
                                   (push-points x new-y))
                            do (setq prev-outside outside)
-                           finally (draw-list)))))))))))))
-
+                           finally (draw-list)))))
+                ;; Zoom controls
+                (clim:with-output-as-gadget (stream :x (- (+ w left-margin) 70) :y (+ h 25))
+                  (clim:make-pane 'clim:push-button-pane
+                                  :label "+"
+                                  :width 30
+                                  :activate-callback (lambda (pane &rest args)
+                                                       (declare (ignore pane args))
+                                                       (log:info "zoom"))))
+                (clim:with-output-as-gadget (stream :x (- (+ w left-margin) 30) :y (+ h 25))
+                  (clim:make-pane 'clim:push-button-pane
+                                  :label "-"
+                                  :width 30
+                                  :activate-callback (lambda (pane &rest args)
+                                                       (declare (ignore pane args))
+                                                       (log:info "zoom out"))))))))))))
