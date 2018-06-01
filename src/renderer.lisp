@@ -365,7 +365,7 @@
             (dimension-bind (top :width top-width :height top-height)
               (set-rec-position top
                                 (/ (- sigma-width top-width) 2)
-                                (- 0 sigma-ascent top-height))
+                                (- (- sigma-ascent) centre top-height))
               (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
             ;;
             (set-rec-position exp (+ sigma-right 2) nil)
@@ -466,9 +466,9 @@
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
                (maxima::mdefine (render-mdefine stream (second fixed) (third fixed)))
-               (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-               (maxima::%integrate (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-               (maxima::%product (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               ((maxima::%sum maxima::$sum) (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               ((maxima::%integrate maxima::$integrate) (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               ((maxima::%product maxima::$product) (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%sqrt (render-sqrt stream (second fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
