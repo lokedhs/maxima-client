@@ -436,7 +436,7 @@
 (defun render-mdefine (stream f definition)
   (let ((function-name (car f))
         (function-args (cdr f)))
-    ;; FUNCTION-NAME should always be a list of a singlr symbol which
+    ;; FUNCTION-NAME should always be a list of a single symbol which
     ;; is the name of the function. For now, we'll just bail if it
     ;; isn't, but perhaps there are situations where some more complex
     ;; stucture can be passed in. If that's the case, we should
