@@ -6,6 +6,10 @@
       (error "~s does not evaluate to a number" expr))
     v))
 
+(clim:define-presentation-type standard-plot
+    ()
+  :inherit-from t)
+
 (defclass standard-plot ()
   ((caller-fun           :initarg :caller-fun)
    (caller-range         :initarg :caller-range)

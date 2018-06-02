@@ -88,35 +88,13 @@
               nil)
           (string-to-native-expr trimmed)))))
 
-#+nil
-(clim:define-presentation-method clim:present (obj (type maxima-expression) stream (view maxima-interactor-view) &key)
-  (let ((output-record (make-expression-output-record stream obj)))
-    (clim:with-room-for-graphics (stream)
-      (clim:stream-add-output-record stream output-record))))
+(clim:define-presentation-type maxima-native-expr
+    ()
+  :inherit-from t)
 
 (clim:define-presentation-type maxima-expression-or-command
     (&key (command-table (clim:frame-command-table clim:*application-frame*)))
   :inherit-from t)
-
-;;; As an alternative to the below method, the it is possible to create a presentation method
-;;; specialised on string-stream that creates a plain-text representation of an expression
-#+nil
-(clim:define-presentation-method clim:present (obj (type maxima-native-expr) (stream string-stream) (view t) &key)
-  (let ((expr (maxima-native-expr/expr obj)))
-    (format stream "~a" (maxima-expr-as-string expr))))
-
-#+nil
-(defmethod drei::presentation-replace-input ((stream drei::drei-input-editing-mixin) object
-                                             (type (eql 'maxima-native-expr)) view
-                                             &rest args
-                                             &key
-                                               (buffer-start (drei::input-position stream))
-                                               rescan
-                                               query-identifier
-                                               (for-context-type type))
-  (declare (ignore query-identifier rescan for-context-type buffer-start))
-  (climi::with-keywords-removed (args (:type :view :query-identifier :for-context-type))
-    (apply #'clim:replace-input stream (maxima-native-expr/src object) args)))
 
 (clim:define-presentation-method clim:accept ((type maxima-expression-or-command)
                                               stream
