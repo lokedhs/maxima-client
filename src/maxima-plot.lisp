@@ -139,7 +139,10 @@
     ;; old function $plot2dopen incorporated here
     (case (getf options :plot_format)
       ($clim
-       (maxima-client::clim-plot2d-backend orig-fun orig-range orig-extra-options points-lists options))
+       (multiple-value-bind (result return-p)
+           (maxima-client::clim-plot2d-backend orig-fun orig-range orig-extra-options points-lists options)
+         (when return-p
+           (return-from cplot2d result))))
       ($xmaxima
        (when (getf options :ps_file)
          (setq output-file (list (getf options :ps_file))))

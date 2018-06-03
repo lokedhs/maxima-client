@@ -16,6 +16,21 @@
   (:layouts (default (clim:vertically ()
                        text-content))))
 
+(defgeneric presentation-pointer-motion (presentation x y)
+  (:method (presentation x y)
+    nil))
+
+(defmethod clim-internals::frame-input-context-track-pointer ((frame maxima-main-frame)
+                                                              input-context
+                                                              stream
+                                                              event)
+  (let* ((x (clim-internals::device-event-x event))
+         (y (clim-internals::device-event-y event))
+         (presentation (find-presentation-at-pos x y)))
+    (when presentation
+      (presentation-pointer-motion presentation x y)))
+  (call-next-method))
+
 (defclass labelled-expression ()
   ((tag :initarg :tag
           :reader labelled-expression/tag)

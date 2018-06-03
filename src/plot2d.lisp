@@ -11,9 +11,12 @@
   :inherit-from t)
 
 (defclass standard-plot ()
-  ((caller-fun           :initarg :caller-fun)
-   (caller-range         :initarg :caller-range)
-   (caller-extra-options :initarg :caller-extra-options)
+  ((caller-fun           :initarg :caller-fun
+                         :reader standard-plot/caller-fun)
+   (caller-range         :initarg :caller-range
+                         :reader standard-plot/caller-range)
+   (caller-extra-options :initarg :caller-extra-options
+                         :reader standard-plot/called-extra-options)
    (data                 :initarg :data
                          :initform nil
                          :accessor standard-plot/data)
@@ -33,15 +36,24 @@
                          :initform nil
                          :accessor standard-plot/min-y)))
 
+(defvar *plot2d-update-existing* nil)
+
 (defun clim-plot2d-backend (caller-fun caller-range caller-extra-options points-lists options)
   (log:info "clim plotter: n: ~s, options: ~s" (length points-lists) options)
-  (let ((plot (make-instance 'standard-plot
-                             :caller-fun caller-fun
-                             :caller-range caller-range
-                             :caller-extra-options caller-extra-options
-                             :data points-lists
-                             :options options)))
-    (present-to-stream plot *current-stream*)))
+  (if *plot2d-update-existing*
+      ;; This is a request to update an existing plot
+      (let ((plot *plot2d-update-existing*))
+        (setf (standard-plot/data plot) points-lists)
+        (setf (standard-plot/options plot) options))
+      ;; ELSE: Draw a new plot and add it to the current stream
+      (let ((plot (make-instance 'standard-plot
+                                 :caller-fun caller-fun
+                                 :caller-range caller-range
+                                 :caller-extra-options caller-extra-options
+                                 :data points-lists
+                                 :options options)))
+        (present-to-stream plot *current-stream*)))
+  (values nil t))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
     ((value 'string :prompt "Value")
@@ -71,6 +83,15 @@
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
   (maxima-eval (string-to-native-expr "plot2d(sin(x),[x,0,%pi*2])")))
+
+(clim:define-command (reload-plot :name "Reload plot" :menu y :command-table maxima-commands)
+    ((plot standard-plot :prompt "Plot"))
+  (let ((*plot2d-update-existing* plot))
+    (apply #'maxima::cplot2d
+           (string-to-maxima-expr "sqrt(x)")
+           (standard-plot/caller-range plot)
+           (standard-plot/called-extra-options plot)))
+  (clim:stream-replay *standard-output* (clim:sheet-region *standard-output*)))
 
 #|
   Typical options:
@@ -282,18 +303,18 @@
                                   (push-points x new-y))
                            do (setq prev-outside outside)
                            finally (draw-list)))))
-                ;; Zoom controls
-                (clim:with-output-as-gadget (stream :x (- (+ w left-margin) 70) :y (+ h 25))
-                  (clim:make-pane 'clim:push-button-pane
-                                  :label "+"
-                                  :width 30
-                                  :activate-callback (lambda (pane &rest args)
-                                                       (declare (ignore pane args))
-                                                       (log:info "zoom"))))
-                (clim:with-output-as-gadget (stream :x (- (+ w left-margin) 30) :y (+ h 25))
-                  (clim:make-pane 'clim:push-button-pane
-                                  :label "-"
-                                  :width 30
-                                  :activate-callback (lambda (pane &rest args)
-                                                       (declare (ignore pane args))
-                                                       (log:info "zoom out"))))))))))))
+                (labels ((add-plot-control (x label callback)
+                           (add-button-gadget stream label (- (+ w left-margin) x) (+ h 25) callback)))
+                  (add-plot-control 130 "Reload" (lambda () (reload-plot obj))))))))))))
+
+(defun add-button-gadget (stream label x y callback &key width)
+  (clim:with-output-as-gadget (stream :x x :y y)
+    (clim:make-pane 'clim:push-button-pane
+                    :label label
+                    :width width
+                    :activate-callback (lambda (pane &rest args)
+                                         (log:info "~s pressed: pane=~s args=~s" label pane args)
+                                         (funcall callback)))))
+
+(defmethod presentation-pointer-motion ((presentation standard-plot) x y)
+  (log:info "mouse moved: (~f,~f)" x y))

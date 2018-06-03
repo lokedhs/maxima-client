@@ -48,6 +48,9 @@
 (defun clamp (n min max)
   (min (max n min) max))
 
+(defun find-presentation-at-pos (x y)
+  nil)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
