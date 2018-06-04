@@ -10,6 +10,10 @@
     ()
   :inherit-from t)
 
+(clim:define-presentation-type plot2d-data
+    ()
+  :inherit-from t)
+
 (defclass standard-plot ()
   ((caller-fun           :initarg :caller-fun
                          :reader standard-plot/caller-fun)
@@ -34,7 +38,22 @@
                          :accessor standard-plot/max-y)
    (min-y                :initarg :min-y
                          :initform nil
-                         :accessor standard-plot/min-y)))
+                         :accessor standard-plot/min-y)
+   (presentations        :initform nil
+                         :accessor standard-plot/presentations)))
+
+(defclass plot2d-presentation (clim:standard-presentation)
+  ())
+
+(defmethod clim:replay-output-record ((record plot2d-presentation) stream &optional region x-offset y-offset)
+  (declare (ignore region x-offset y-offset))
+  (call-next-method)
+  (log:info "replaying plot2d-presentation")
+  )
+
+(defmethod initialize-instance :after ((obj plot2d-presentation) &rest rest)
+  (log:info "plot2d-presentation created. Args: ~s" rest)
+  (push obj (standard-plot/presentations (clim:presentation-object obj))))
 
 (defvar *plot2d-update-existing* nil)
 
@@ -51,8 +70,18 @@
                                  :caller-range caller-range
                                  :caller-extra-options caller-extra-options
                                  :data points-lists
-                                 :options options)))
-        (present-to-stream plot *current-stream*)))
+                                 :options options))
+            (stream *current-stream*))
+        (let ((p (make-instance 'plot2d-presentation
+                                :object plot
+                                :type 'standard-plot)))
+          (clim:with-output-as-presentation (stream plot 'plot2d-data
+                                                    :view (clim:stream-default-view stream)
+                                                    :allow-sensitive-inferiors t
+                                                    :record-type 'clim:standard-presentation
+                                                    :parent p)
+            (display-standard-plot stream plot))
+          (clim:stream-add-output-record stream p))))
   (values nil t))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
@@ -91,7 +120,9 @@
            (string-to-maxima-expr "sqrt(x)")
            (standard-plot/caller-range plot)
            (standard-plot/called-extra-options plot)))
-  (clim:stream-replay *standard-output* (clim:sheet-region *standard-output*)))
+  ;;(clim:stream-replay *standard-output* (clim:sheet-region *standard-output*))
+  (let ((presentations (standard-plot/presentations plot)))
+    (log:info "need to recompute the following output records: ~s" presentations)))
 
 #|
   Typical options:
@@ -195,7 +226,7 @@
       (format nil "~d" n)
       (format nil "~,vf" num-decimals n)))
 
-(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
+(defun display-standard-plot (stream obj)
   (let* ((w 500)
          (h 300)
          (left-margin 50)
@@ -318,3 +349,6 @@
 
 (defmethod presentation-pointer-motion ((presentation standard-plot) x y)
   (log:info "mouse moved: (~f,~f)" x y))
+
+(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
+  (display-standard-plot stream obj))
