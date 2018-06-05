@@ -20,7 +20,7 @@
    (caller-range         :initarg :caller-range
                          :reader standard-plot/caller-range)
    (caller-extra-options :initarg :caller-extra-options
-                         :reader standard-plot/called-extra-options)
+                         :reader standard-plot/caller-extra-options)
    (data                 :initarg :data
                          :initform nil
                          :accessor standard-plot/data)
@@ -72,17 +72,45 @@
                                  :data points-lists
                                  :options options))
             (stream *current-stream*))
-        (let ((p (make-instance 'plot2d-presentation
-                                :object plot
-                                :type 'standard-plot)))
-          (clim:with-output-as-presentation (stream plot 'plot2d-data
+        (let ((rec (make-instance 'clim:standard-sequence-output-record)))
+          (clim:with-output-as-presentation (stream plot 'standard-plot
                                                     :view (clim:stream-default-view stream)
                                                     :allow-sensitive-inferiors t
-                                                    :record-type 'clim:standard-presentation
-                                                    :parent p)
-            (display-standard-plot stream plot))
-          (clim:stream-add-output-record stream p))))
+                                                    :record-type 'plot2d-presentation
+                                                    :parent rec)
+            (clim:with-output-recording-options (stream :record t :draw t)
+              (let ((inner (clim:with-output-to-output-record (stream)
+                             (display-standard-plot stream plot))))
+                (clim:stream-add-output-record stream inner))))
+          (clim:with-room-for-graphics (stream)
+            (clim:stream-add-output-record stream rec)))))
   (values nil t))
+
+(defun recompute-plot2d-presentation (stream presentation)
+  (let ((prev-elements (slot-value presentation 'clim-internals::children)))
+    (unless (= (length prev-elements) 1)
+      (error "Unexpected length of child list: ~s" (length prev-elements)))
+    (let ((prev (aref prev-elements 0)))
+      (dimension-bind (prev :x x :y y :width width :height height)
+        (clim:clear-output-record presentation)
+        (let ((inner (clim:with-output-to-output-record (stream)
+                       (display-standard-plot stream (clim:presentation-object presentation)))))
+          (dimension-bind (inner :width inner-width :height inner-height)
+            (unless (and (= inner-width width)
+                         (= inner-height height))
+              ;; Disabled for now since it's hard to guarantee that the dimension is exactly the same
+              (log:error "Output record dimension mismatch: old: (~f,~f) new: (~f,~f)"
+                         width height inner-width inner-height)
+              #+nil
+              (error "New output record has different size: prev-width=~s, prev-height=~s, width=~s, height=~s"
+                     width height inner-width inner-height))
+            (setf (clim:output-record-position inner)
+                  (values x y))
+            (clim:add-output-record inner presentation)))))))
+
+(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
+  (break)
+  (display-standard-plot stream obj))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
     ((value 'string :prompt "Value")
@@ -119,10 +147,10 @@
     (apply #'maxima::cplot2d
            (string-to-maxima-expr "sqrt(x)")
            (standard-plot/caller-range plot)
-           (standard-plot/called-extra-options plot)))
+           (standard-plot/caller-extra-options plot)))
   ;;(clim:stream-replay *standard-output* (clim:sheet-region *standard-output*))
   (let ((presentations (standard-plot/presentations plot)))
-    (log:info "need to recompute the following output records: ~s" presentations)))
+    (mapc (lambda (v) (recompute-plot2d-presentation *standard-output* v)) presentations)))
 
 #|
   Typical options:
@@ -350,5 +378,3 @@
 (defmethod presentation-pointer-motion ((presentation standard-plot) x y)
   (log:info "mouse moved: (~f,~f)" x y))
 
-(clim:define-presentation-method clim:present (obj (type standard-plot) stream (view maxima-renderer-view) &key)
-  (display-standard-plot stream obj))
