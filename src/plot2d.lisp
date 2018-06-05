@@ -82,25 +82,27 @@ to be adjusted by the same amount."))
                                                   :view (clim:stream-default-view stream)
                                                   :allow-sensitive-inferiors t
                                                   :record-type 'plot2d-presentation)
-          (clim:with-output-recording-options (stream :record t :draw t)
-            (let ((inner (clim:with-output-to-output-record (stream 'coordinate-adjusted-record)
-                           (display-standard-plot stream plot))))
-              ;; We can't use WITH-ROOM-FOR-GRAPHICS here because we want
-              ;; the graph to be displayed in a predictable location in
-              ;; order for it not to move around when refreshing the
-              ;; content.
-              (dimension-bind (inner :height height)
-                (multiple-value-bind (cx cy)
-                    (clim:stream-cursor-position stream)
-                  ;; Add a little space since the vertical axis labels
-                  ;; sometimes gets drawn above the top of the graph
-                  (incf cy 10)
-                  (setf (coordinate-adjusted-record/dx inner) cx)
-                  (setf (coordinate-adjusted-record/dy inner) cy)
-                  (move-rec inner cx cy)
-                  (clim:stream-add-output-record stream inner)
-                  (setf (clim:stream-cursor-position stream)
-                        (values cx (+ cy height))))))))))
+          (let ((inner (clim:with-output-to-output-record (stream 'coordinate-adjusted-record)
+                         (display-standard-plot stream plot))))
+            ;; We can't use WITH-ROOM-FOR-GRAPHICS here because we want
+            ;; the graph to be displayed in a predictable location in
+            ;; order for it not to move around when refreshing the
+            ;; content.
+            (dimension-bind (inner :height height)
+              (multiple-value-bind (cx cy)
+                  (clim:stream-cursor-position stream)
+                ;; Add a little space since the vertical axis labels
+                ;; sometimes gets drawn above the top of the graph
+                (incf cy 10)
+                (setf (coordinate-adjusted-record/dx inner) cx)
+                (setf (coordinate-adjusted-record/dy inner) cy)
+                (move-rec inner cx cy)
+                (clim:stream-add-output-record stream inner)
+                (setf (clim:stream-cursor-position stream)
+                      (values cx (+ cy height)))
+                ;; It's not clear why this is needed here, but if it's not included
+                ;; part of the graph will not be displayed.
+                (clim:replay inner stream)))))))
   (values nil t))
 
 (defun recompute-plot2d-presentation (stream presentation)
@@ -110,11 +112,11 @@ to be adjusted by the same amount."))
     (let* ((prev (aref prev-elements 0))
            (dx (coordinate-adjusted-record/dx prev))
            (dy (coordinate-adjusted-record/dy prev)))
-      (dimension-bind (prev :x x :y y :width width :height height)
+      (dimension-bind (prev :width width :height height)
         (clim:clear-output-record presentation)
         (let ((inner (clim:with-output-to-output-record (stream)
                        (display-standard-plot stream (clim:presentation-object presentation)))))
-          (dimension-bind (inner :y inner-y :width inner-width :height inner-height)
+          (dimension-bind (inner :width inner-width :height inner-height)
             (unless (and (= inner-width width)
                          (= inner-height height))
               ;; Disabled for now since it's hard to guarantee that the dimension is exactly the same
@@ -124,7 +126,9 @@ to be adjusted by the same amount."))
               (error "New output record has different size: prev-width=~s, prev-height=~s, width=~s, height=~s"
                      width height inner-width inner-height))
             (move-rec inner dx dy)
-            (clim:add-output-record inner presentation)))))))
+            (clim:add-output-record inner presentation)
+            (dimension-bind (presentation :x x :y y :width width :height height)
+              (clim:repaint-sheet stream (clim:make-bounding-rectangle x y (+ x width) (+ y height))))))))))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
     ((value 'string :prompt "Value")
