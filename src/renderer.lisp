@@ -472,7 +472,7 @@
                (maxima::%sqrt (render-sqrt stream (second fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
-      (log:info "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
+      (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
       (etypecase fixed
         (number (render-formatted stream "~a" fixed))
         (symbol (render-symbol stream fixed))
@@ -494,7 +494,7 @@
            ,output-record)))))
 
 (defun make-expression-output-record (stream expr)
-  (log:info "Making output record for expr: ~s" expr)
+  (log:trace "Making output record for expr: ~s" expr)
   (make-rendered-output-record (stream)
     (render-maxima-expression stream expr)))
 

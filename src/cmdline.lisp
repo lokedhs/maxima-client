@@ -85,7 +85,7 @@
                                                                 (default nil defaultp)
                                                                 (default-type type))
   (let ((result (read-plain-text stream)))
-    (log:info "Got string from reading plain-text: ~s" result)
+    (log:trace "Got string from reading plain-text: ~s" result)
     (cond ((and (equal result "") defaultp)
            (values default default-type))
           (t (values result type)))))
@@ -95,7 +95,7 @@
                                                                         (default nil defaultp)
                                                                         (default-type type))
   (let ((s (read-plain-text stream)))
-    (log:info "Got string from reading native expr: ~s" s)
+    (log:trace "Got string from reading native expr: ~s" s)
     (let ((trimmed (string-trim " " s)))
       (if (equal trimmed "")
           (if defaultp
@@ -129,12 +129,12 @@
 
 (clim:define-presentation-translator maxima-to-plain-text (maxima-native-expr plain-text maxima-commands)
     (object)
-  (log:info "Converting to text: ~s" object)
+  (log:trace "Converting to text: ~s" object)
   (maxima-native-expr/src object))
 
 (clim:define-presentation-translator plain-text-to-maxima (plain-text maxima-native-expr maxima-commands)
     (object)
-  (log:info "Converting to maxima expr: ~s" object)
+  (log:trace "Converting to maxima expr: ~s" object)
   (string-to-native-expr object))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
@@ -143,7 +143,7 @@
           (let ((clim:*command-dispatchers* '(#\:)))
             (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
               (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default nil :default-type 'maxima-empty-input)))
-        (log:info "Got input: object=~s, type=~s" object type)
+        (log:trace "Got input: object=~s, type=~s" object type)
         (cond
           ((null object)
            nil)
@@ -194,7 +194,7 @@
                                            (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
                                        (maxima::meval* (maxima-native-expr/expr cmd)))))
-                         (log:info "Result: ~s" result)
+                         (log:trace "Result: ~s" result)
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setf (symbol-value d-tag) result)
                            (let ((obj (make-instance 'maxima-native-expr :expr result)))
@@ -212,7 +212,7 @@
                                   *standard-output*))
               (t
                (when (plusp (length content))
-                 (log:info "Output from command: ~s" content))))))))
+                 (log:trace "Output from command: ~s" content))))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()

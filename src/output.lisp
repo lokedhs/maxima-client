@@ -38,7 +38,7 @@
   ())
 
 (defmethod trivial-gray-streams:stream-read-char ((stream maxima-input))
-  (log:info "trying to read from stream"))
+  (log:trace "trying to read from stream"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; io
@@ -64,7 +64,7 @@
       (format (maxima-io/clim-stream stream) "~a" s))
     (let* ((result (maxima-io-input-plain-text stream))
            (updated (format nil "~a~%" result)))
-      (log:info "got result: ~s" result)
+      (log:trace "got result: ~s" result)
       (setf (maxima-io/buffer stream) updated)
       (setf (maxima-io/pos stream) 0))))
 
@@ -74,7 +74,7 @@
   (let ((pos (maxima-io/pos stream)))
     (incf (maxima-io/pos stream))
     (let ((result (aref (maxima-io/buffer stream) pos)))
-      (log:info "result from read-char: ~s" result)
+      (log:trace "result from read-char: ~s" result)
       result)))
 
 (defmethod trivial-gray-streams:stream-read-char-no-hang ((stream maxima-io))
@@ -84,7 +84,7 @@
   (let ((ch (if (maxima-io-buffer-nonempty stream)
                 (aref (maxima-io/buffer stream) (maxima-io/pos stream))
                 nil)))
-    (log:info "peeking char, result: ~s" ch)
+    (log:trace "peeking char, result: ~s" ch)
     ch))
 
 (defmethod trivial-gray-streams:stream-read-line ((stream maxima-io))
@@ -95,5 +95,5 @@
                         until (eql ch #\Newline)
                         do (princ ch)))
                     (maxima-io-input-plain-text stream))))
-    (log:info "result from stream-read-line: ~s" result)
+    (log:trace "result from stream-read-line: ~s" result)
     result))

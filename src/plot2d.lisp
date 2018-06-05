@@ -45,20 +45,26 @@
 (defclass plot2d-presentation (clim:standard-presentation)
   ())
 
+(defclass coordinate-adjusted-record (clim:standard-sequence-output-record)
+  ((dx :accessor coordinate-adjusted-record/dx)
+   (dy :accessor coordinate-adjusted-record/dy))
+  (:documentation "Output record that keeps track of its location relative to its parent.
+This is needed if the record is ever replaced in which case the new record needs
+to be adjusted by the same amount."))
+
 (defmethod clim:replay-output-record ((record plot2d-presentation) stream &optional region x-offset y-offset)
   (declare (ignore region x-offset y-offset))
   (call-next-method)
-  (log:info "replaying plot2d-presentation")
-  )
+  (log:trace "replaying plot2d-presentation"))
 
 (defmethod initialize-instance :after ((obj plot2d-presentation) &rest rest)
-  (log:info "plot2d-presentation created. Args: ~s" rest)
+  (log:trace "plot2d-presentation created. Args: ~s" rest)
   (push obj (standard-plot/presentations (clim:presentation-object obj))))
 
 (defvar *plot2d-update-existing* nil)
 
 (defun clim-plot2d-backend (caller-fun caller-range caller-extra-options points-lists options)
-  (log:info "clim plotter: n: ~s, options: ~s" (length points-lists) options)
+  (log:trace "clim plotter: n: ~s, options: ~s" (length points-lists) options)
   (if *plot2d-update-existing*
       ;; This is a request to update an existing plot
       (let ((plot *plot2d-update-existing*))
@@ -72,39 +78,43 @@
                                  :data points-lists
                                  :options options))
             (stream *current-stream*))
-        (let ((rec (make-instance 'clim:standard-sequence-output-record)))
-          (clim:with-output-as-presentation (stream plot 'standard-plot
-                                                    :view (clim:stream-default-view stream)
-                                                    :allow-sensitive-inferiors t
-                                                    :record-type 'plot2d-presentation
-                                                    :parent rec)
-            (clim:with-output-recording-options (stream :record t :draw t)
-              (let ((inner (clim:with-output-to-output-record (stream)
-                             (display-standard-plot stream plot))))
-                (clim:stream-add-output-record stream inner))))
-          ;; We can't use WITH-ROOM-FOR-GRAPHICS here because we want
-          ;; the graph to be displayed in a predictable location in
-          ;; order for it not to move around when refreshing the
-          ;; content.
-          (dimension-bind (rec :height height)
-            (multiple-value-bind (cx cy)
-                (clim:stream-cursor-position stream)
-              (set-rec-position rec cx cy)
-              (clim:stream-add-output-record stream rec)
-              (setf (clim:stream-cursor-position stream)
-                    (values cx (+ cy height))))))))
+        (clim:with-output-as-presentation (stream plot 'standard-plot
+                                                  :view (clim:stream-default-view stream)
+                                                  :allow-sensitive-inferiors t
+                                                  :record-type 'plot2d-presentation)
+          (clim:with-output-recording-options (stream :record t :draw t)
+            (let ((inner (clim:with-output-to-output-record (stream 'coordinate-adjusted-record)
+                           (display-standard-plot stream plot))))
+              ;; We can't use WITH-ROOM-FOR-GRAPHICS here because we want
+              ;; the graph to be displayed in a predictable location in
+              ;; order for it not to move around when refreshing the
+              ;; content.
+              (dimension-bind (inner :height height)
+                (multiple-value-bind (cx cy)
+                    (clim:stream-cursor-position stream)
+                  ;; Add a little space since the vertical axis labels
+                  ;; sometimes gets drawn above the top of the graph
+                  (incf cy 10)
+                  (setf (coordinate-adjusted-record/dx inner) cx)
+                  (setf (coordinate-adjusted-record/dy inner) cy)
+                  (move-rec inner cx cy)
+                  (clim:stream-add-output-record stream inner)
+                  (setf (clim:stream-cursor-position stream)
+                        (values cx (+ cy height))))))))))
   (values nil t))
 
 (defun recompute-plot2d-presentation (stream presentation)
   (let ((prev-elements (slot-value presentation 'clim-internals::children)))
     (unless (= (length prev-elements) 1)
       (error "Unexpected length of child list: ~s" (length prev-elements)))
-    (let ((prev (aref prev-elements 0)))
+    (let* ((prev (aref prev-elements 0))
+           (dx (coordinate-adjusted-record/dx prev))
+           (dy (coordinate-adjusted-record/dy prev)))
       (dimension-bind (prev :x x :y y :width width :height height)
         (clim:clear-output-record presentation)
         (let ((inner (clim:with-output-to-output-record (stream)
                        (display-standard-plot stream (clim:presentation-object presentation)))))
-          (dimension-bind (inner :width inner-width :height inner-height)
+          (dimension-bind (inner :y inner-y :width inner-width :height inner-height)
             (unless (and (= inner-width width)
                          (= inner-height height))
               ;; Disabled for now since it's hard to guarantee that the dimension is exactly the same
@@ -113,8 +123,7 @@
               #+nil
               (error "New output record has different size: prev-width=~s, prev-height=~s, width=~s, height=~s"
                      width height inner-width inner-height))
-            (setf (clim:output-record-position inner)
-                  (values x y))
+            (move-rec inner dx dy)
             (clim:add-output-record inner presentation)))))))
 
 (clim:define-command (command-test :name "Test command" :menu t :command-table maxima-commands)
@@ -122,7 +131,7 @@
      &key
      (type 'string :prompt "Type")
      (size 'string :prompt "Size"))
-  (log:info "value=~s, type=~s, size=~s" value type size))
+  (log:trace "value=~s, type=~s, size=~s" value type size))
 
 (clim:define-command (plot2d-with-range :name "Plot 2D" :menu t :command-table maxima-commands)
     ((expression 'maxima-native-expr :prompt "Expression")
@@ -140,7 +149,7 @@
     ((plot standard-plot :prompt "Plot")
      &key
      (amount integer :prompt "Amount"))
-  (log:info "Zooming ~s by ~s" plot amount))
+  (log:trace "Zooming ~s by ~s" plot amount))
 
 (clim:define-command (plot2d-demo :name "Demo plot" :menu t :command-table maxima-commands)
     ()
@@ -245,7 +254,7 @@
          (graph-min (* (floor (/ min d)) d))
          (graph-max (* (ceiling (/ max d)) d))
          (num-decimals (max (- (floor (log d 10))) 0)))
-    (log:info "graph-min=~s graph-max=~s d=~s min=~s max=~s" graph-min graph-max d min max)
+    (log:trace "graph-min=~s graph-max=~s d=~s min=~s max=~s" graph-min graph-max d min max)
     (loop
       ;; The tick marks starts at graph-min, but this value may be less than min
       for x from (+ graph-min (* d (ceiling (/ (- min graph-min) d)))) by d
@@ -375,9 +384,8 @@
                     :label label
                     :width width
                     :activate-callback (lambda (pane &rest args)
-                                         (log:info "~s pressed: pane=~s args=~s" label pane args)
+                                         (log:trace "~s pressed: pane=~s args=~s" label pane args)
                                          (funcall callback)))))
 
 (defmethod presentation-pointer-motion ((presentation standard-plot) x y)
   (log:info "mouse moved: (~f,~f)" x y))
-
