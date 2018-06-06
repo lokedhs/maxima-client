@@ -48,8 +48,7 @@
         (clim:formatting-cell (stream :align-y :center :min-width 75)
           (format stream "(~a)" s))
         (clim:formatting-cell (stream :align-y :center)
-          (present-to-stream (labelled-expression/expr obj) stream
-                             :record-type 'highlighted-standard-presentation))))))
+          (present-to-stream (labelled-expression/expr obj) stream))))))
 
 (clim:define-presentation-type plain-text ()
   :inherit-from 'string)
@@ -81,20 +80,22 @@
 		  (clim:unread-gesture gesture :stream stream))
 		(return (subseq result 0))))))
 
-(clim:define-presentation-method clim:accept ((type plain-text) stream (view clim:textual-view)
-                                                                &key
-                                                                (default nil defaultp)
-                                                                (default-type type))
+(clim:define-presentation-method clim:accept ((type plain-text)
+                                              stream (view clim:textual-view)
+                                              &key
+                                              (default nil defaultp)
+                                              (default-type type))
   (let ((result (read-plain-text stream)))
     (log:trace "Got string from reading plain-text: ~s" result)
     (cond ((and (equal result "") defaultp)
            (values default default-type))
           (t (values result type)))))
 
-(clim:define-presentation-method clim:accept ((type maxima-native-expr) stream (view clim:textual-view)
-                                                                        &key
-                                                                        (default nil defaultp)
-                                                                        (default-type type))
+(clim:define-presentation-method clim:accept ((type maxima-native-expr)
+                                              stream (view clim:textual-view)
+                                              &key
+                                              (default nil defaultp)
+                                              (default-type type))
   (let ((s (read-plain-text stream)))
     (log:trace "Got string from reading native expr: ~s" s)
     (let ((trimmed (string-trim " " s)))
@@ -187,7 +188,7 @@
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
   (let ((c-tag (maxima::makelabel maxima::$inchar)))
-    (setf (symbol-value c-tag) cmd)
+    (setf (symbol-value c-tag) (maxima-native-expr/expr cmd))
     (let* ((maxima-stream (make-instance 'maxima-io :clim-stream *standard-output*))
            (eval-ret (catch 'maxima::macsyma-quit
                        (let ((result (let ((*use-clim-retrieve* t)
