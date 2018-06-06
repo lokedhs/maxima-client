@@ -48,7 +48,8 @@
         (clim:formatting-cell (stream :align-y :center :min-width 75)
           (format stream "(~a)" s))
         (clim:formatting-cell (stream :align-y :center)
-          (present-to-stream (labelled-expression/expr obj) stream))))))
+          (present-to-stream (labelled-expression/expr obj) stream
+                             :record-type 'highlighted-standard-presentation))))))
 
 (clim:define-presentation-type plain-text ()
   :inherit-from 'string)

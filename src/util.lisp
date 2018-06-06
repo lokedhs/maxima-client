@@ -1,7 +1,8 @@
 (in-package :maxima-client)
 
-(defun present-to-stream (obj stream)
-  (clim:present obj (clim:presentation-type-of obj) :stream stream))
+(defun present-to-stream (obj stream &key (record-type 'clim:standard-presentation))
+  (clim:present obj (clim:presentation-type-of obj) :stream stream
+                :record-type record-type))
 
 (defun call-in-event-handler (frame fn)
   (clim:execute-frame-command frame `(funcall ,(lambda () (funcall fn))))
@@ -49,6 +50,7 @@
   (min (max n min) max))
 
 (defun find-presentation-at-pos (x y)
+  (declare (ignore x y))
   nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
