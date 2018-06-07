@@ -510,6 +510,9 @@
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view clim:textual-view) &key)
   (format stream "~a" (maxima-native-expr/src obj)))
 
+(clim:define-presentation-method clim:present (obj (type maxima-native-expr) (stream string-stream) (view t) &key)
+  (format stream "~a" (maxima-native-expr/src obj)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun render-error-message (stream message)
