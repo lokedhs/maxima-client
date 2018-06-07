@@ -196,7 +196,7 @@
                                            (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
                                        (maxima::meval* (maxima-native-expr/expr cmd)))))
-                         (log:trace "Result: ~s" result)
+                         (log:debug "Result: ~s" result)
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setf (symbol-value d-tag) result)
                            (let ((obj (make-instance 'maxima-native-expr :expr result)))
@@ -214,7 +214,7 @@
                                   *standard-output*))
               (t
                (when (plusp (length content))
-                 (log:trace "Output from command: ~s" content))))))))
+                 (log:info "Output from command: ~s" content))))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()

@@ -38,7 +38,7 @@
   ())
 
 (defmethod trivial-gray-streams:stream-read-char ((stream maxima-input))
-  (log:trace "trying to read from stream"))
+  (log:info "trying to read from stream"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; io

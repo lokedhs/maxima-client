@@ -1,13 +1,5 @@
 (in-package :maxima-client)
 
-#+nil
-(wrap-function maxima::retrieve (msg flag)
-  (declare (special maxima::behaviour))
-  (log:trace "in clim-retrieve: MSG: ~s FLAG: ~s, BEHAVIOUR: ~s" msg flag (if (boundp 'maxima::behaviour)
-                                                                             maxima::behaviour
-                                                                             :unbound))
-  (funcall *old-fn-retrieve* msg flag))
-
 (defun name-from-sign (sign)
   (ecase sign
     (maxima::$pos "positive")
