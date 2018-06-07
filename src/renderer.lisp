@@ -327,20 +327,10 @@
       (list rec baseline (- height baseline)))))
 
 (defun render-intsum-inner (stream f var from to symbol sym2)
-  (let* ((bottom (clim:with-output-to-output-record (stream)
-                   (with-aligned-rendering (stream)
-                     (with-paren-op
-                       (when var
-                         (render-aligned () (render-maxima-expression stream var))
-                         (render-aligned () (render-formatted stream "=")))
-                       (render-aligned () (render-maxima-expression stream from))))))
-         (top    (clim:with-output-to-output-record (stream)
-                   (with-paren-op
-                     (render-maxima-expression stream to))))
-         (exp    (clim:with-output-to-output-record (stream)
-                   (let ((*lop* 'maxima::%sum)
-                         (*rop* 'maxima::mparen))
-                     (render-maxima-expression stream f)))))
+  (let ((exp (clim:with-output-to-output-record (stream)
+               (let ((*lop* 'maxima::%sum)
+                     (*rop* 'maxima::mparen))
+                 (render-maxima-expression stream f)))))
     (dimension-bind (exp :height exp-height)
       (destructuring-bind (sigma sigma-ascent sigma-descent)
           (clim:with-text-size (stream (+ 10 exp-height))
@@ -354,19 +344,31 @@
             (move-rec sigma 0 (- centre))
             (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
             ;;
-            (dimension-bind (bottom :width bottom-width)
-              (set-rec-position bottom
-                                (+ sigma-x (/ (- sigma-width bottom-width) 2))
-                                ;; centre is negative, so subtracting that value from sigma-descent
-                                ;; moves the bottom rec downards to compensate for the adjustment of sigma
-                                (- sigma-descent centre))
-              (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))
+            (when from
+              (let ((bottom (clim:with-output-to-output-record (stream)
+                              (with-aligned-rendering (stream)
+                                (with-paren-op
+                                  (when var
+                                    (render-aligned () (render-maxima-expression stream var))
+                                    (render-aligned () (render-formatted stream "=")))
+                                  (render-aligned () (render-maxima-expression stream from)))))))
+                (dimension-bind (bottom :width bottom-width)
+                  (set-rec-position bottom
+                                    (+ sigma-x (/ (- sigma-width bottom-width) 2))
+                                    ;; centre is negative, so subtracting that value from sigma-descent
+                                    ;; moves the bottom rec downards to compensate for the adjustment of sigma
+                                    (- sigma-descent centre))
+                  (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))))
             ;;
-            (dimension-bind (top :width top-width :height top-height)
-              (set-rec-position top
-                                (/ (- sigma-width top-width) 2)
-                                (- (- sigma-ascent) centre top-height))
-              (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
+            (when to
+              (let ((top (clim:with-output-to-output-record (stream)
+                           (with-paren-op
+                             (render-maxima-expression stream to)))))
+                (dimension-bind (top :width top-width :height top-height)
+                  (set-rec-position top
+                                    (/ (- sigma-width top-width) 2)
+                                    (- (- sigma-ascent) centre top-height))
+                  (clim:stream-add-output-record stream (make-boxed-output-record stream top)))))
             ;;
             (set-rec-position exp (+ sigma-right 2) nil)
             (clim:stream-add-output-record stream (make-boxed-output-record stream exp))
