@@ -60,6 +60,10 @@
 (defvar *use-clim-retrieve* nil)
 (defvar *current-stream* nil)
 
+(defmacro with-maxima-package (&body body)
+  `(let ((*package* (find-package :maxima)))
+     ,@body))
+
 (define-condition maxima-native-error (error)
   ())
 
@@ -145,6 +149,14 @@
 (defun maxima-expr-as-string (expr)
   (coerce (maxima::mstring expr) 'string))
 
+(defun maxima-coerce-float (expr)
+  (with-maxima-package
+    (maxima::coerce-float expr)))
+
 (defun maxima-native-expr-as-float (expr)
   (and expr
-       (maxima::coerce-float (maxima-native-expr/expr expr))))
+       (maxima-coerce-float (maxima-native-expr/expr expr))))
+
+(defun eval-maxima-expression (expr)
+  (with-maxima-package
+    (maxima::meval* expr)))

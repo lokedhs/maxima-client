@@ -176,6 +176,8 @@
 
 (defun maxima-client ()
   ;; This variable is needed sometimes inside Maxima, but it's not set by default
+  (let ((*package* (find-package :maxima)))
+    (maxima::initialize-runtime-globals))
   (unless (boundp 'maxima::*maxima-tempdir*)
     (setq maxima::*maxima-tempdir* #p"/tmp/"))
   ;; Set up default plot options
@@ -196,7 +198,7 @@
                                            (*current-stream* *standard-output*)
                                            (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
-                                       (maxima::meval* (maxima-native-expr/expr cmd)))))
+                                       (eval-maxima-expression (maxima-native-expr/expr cmd)))))
                          (log:debug "Result: ~s" result)
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setf (symbol-value d-tag) result)
