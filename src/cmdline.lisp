@@ -221,10 +221,19 @@
     ()
   (clim:frame-exit clim:*application-frame*))
 
+(clim:define-command (maxima-eval-lisp-expression :name "Lisp" :menu "Eval Lisp form" :command-table maxima-commands)
+    ((form clim:form :prompt "Form"))
+  (let ((result (maxima::eval form)))
+    #+nil
+    (present-to-stream result *standard-output* :record-type 'clim:form)
+    (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
+      (clim:present result 'clim:expression :stream *standard-output*))))
+
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
                          :menu '(("File" :menu maxima-file-command-table)
-                                 ("Plot" :menu maxima-plot-command-table)))
+                                 ("Plot" :menu maxima-plot-command-table)
+                                 ("Lisp" :menu maxima-lisp-command-table)))
 
 (clim:make-command-table 'maxima-file-command-table
                          :errorp nil
@@ -235,3 +244,7 @@
                          :menu '(("Discrete" :command plot2d-with-range)
                                  ("Parametric" :command plot2d-with-range)
                                  ("Plot examle" :command plot2d-demo)))
+
+(clim:make-command-table 'maxima-lisp-command-table
+                         :errorp nil
+                         :menu '(("Eval Lisp Form" :command maxima-eval-lisp-expression)))
