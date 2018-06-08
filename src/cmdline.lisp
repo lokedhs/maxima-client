@@ -9,7 +9,8 @@
   ()
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
-                                                    :default-view +listener-view+)))
+                                                    :default-view +listener-view+
+                                                    :incremental-redisplay t)))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))

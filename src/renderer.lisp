@@ -456,6 +456,40 @@
       (aligned-spacing 0.5)
       (render-aligned () (render-maxima-expression stream definition)))))
 
+(defun render-limit (stream expr sym to direction)
+  (log:trace "rendering limit: expr=~s, sym=~s, to=~s, direction=~s" expr sym to direction)
+  (destructuring-bind (top top-ascent top-descent)
+      (with-roman-text-style (stream)
+        (render-and-measure-string stream "lim"))
+    (declare (ignore top-ascent))
+    (let* ((bottom (clim:with-output-to-output-record (stream)
+                     (with-font-size-change (stream 0.8)
+                       (with-aligned-rendering (stream)
+                         (render-aligned () (render-maxima-expression stream sym))
+                         (aligned-spacing 0.5)
+                         (render-aligned-string "~c" #\RIGHTWARDS_ARROW)
+                         (aligned-spacing 0.5)
+                         (render-aligned () (render-maxima-expression stream to))
+                         (when direction
+                           (render-aligned-string (case direction
+                                                    (maxima::$plus "+")
+                                                    (maxima::$minus (format nil "~c" #\MINUS_SIGN))
+                                                    (t (format nil "~a" direction))))))))))
+      (dimension-bind (top :width top-width)
+        (dimension-bind (bottom :width bottom-width)
+          (let ((lim-rec (clim:with-output-to-output-record (stream)
+                           (let ((horiz-centre (/ (max top-width bottom-width) 2)))
+                             (set-rec-position top (- horiz-centre (/ top-width 2)) nil)
+                             (set-rec-position bottom (- horiz-centre (/ bottom-width 2)) top-descent))
+                           (clim:stream-add-output-record stream top)
+                           (clim:stream-add-output-record stream bottom)))
+                (rec (clim:with-output-to-output-record (stream)
+                       (render-maxima-expression stream expr))))
+            (dimension-bind (lim-rec :right lim-rec-right)
+              (clim:stream-add-output-record stream lim-rec)
+              (move-rec rec (+ lim-rec-right (/ (char-width stream) 2)) 0)
+              (clim:stream-add-output-record stream rec))))))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -472,6 +506,7 @@
                ((maxima::%integrate maxima::$integrate) (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                ((maxima::%product maxima::$product) (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%sqrt (render-sqrt stream (second fixed)))
+               ((maxima::%limit maxima::$limit) (render-limit stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
@@ -511,7 +546,8 @@
   (format stream "~a" (maxima-native-expr/src obj)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) (stream string-stream) (view t) &key)
-  (format stream "~a" (maxima-native-expr/src obj)))
+  (when obj
+    (format stream "~a" (maxima-native-expr/src obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
