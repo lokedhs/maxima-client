@@ -270,14 +270,14 @@
 (defun render-equal (stream a b)
   (render-plain stream 4 #\= a b))
 
-(defun wrap-with-parens (stream output-record)
+(defun wrap-with-parens (stream output-record &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
   (dimension-bind (output-record :x x :y y :width width :height height)
     (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
         (with-roman-text-style (stream height)
-          (render-and-measure-string stream "("))
+          (render-and-measure-string stream left-paren))
       (let ((right-paren (clim:with-output-to-output-record (stream)
                            (with-roman-text-style (stream height)
-                             (clim:draw-text* stream ")" 0 0)))))
+                             (clim:draw-text* stream right-paren 0 0)))))
         (dimension-bind (left-paren :width left-paren-width)
           (let* ((centre (+ (/ height 2) y))
                  (p-centre (- left-paren-descent
@@ -286,10 +286,10 @@
             (move-rec left-paren x p-offset)
             (clim:stream-add-output-record stream left-paren)
             ;;
-            (move-rec output-record left-paren-width 0)
+            (move-rec output-record (+ left-paren-width left-spacing) 0)
             (clim:stream-add-output-record stream output-record)
             ;;
-            (move-rec right-paren (+ x left-paren-width width) p-offset)
+            (move-rec right-paren (+ x left-paren-width width left-spacing right-spacing) p-offset)
             (clim:stream-add-output-record stream right-paren)))))))
 
 (defmacro with-wrapped-parens ((stream) &body body)
@@ -490,6 +490,21 @@
               (move-rec rec (+ lim-rec-right (/ (char-width stream) 2)) 0)
               (clim:stream-add-output-record stream rec))))))))
 
+(defun render-matrix (stream rows)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (clim:formatting-table (stream :x-spacing (char-width stream) :y-spacing (char-height stream))
+                 (loop
+                   for row in rows
+                   do (clim:formatting-row (stream)
+                        (loop
+                          for col in (maxima-list-to-list row)
+                          do (log:info "col=~s" col)
+                          do (clim:formatting-cell (stream :align-y :center :align-x :center)
+                               (with-paren-op
+                                 (render-maxima-expression stream col))))))))))
+    (wrap-with-parens stream rec :left-paren "[" :right-paren "]"
+                                 :left-spacing (char-width stream) :right-spacing (char-width stream))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -507,6 +522,7 @@
                ((maxima::%product maxima::$product) (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%sqrt (render-sqrt stream (second fixed)))
                ((maxima::%limit maxima::$limit) (render-limit stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               (maxima::$matrix (render-matrix stream (cdr fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)

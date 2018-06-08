@@ -160,3 +160,8 @@
 (defun eval-maxima-expression (expr)
   (with-maxima-package
     (maxima::meval* expr)))
+
+(defun maxima-list-to-list (expr)
+  (unless (maxima::$listp expr)
+    (error "Argument is not a maxima list: ~s" expr))
+  (cdr expr))

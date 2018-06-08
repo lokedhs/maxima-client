@@ -176,8 +176,9 @@
 
 (defun maxima-client ()
   ;; This variable is needed sometimes inside Maxima, but it's not set by default
-  (let ((*package* (find-package :maxima)))
+  (with-maxima-package
     (maxima::initialize-runtime-globals))
+  (setq *debugger-hook* nil)
   (unless (boundp 'maxima::*maxima-tempdir*)
     (setq maxima::*maxima-tempdir* #p"/tmp/"))
   ;; Set up default plot options
