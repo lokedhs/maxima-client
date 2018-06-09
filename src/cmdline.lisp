@@ -110,6 +110,17 @@
     ()
   :inherit-from t)
 
+(clim:define-presentation-type maxima-lisp-package-form
+    ()
+  :inherit-from 'clim:form)
+
+(clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
+                                              stream
+                                              (view clim:textual-view)
+                                              &key)
+  (with-maxima-package
+    (clim:accept 'clim:form :stream stream :view view :prompt nil)))
+
 (clim:define-presentation-type maxima-expression-or-command
     (&key (command-table (clim:frame-command-table clim:*application-frame*)))
   :inherit-from t)
@@ -175,12 +186,11 @@
   (format stream "~a " (maxima::main-prompt)))
 
 (defun maxima-client ()
-  ;; This variable is needed sometimes inside Maxima, but it's not set by default
+  (let ((fonts-location (merge-pathnames #p"fonts/tex/" (asdf:component-pathname (asdf:find-system :maxima-client)))))
+    (mcclim-fontconfig:app-font-add-dir fonts-location))
   (with-maxima-package
     (maxima::initialize-runtime-globals))
   (setq *debugger-hook* nil)
-  (unless (boundp 'maxima::*maxima-tempdir*)
-    (setq maxima::*maxima-tempdir* #p"/tmp/"))
   ;; Set up default plot options
   (setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
   ;;
@@ -225,8 +235,9 @@
   (clim:frame-exit clim:*application-frame*))
 
 (clim:define-command (maxima-eval-lisp-expression :name "Lisp" :menu "Eval Lisp form" :command-table maxima-commands)
-    ((form clim:form :prompt "Form"))
-  (let ((result (maxima::eval form)))
+    ((form maxima-lisp-package-form :prompt "Form"))
+  (let ((result (with-maxima-package
+                  (maxima::eval form))))
     #+nil
     (present-to-stream result *standard-output* :record-type 'clim:form)
     (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)

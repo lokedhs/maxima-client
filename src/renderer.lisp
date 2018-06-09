@@ -1,8 +1,14 @@
 (in-package :maxima-client)
 
-(defvar *font-roman* '("Latin Modern Math" "Regular"))
-(defvar *font-italic* '("Noto Serif" "Italic"))
+(defvar *font-roman* '("MathJax_Main" "Regular"))
+(defvar *font-italic* '("MathJax_Main" "Italic"))
 (defvar *font-fixed* '("Source Code Pro" "Regular"))
+(defvar *font-sigma* '("MathJax_Main" "Regular"))
+(defvar *font-integrate-size1* '("MathJax_Size1" "Regular"))
+(defvar *font-integrate-size2* '("MathJax_Size2" "Regular"))
+(defvar *font-product* '("MathJax_Main" "Regular"))
+(defvar *font-paren-size3* '("MathJax_Size3" "Regular"))
+(defvar *font-paren-size4* '("MathJax_Size4" "Regular"))
 (defvar *draw-boxes* nil)
 
 (defvar *aligned-rendering-pos*)
@@ -235,7 +241,7 @@
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mtimes :first-sym first)
       (unless first
-        (render-aligned-string "~c" #\MIDDLE_DOT))
+        (render-aligned-string "~c" #\DOT_OPERATOR))
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun render-expt (stream a b)
@@ -270,27 +276,38 @@
 (defun render-equal (stream a b)
   (render-plain stream 4 #\= a b))
 
-(defun wrap-with-parens (stream output-record &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
+(defun find-paren-font (size)
+  (cond ((< size 16)
+         (list *font-roman* size))
+        ((< size 80)
+         (list *font-paren-size3* (* size 0.4)))
+        (t
+         (list *font-paren-size4* (* size 0.35)))))
+
+(defun wrap-with-parens (stream output-record
+                         &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
   (dimension-bind (output-record :x x :y y :width width :height height)
-    (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
-        (with-roman-text-style (stream height)
-          (render-and-measure-string stream left-paren))
-      (let ((right-paren (clim:with-output-to-output-record (stream)
-                           (with-roman-text-style (stream height)
-                             (clim:draw-text* stream right-paren 0 0)))))
-        (dimension-bind (left-paren :width left-paren-width)
-          (let* ((centre (+ (/ height 2) y))
-                 (p-centre (- left-paren-descent
-                              (/ (+ left-paren-ascent left-paren-descent) 2)))
-                 (p-offset (- centre p-centre)))
-            (move-rec left-paren x p-offset)
-            (clim:stream-add-output-record stream left-paren)
-            ;;
-            (move-rec output-record (+ left-paren-width left-spacing) 0)
-            (clim:stream-add-output-record stream output-record)
-            ;;
-            (move-rec right-paren (+ x left-paren-width width left-spacing right-spacing) p-offset)
-            (clim:stream-add-output-record stream right-paren)))))))
+    (destructuring-bind (paren-font paren-size)
+        (find-paren-font height)
+      (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
+          (with-font (stream paren-font paren-size)
+            (render-and-measure-string stream left-paren))
+        (let ((right-paren (clim:with-output-to-output-record (stream)
+                             (with-font (stream paren-font paren-size)
+                               (clim:draw-text* stream right-paren 0 0)))))
+          (dimension-bind (left-paren :width left-paren-width)
+            (let* ((centre (+ (/ height 2) y))
+                   (p-centre (- left-paren-descent
+                                (/ (+ left-paren-ascent left-paren-descent) 2)))
+                   (p-offset (- centre p-centre)))
+              (move-rec left-paren x p-offset)
+              (clim:stream-add-output-record stream left-paren)
+              ;;
+              (move-rec output-record (+ left-paren-width left-spacing) 0)
+              (clim:stream-add-output-record stream output-record)
+              ;;
+              (move-rec right-paren (+ x left-paren-width width left-spacing right-spacing) p-offset)
+              (clim:stream-add-output-record stream right-paren))))))))
 
 (defmacro with-wrapped-parens ((stream) &body body)
   (alexandria:once-only (stream)
@@ -326,15 +343,17 @@
                  (clim:draw-text* stream string x y))))
       (list rec baseline (- height baseline)))))
 
-(defun render-intsum-inner (stream f var from to symbol sym2)
+(defun render-intsum-inner (stream f var from to symbol sym2 font-fn)
   (let ((exp (clim:with-output-to-output-record (stream)
                (let ((*lop* 'maxima::%sum)
                      (*rop* 'maxima::mparen))
                  (render-maxima-expression stream f)))))
     (dimension-bind (exp :height exp-height)
       (destructuring-bind (sigma sigma-ascent sigma-descent)
-          (clim:with-text-size (stream (+ 10 exp-height))
-            (render-and-measure-string stream (format nil "~c" symbol)))
+          (destructuring-bind (sigma-font sigma-size)
+              (funcall font-fn exp-height)
+            (with-font (stream sigma-font sigma-size)
+              (render-and-measure-string stream (format nil "~c" symbol))))
         (dimension-bind (sigma :width sigma-width :height sigma-height :right sigma-right :x sigma-x :y sigma-y)
           (let ((centre (+ (/ sigma-height 2)
                            (/ (char-height stream) 2)
@@ -370,35 +389,41 @@
                                     (- (- sigma-ascent) centre top-height))
                   (clim:stream-add-output-record stream (make-boxed-output-record stream top)))))
             ;;
-            (set-rec-position exp (+ sigma-right 2) nil)
+            (set-rec-position exp (+ sigma-right (/ (char-width stream) 2)) nil)
             (clim:stream-add-output-record stream (make-boxed-output-record stream exp))
             ;;
             (when sym2
               (let ((variable (clim:with-output-to-output-record (stream)
                                 (with-aligned-rendering (stream)
-                                  (aligned-spacing 0.5)
-                                  (render-aligned () (with-italic-text-style (stream)
+                                  (render-aligned () (with-roman-text-style (stream)
                                                        (render-formatted stream "d")))
                                   (render-aligned () (render-maxima-expression stream sym2))))))
                 (dimension-bind (exp :right x)
-                  (move-rec variable (+ x 2) 0)
+                  (move-rec variable (+ x (/ (char-width stream) 2)) 0)
                   (clim:stream-add-output-record stream variable))))))))))
 
-(defun render-intsum (stream f var from to symbol sym2)
+(defun render-intsum (stream f var from to symbol sym2 font-fn)
   (if (> (maxima::lbp *rop*) (maxima::rbp 'maxima::mparen))
       (let ((rec (clim:with-output-to-output-record (stream)
-                   (render-intsum-inner stream f var from to symbol sym2))))
+                   (render-intsum-inner stream f var from to symbol sym2 font-fn))))
         (wrap-with-parens stream rec))
-      (render-intsum-inner stream f var from to symbol sym2)))
+      (render-intsum-inner stream f var from to symbol sym2 font-fn)))
+
+(defun find-integrate-font (size)
+  (log:info "Finding integrate font: ~s" size)
+  (cond ((< size 65)
+         (list *font-integrate-size1* (* size 0.7)))
+        (t
+         (list *font-integrate-size2* (* size 0.4)))))
 
 (defun render-sum (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_SIGMA nil))
+  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* size))))
 
 (defun render-integrate (stream f var from to)
-  (render-intsum stream f nil from to #\INTEGRAL var))
+  (render-intsum stream f nil from to #\INTEGRAL var #'find-integrate-font))
 
 (defun render-product (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil))
+  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* size))))
 
 (defun render-sqrt (stream expr)
   (let ((exp (clim:with-output-to-output-record (stream)
