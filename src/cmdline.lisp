@@ -56,6 +56,14 @@
 
 (clim:define-presentation-type maxima-empty-input ())
 
+(clim:define-presentation-type maxima-native-expr
+    ()
+  :inherit-from t)
+
+(clim:define-presentation-type maxima-lisp-package-form
+    ()
+  :inherit-from 'clim:form)
+
 (defun read-plain-text (stream
                         &key
                           (input-wait-handler clim:*input-wait-handler*)
@@ -81,6 +89,24 @@
 		  (clim:unread-gesture gesture :stream stream))
 		(return (subseq result 0))))))
 
+(defmethod clim:presentation-replace-input ((stream drei:drei-input-editing-mixin) (obj maxima-native-expr) type view
+                                            &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
+                                              query-identifier
+                                              for-context-type)
+  (declare (ignore query-identifier for-context-type))
+  (log:info "Replacing input for ~s" obj)
+  (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
+         (append (if buffer-start-p (list :buffer-start buffer-start) nil)
+                 (if rescan-p (list :rescan rescan) nil))))
+
+(clim:define-presentation-method clim:present (obj (type plain-text) stream (view clim:textual-view) &key)
+  (log:info "STD TEXT present: ~s" obj)
+  (format stream "~a" obj))
+
+(clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
+  (log:info "STR TEXT present: ~s" obj)
+  (format stream "~a" obj))
+
 (clim:define-presentation-method clim:accept ((type plain-text)
                                               stream (view clim:textual-view)
                                               &key
@@ -103,16 +129,8 @@
       (if (equal trimmed "")
           (if defaultp
               (values default default-type)
-              nil)
-          (string-to-native-expr trimmed)))))
-
-(clim:define-presentation-type maxima-native-expr
-    ()
-  :inherit-from t)
-
-(clim:define-presentation-type maxima-lisp-package-form
-    ()
-  :inherit-from 'clim:form)
+              (values nil 'maxima-empty-input))
+          (values (string-to-native-expr trimmed) type)))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream
@@ -154,9 +172,13 @@
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (handler-case
       (multiple-value-bind (object type)
-          (let ((clim:*command-dispatchers* '(#\:)))
+          (let ((clim:*command-dispatchers* '(#\:))
+                (clim:*command-unparser* (lambda (command-table stream command)
+                                           (log:info "unparsing ~s (~s ~s)" command command-table stream))))
             (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-              (clim:accept 'maxima-expression-or-command :stream stream :prompt nil :default nil :default-type 'maxima-empty-input)))
+              (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
+                                                         :default nil :default-type 'maxima-empty-input
+                                                         :history 'maxima-native-expr)))
         (log:trace "Got input: object=~s, type=~s" object type)
         (cond
           ((null object)
