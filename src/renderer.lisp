@@ -365,12 +365,13 @@
             ;;
             (when from
               (let ((bottom (clim:with-output-to-output-record (stream)
-                              (with-aligned-rendering (stream)
-                                (with-paren-op
-                                  (when var
-                                    (render-aligned () (render-maxima-expression stream var))
-                                    (render-aligned () (render-formatted stream "=")))
-                                  (render-aligned () (render-maxima-expression stream from)))))))
+                              (with-font-size-change (stream 0.8)
+                                (with-aligned-rendering (stream)
+                                  (with-paren-op
+                                    (when var
+                                      (render-aligned () (render-maxima-expression stream var))
+                                      (render-aligned () (render-formatted stream "=")))
+                                    (render-aligned () (render-maxima-expression stream from))))))))
                 (dimension-bind (bottom :width bottom-width)
                   (set-rec-position bottom
                                     (+ sigma-x (/ (- sigma-width bottom-width) 2))
@@ -381,8 +382,9 @@
             ;;
             (when to
               (let ((top (clim:with-output-to-output-record (stream)
-                           (with-paren-op
-                             (render-maxima-expression stream to)))))
+                           (with-font-size-change (stream 0.8)
+                             (with-paren-op
+                               (render-maxima-expression stream to))))))
                 (dimension-bind (top :width top-width :height top-height)
                   (set-rec-position top
                                     (/ (- sigma-width top-width) 2)
@@ -411,19 +413,20 @@
 
 (defun find-integrate-font (size)
   (log:info "Finding integrate font: ~s" size)
-  (cond ((< size 65)
-         (list *font-integrate-size1* (* size 0.7)))
-        (t
-         (list *font-integrate-size2* (* size 0.4)))))
+  (let ((adjusted-size (+ size 10)))
+    (cond ((< adjusted-size 65)
+           (list *font-integrate-size1* (* adjusted-size 0.7)))
+          (t
+           (list *font-integrate-size2* (* adjusted-size 0.4))))))
 
 (defun render-sum (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* size))))
+  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
 
 (defun render-integrate (stream f var from to)
   (render-intsum stream f nil from to #\INTEGRAL var #'find-integrate-font))
 
 (defun render-product (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* size))))
+  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
 
 (defun render-sqrt (stream expr)
   (let ((exp (clim:with-output-to-output-record (stream)
