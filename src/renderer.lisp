@@ -329,7 +329,9 @@
                           do (progn
                                (render-aligned-string ",")
                                (aligned-spacing 0.5))
-                        do (render-aligned () (render-maxima-expression stream expr)))))))
+                        do (render-aligned ()
+                             (with-paren-op
+                               (render-maxima-expression stream expr))))))))
       (render-aligned () (wrap-with-parens stream params)))))
 
 (defun render-function (stream name exprs)
