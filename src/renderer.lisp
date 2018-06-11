@@ -1,6 +1,7 @@
 (in-package :maxima-client)
 
 (defvar *font-roman* '("MathJax_Main" "Regular"))
+(defvar *font-roman-math* '("MathJax_Math" "Regular"))
 (defvar *font-italic* '("MathJax_Main" "Italic"))
 (defvar *font-fixed* '("Source Code Pro" "Regular"))
 (defvar *font-sigma* '("MathJax_Main" "Regular"))
@@ -206,7 +207,7 @@
 (defun render-symbol (stream sym &key roman-font)
   (case sym
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
-    (maxima::$%pi (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))
+    (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (t (let ((n (format-sym-name sym)))
          (if (or (eql (aref n 0) #\$)
                  (eql (aref n 0) #\%))
