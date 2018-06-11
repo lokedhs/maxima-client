@@ -155,7 +155,7 @@
 	      (progn
 		(clim:read-gesture :stream stream)
 		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history 'maxima-native-expr)))
+	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history 'maxima-expression-or-command)))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
@@ -178,7 +178,7 @@
             (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
               (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
                                                          :default nil :default-type 'maxima-empty-input
-                                                         :history 'maxima-native-expr)))
+                                                         :history 'maxima-expression-or-command)))
         (log:trace "Got input: object=~s, type=~s" object type)
         (cond
           ((null object)
