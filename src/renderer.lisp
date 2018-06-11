@@ -326,7 +326,9 @@
                         for expr in params
                         for first = t then nil
                         unless first
-                          do (render-aligned-string ", ")
+                          do (progn
+                               (render-aligned-string ",")
+                               (aligned-spacing 0.5))
                         do (render-aligned () (render-maxima-expression stream expr)))))))
       (render-aligned () (wrap-with-parens stream params)))))
 
@@ -533,6 +535,14 @@
     (wrap-with-parens stream rec :left-paren "[" :right-paren "]"
                                  :left-spacing (char-width stream) :right-spacing (char-width stream))))
 
+(defun render-msetq (stream a b)
+  (with-aligned-rendering (stream)
+    (render-aligned () (render-maxima-expression stream a))
+    (aligned-spacing 0.1)
+    (render-aligned-string ":")
+    (aligned-spacing 0.1)
+    (render-aligned () (render-maxima-expression stream b))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -551,6 +561,8 @@
                (maxima::%sqrt (render-sqrt stream (second fixed)))
                ((maxima::%limit maxima::$limit) (render-limit stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::$matrix (render-matrix stream (cdr fixed)))
+               (maxima::mprog (render-function stream '(maxima::$block) (cdr fixed)))
+               (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
