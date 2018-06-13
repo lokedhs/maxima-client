@@ -64,6 +64,14 @@
     ()
   :inherit-from 'clim:form)
 
+(clim:define-presentation-method clim:present (obj (type plain-text) stream (view clim:textual-view) &key)
+  (log:info "STD TEXT present: ~s" obj)
+  (format stream "~a" obj))
+
+(clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
+  (log:info "STR TEXT present: ~s" obj)
+  (format stream "~a" obj))
+
 (defun read-plain-text (stream
                         &key
                           (input-wait-handler clim:*input-wait-handler*)
@@ -89,24 +97,6 @@
 		  (clim:unread-gesture gesture :stream stream))
 		(return (subseq result 0))))))
 
-(defmethod clim:presentation-replace-input ((stream drei:drei-input-editing-mixin) (obj maxima-native-expr) type view
-                                            &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
-                                              query-identifier
-                                              for-context-type)
-  (declare (ignore query-identifier for-context-type))
-  (log:info "Replacing input for ~s" obj)
-  (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
-         (append (if buffer-start-p (list :buffer-start buffer-start) nil)
-                 (if rescan-p (list :rescan rescan) nil))))
-
-(clim:define-presentation-method clim:present (obj (type plain-text) stream (view clim:textual-view) &key)
-  (log:info "STD TEXT present: ~s" obj)
-  (format stream "~a" obj))
-
-(clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
-  (log:info "STR TEXT present: ~s" obj)
-  (format stream "~a" obj))
-
 (clim:define-presentation-method clim:accept ((type plain-text)
                                               stream (view clim:textual-view)
                                               &key
@@ -118,6 +108,100 @@
            (values default default-type))
           (t (values result type)))))
 
+(defmethod clim:presentation-replace-input ((stream drei:drei-input-editing-mixin) (obj maxima-native-expr) type view
+                                            &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
+                                              query-identifier
+                                              for-context-type)
+  #+nil  (declare (ignore query-identifier for-context-type))
+  (log:info "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
+            obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
+  (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
+         (append (if buffer-start-p (list :buffer-start buffer-start) nil)
+                 (if rescan-p (list :rescan rescan) nil))))
+
+(clim:define-presentation-method clim:accept
+    ((type maxima-native-expr)
+     (stream drei:drei-input-editing-mixin)
+     (view clim:textual-view)
+     &key)
+  (let ((clim:*completion-gestures* nil)
+        (clim:*possibilities-gestures* nil))
+    (clim:with-delimiter-gestures (nil :override t)
+      (loop
+        named control-loop
+        with start-scan-pointer = (clim:stream-scan-pointer stream)
+        with drei = (drei:drei-instance stream)
+        ;;with syntax = (drei:syntax (clim:view drei))
+        ;; The input context permits the user to mouse-select displayed
+        ;; Lisp objects and put them into the input buffer as literal
+        ;; objects.
+        for gesture = (clim:with-input-context ('maxima-native-expr :override nil)
+                          (object type)
+                          (clim:read-gesture :stream stream)
+                        (maxima-native-expr (drei:performing-drei-operations (drei :with-undo t
+                                                                                   :redisplay t)
+                                              (clim:presentation-replace-input
+                                               stream object type (clim:view drei)
+                                               :buffer-start (clim:stream-insertion-pointer stream)
+                                               :allow-other-keys t
+                                               :accept-result nil
+                                               :rescan t))
+                                            (clim:rescan-if-necessary stream)
+                                            nil))
+        ;; True if `gesture' was freshly read from the user, and not
+        ;; just retrieved from the buffer during a rescan.
+        for freshly-inserted = (and (plusp (clim:stream-scan-pointer stream))
+                                    (not (equal (drei::buffer-object
+                                                 (drei:buffer (clim:view drei))
+                                                 (1- (clim:stream-scan-pointer stream)))
+                                                gesture)))
+        ;;for form = (drei-lisp-syntax::form-after syntax (drei::input-position stream))
+        ;; We do not stop until the input is complete and an activation
+        ;; gesture has just been provided. The freshness check is so
+        ;; #\Newline characters in the input will not cause premature
+        ;; activation.
+        until (and (clim:activation-gesture-p gesture)
+                   (or (and freshly-inserted
+                            #+nil (drei-lisp-syntax::form-complete-p form))))
+        when (and (clim:activation-gesture-p gesture)
+                  #+nil (null form))
+          do (progn
+               ;; We have to remove the buffer contents (whitespace,
+               ;; comments or error states, if this happens) or code
+               ;; above us will not believe us when we tell them that
+               ;; the input is empty
+               (drei::delete-buffer-range (drei:buffer (clim:view drei))
+                                          start-scan-pointer
+                                          (- (clim:stream-scan-pointer stream)
+                                             start-scan-pointer))
+               (setf (clim:stream-scan-pointer stream) start-scan-pointer)
+               (clim:simple-parse-error "Empty input"))
+             ;; We only want to process the gesture if it is fresh,
+             ;; because if it isn't, it has already been processed at
+             ;; some point in the past.
+        when (and (clim:activation-gesture-p gesture)
+                  freshly-inserted)
+          do (clim:with-activation-gestures (nil :override t)
+               (clim:stream-process-gesture stream gesture nil))
+        finally 
+           (progn
+             (clim:unread-gesture gesture :stream stream)
+             (let* ((object (handler-case
+                                (string-to-native-expr "1+x")
+                              (drei-lisp-syntax:form-conversion-error (e)
+                                ;; Move point to the problematic form
+                                ;; and signal a rescan.
+                                (setf (drei::activation-gesture stream) nil)
+                                (drei:handle-drei-condition drei e)
+                                (drei:display-drei drei :redisplay-minibuffer t)
+                                (clim:immediate-rescan stream))))
+                    (ptype (clim:presentation-type-of object)))
+               (return-from control-loop
+                 (values object
+                         (if (clim:presentation-subtypep ptype 'clim:expression)
+                             ptype 'clim:expression)))))))))
+
+#+nil
 (clim:define-presentation-method clim:accept ((type maxima-native-expr)
                                               stream (view clim:textual-view)
                                               &key
@@ -155,7 +239,8 @@
 	      (progn
 		(clim:read-gesture :stream stream)
 		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil :history 'maxima-expression-or-command)))
+	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
+                                               :history 'maxima-expression-or-command :replace-input t)))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
@@ -178,7 +263,8 @@
             (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
               (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
                                                          :default nil :default-type 'maxima-empty-input
-                                                         :history 'maxima-expression-or-command)))
+                                                         :history 'maxima-expression-or-command
+                                                         :replace-input t)))
         (log:trace "Got input: object=~s, type=~s" object type)
         (cond
           ((null object)
