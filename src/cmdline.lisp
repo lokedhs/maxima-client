@@ -2,6 +2,15 @@
 
 (clim:define-command-table maxima-commands)
 
+#+nil
+(defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
+  '())
+
+(defvar maxima::$submit_on_return t
+  "If true, pressing return will terminate input, and shift-return is
+needed in order to add a newline. If false, a command needs to be
+terminated by ;.")
+
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
@@ -119,94 +128,98 @@
          (append (if buffer-start-p (list :buffer-start buffer-start) nil)
                  (if rescan-p (list :rescan rescan) nil))))
 
+(defun cleanup-input (string)
+  "Removes final ; in the string, if it exists"
+  (loop
+    for i from (1- (length string)) downto 0
+    for ch = (aref string i)
+    when (eql ch #\;)
+      return (subseq string 0 i)
+    while (eql ch #\Space)
+    finally (return string)))
+
 (clim:define-presentation-method clim:accept
     ((type maxima-native-expr)
      (stream drei:drei-input-editing-mixin)
      (view clim:textual-view)
      &key)
-  (let ((clim:*completion-gestures* nil)
-        (clim:*possibilities-gestures* nil))
-    (clim:with-delimiter-gestures (nil :override t)
-      (loop
-        named control-loop
-        with drei = (drei:drei-instance stream)
-        ;;with syntax = (drei:syntax (clim:view drei))
-        ;; The input context permits the user to mouse-select displayed
-        ;; Lisp objects and put them into the input buffer as literal
-        ;; objects.
-        for gesture = (clim:with-input-context ('maxima-native-expr :override nil)
-                          (object type)
-                          (clim:read-gesture :stream stream)
-                        (maxima-native-expr (drei:performing-drei-operations (drei :with-undo t
-                                                                                   :redisplay t)
-                                              (clim:presentation-replace-input
-                                               stream object type (clim:view drei)
-                                               :buffer-start (clim:stream-insertion-pointer stream)
-                                               :allow-other-keys t
-                                               :accept-result nil
-                                               :rescan t))
-                                            (clim:rescan-if-necessary stream)
-                                            nil))
-        ;; True if `gesture' was freshly read from the user, and not
-        ;; just retrieved from the buffer during a rescan.
-        for freshly-inserted = (and (plusp (clim:stream-scan-pointer stream))
-                                    (not (equal (drei::buffer-object
-                                                 (drei:buffer (clim:view drei))
-                                                 (1- (clim:stream-scan-pointer stream)))
-                                                gesture)))
-        ;;for form = (drei-lisp-syntax::form-after syntax (drei::input-position stream))
-        ;; We do not stop until the input is complete and an activation
-        ;; gesture has just been provided. The freshness check is so
-        ;; #\Newline characters in the input will not cause premature
-        ;; activation.
-        until (and (clim:activation-gesture-p gesture)
-                   (and freshly-inserted
-                        (let ((gesture-event (climi::last-gesture (clim::encapsulating-stream-stream stream))))
-                          (and (typep gesture-event 'clim:keyboard-event)
-                               (zerop (logand (clim::event-modifier-state gesture-event) #x100))))))
-             ;; We only want to process the gesture if it is fresh,
-             ;; because if it isn't, it has already been processed at
-             ;; some point in the past.
-        when (and (clim:activation-gesture-p gesture)
-                  freshly-inserted)
-          do (progn
-               (clim:with-activation-gestures (nil :override t)
-                 (clim:stream-process-gesture stream gesture nil)))
-        finally 
-           (progn
-             (clim:unread-gesture gesture :stream stream)
-             (let* ((object (handler-case
-                                (let* ((buffer (drei:buffer (clim:view drei)))
+  (drei:with-drei-options ((drei:drei-instance stream)
+                           :syntax "Maxima"
+                           :keep-syntax t)
+    (let ((clim:*completion-gestures* nil)
+          (clim:*possibilities-gestures* nil))
+      (clim:with-delimiter-gestures (nil :override t)
+        (loop
+          named control-loop
+          with drei = (drei:drei-instance stream)
+          ;;with syntax = (drei:syntax (clim:view drei))
+          ;; The input context permits the user to mouse-select displayed
+          ;; Lisp objects and put them into the input buffer as literal
+          ;; objects.
+          for gesture = (clim:with-input-context ('maxima-native-expr :override nil)
+                            (object type)
+                            (clim:read-gesture :stream stream)
+                          (maxima-native-expr (drei:performing-drei-operations (drei :with-undo t
+                                                                                     :redisplay t)
+                                                (clim:presentation-replace-input
+                                                 stream object type (clim:view drei)
+                                                 :buffer-start (clim:stream-insertion-pointer stream)
+                                                 :allow-other-keys t
+                                                 :accept-result nil
+                                                 :rescan t))
+                                              (clim:rescan-if-necessary stream)
+                                              nil))
+
+          for current-command = (let* ((buffer (drei:buffer (clim:view drei)))
                                        (start (drei::input-position stream))
                                        (end (drei::size buffer)))
-                                  (string-to-native-expr (drei::buffer-substring buffer start end)))
-                              (maxima-expr-parse-error (condition)
-                                ;; Move point to the problematic form
-                                ;; and signal a rescan.
-                                (setf (drei::activation-gesture stream) nil)
-                                (drei:handle-drei-condition drei condition)
-                                (drei:display-drei drei :redisplay-minibuffer t)
-                                (clim:immediate-rescan stream))))
-                    (ptype (clim:presentation-type-of object)))
-               (return-from control-loop
-                 (values object
-                         (if (clim:presentation-subtypep ptype 'maxima-native-expr)
-                             ptype 'maxima-native-expr)))))))))
+                                  (drei::buffer-substring buffer start end))
 
-#+nil
-(clim:define-presentation-method clim:accept ((type maxima-native-expr)
-                                              stream (view clim:textual-view)
-                                              &key
-                                              (default nil defaultp)
-                                              (default-type type))
-  (let ((s (read-plain-text stream)))
-    (log:trace "Got string from reading native expr: ~s" s)
-    (let ((trimmed (string-trim " " s)))
-      (if (equal trimmed "")
-          (if defaultp
-              (values default default-type)
-              (values nil 'maxima-empty-input))
-          (values (string-to-native-expr trimmed) type)))))
+          ;; True if `gesture' was freshly read from the user, and not
+          ;; just retrieved from the buffer during a rescan.
+          for freshly-inserted = (and (plusp (clim:stream-scan-pointer stream))
+                                      (not (equal (drei::buffer-object
+                                                   (drei:buffer (clim:view drei))
+                                                   (1- (clim:stream-scan-pointer stream)))
+                                                  gesture)))
+          ;;for form = (drei-lisp-syntax::form-after syntax (drei::input-position stream))
+          ;; We do not stop until the input is complete and an activation
+          ;; gesture has just been provided. The freshness check is so
+          ;; #\Newline characters in the input will not cause premature
+          ;; activation.
+          until (and (clim:activation-gesture-p gesture)
+                     (and freshly-inserted
+                          (or (and maxima::$submit_on_return
+                                   (let ((gesture-event (climi::last-gesture (clim::encapsulating-stream-stream stream))))
+                                     (and (typep gesture-event 'clim:keyboard-event)
+                                          (zerop (logand (clim::event-modifier-state gesture-event) #x100)))))
+                              (and (not maxima::$submit_on_return)
+                                   (alexandria:ends-with-subseq ";" (string-trim " " current-command))))))
+          ;; We only want to process the gesture if it is fresh,
+          ;; because if it isn't, it has already been processed at
+          ;; some point in the past.
+          when (and (clim:activation-gesture-p gesture)
+                    freshly-inserted)
+            do (progn
+                 (clim:with-activation-gestures (nil :override t)
+                   (clim:stream-process-gesture stream gesture nil)))
+          finally 
+             (progn
+               (clim:unread-gesture gesture :stream stream)
+               (let* ((object (handler-case
+                                  (string-to-native-expr (cleanup-input current-command))
+                                (maxima-expr-parse-error (condition)
+                                  ;; Move point to the problematic form
+                                  ;; and signal a rescan.
+                                  (setf (drei::activation-gesture stream) nil)
+                                  (drei:handle-drei-condition drei condition)
+                                  (drei:display-drei drei :redisplay-minibuffer t)
+                                  (clim:immediate-rescan stream))))
+                      (ptype (clim:presentation-type-of object)))
+                 (return-from control-loop
+                   (values object
+                           (if (clim:presentation-subtypep ptype 'maxima-native-expr)
+                               ptype 'maxima-native-expr))))))))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream

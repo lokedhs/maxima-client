@@ -8,6 +8,7 @@
                :trivial-gray-streams
                :log4cl
                :lambda-fiddle
+               :cl-ppcre
                :maxima)
   :components ((:module src
                         :serial t
@@ -16,6 +17,7 @@
                                      (:file "renderer")
                                      (:file "output")
                                      (:file "queries")
+                                     (:file "maxima-syntax")
                                      (:file "cmdline")
                                      (:file "maxima-plot")
                                      (:file "plot2d")))))
