@@ -557,7 +557,7 @@
         (let ((line-x (+ (- right x) (* spacing 2))))
           (clim:draw-line* stream line-x y line-x bottom))))))
 
-(defun render-maxima-expression (stream expr)
+(defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
                (maxima::mlist (render-mlist stream (cdr fixed)))
@@ -578,7 +578,15 @@
                (maxima::mprog (render-function stream '(maxima::$block) (cdr fixed)))
                (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                (maxima::mabs (render-mabs stream (second fixed)))
-               (t (render-function stream (car fixed) (cdr fixed))))))
+               (t (render-function stream (car fixed) (cdr fixed)))))
+           (render-with-presentation (fixed)
+             (if toplevel-p
+                 (render-inner fixed)
+                 (clim:with-output-as-presentation (stream (make-instance 'maxima-native-expr :expr fixed)
+                                                           'maxima-native-expr
+                                                           :view (clim:stream-default-view stream)
+                                                           :allow-sensitive-inferiors t)
+                   (render-inner fixed)))))
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
       (etypecase fixed
@@ -588,8 +596,8 @@
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
                   (with-wrapped-parens (stream)
-                    (render-inner fixed))
-                  (render-inner fixed)))))))
+                    (render-with-presentation fixed))
+                  (render-with-presentation fixed)))))))
 
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
@@ -604,7 +612,7 @@
 (defun make-expression-output-record (stream expr)
   (log:trace "Making output record for expr: ~s" expr)
   (make-rendered-output-record (stream)
-    (render-maxima-expression stream expr)))
+    (render-maxima-expression stream expr t)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view maxima-renderer-view) &key)
   (log:info "STD present: ~s" obj)

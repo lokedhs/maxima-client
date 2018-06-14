@@ -192,7 +192,8 @@ terminated by ;.")
                           (or (and maxima::$submit_on_return
                                    (let ((gesture-event (climi::last-gesture (clim::encapsulating-stream-stream stream))))
                                      (and (typep gesture-event 'clim:keyboard-event)
-                                          (zerop (logand (clim::event-modifier-state gesture-event) #x100)))))
+                                          (zerop (logand (clim::event-modifier-state gesture-event)
+                                                         (clim:make-modifier-state :shift))))))
                               (and (not maxima::$submit_on_return)
                                    (alexandria:ends-with-subseq ";" (string-trim " " current-command))))))
           ;; We only want to process the gesture if it is fresh,

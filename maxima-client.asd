@@ -14,6 +14,7 @@
                         :serial t
                         :components ((:file "package")
                                      (:file "util")
+                                     (:file "popup")
                                      (:file "renderer")
                                      (:file "output")
                                      (:file "queries")
