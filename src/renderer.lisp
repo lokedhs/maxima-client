@@ -1,5 +1,7 @@
 (in-package :maxima-client)
 
+(defvar maxima::$font_size 14)
+
 (defvar *font-roman* '("MathJax_Main" "Regular"))
 (defvar *font-roman-math* '("MathJax_Math" "Regular"))
 (defvar *font-italic* '("MathJax_Main" "Italic"))
@@ -601,7 +603,7 @@
 
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
-    `(let ((*font-size* 14))
+    `(let ((*font-size* maxima::$font_size))
        (with-roman-text-style (stream)
          (let ((,output-record (clim:with-output-to-output-record (,stream)
                                  (with-paren-op
