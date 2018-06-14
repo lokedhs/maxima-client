@@ -14,17 +14,24 @@ terminated by ;.")
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
+(defclass maxima-pointer-documentation-view (maxima-renderer-view clim:pointer-documentation-view)
+  ())
+
+(defparameter +maxima-pointer-documentation-view+ (make-instance 'maxima-pointer-documentation-view))
+
 (clim:define-application-frame maxima-main-frame ()
   ()
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+
-                                                    :incremental-redisplay t)))
+                                                    :incremental-redisplay t))
+          (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       text-content))))
+                       text-content
+                       doc))))
 
 (defgeneric presentation-pointer-motion (presentation x y)
   (:method (presentation x y)
@@ -80,6 +87,10 @@ terminated by ;.")
 (clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
   (log:info "STR TEXT present: ~s" obj)
   (format stream "~a" obj))
+
+(clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream
+                                                   (view maxima-pointer-documentation-view) &key)
+  (format stream "~a" (maxima-native-expr/src obj)))
 
 (defun read-plain-text (stream
                         &key
