@@ -28,7 +28,8 @@
   (let ((code (char-code ch)))
     (or (<= (char-code #\a) code (char-code #\z))
         (<= (char-code #\A) code (char-code #\Z))
-        (<= (char-code #\0) code (char-code #\9)))))
+        (<= (char-code #\0) code (char-code #\9))
+        (eql ch #\_))))
 
 (defun insert-completed-symbol (mark string)
   (loop
