@@ -19,6 +19,7 @@
 (defvar *font-size*)
 (defvar *rop*)
 (defvar *lop*)
+(defvar *inhibit-presentations* nil)
 
 (defparameter *invert-readtable* (let ((readtable (copy-readtable)))
                                    (setf (readtable-case readtable) :invert)
@@ -185,12 +186,12 @@
     (declare (ignore width x y))
     (- height baseline)))
 
-(defun render-quotient (stream top-expr bottom-expr)
+(defun %render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
         (top (clim:with-output-to-output-record (stream)
-               (render-maxima-expression stream top-expr)))
+               (funcall top-expr stream)))
         (bottom (clim:with-output-to-output-record (stream)
-                  (render-maxima-expression stream bottom-expr))))
+                  (funcall bottom-expr stream))))
     (dimension-bind (top :width top-width :height top-height)
       (dimension-bind (bottom :width bottom-width)
         (let* ((max-width (max top-width bottom-width))
@@ -205,6 +206,16 @@
                             (- (+ top-height (+ (* fraction-spacing 2) 1)) centre))
           (clim:stream-add-output-record stream bottom)
           (clim:draw-line* stream 0 (- y centre) max-width (- y centre)))))))
+
+(defun render-quotient (stream top-expr bottom-expr)
+  (%render-quotient stream
+                    (lambda (stream)
+                      (render-maxima-expression stream top-expr))
+                    (lambda (stream)
+                      (render-maxima-expression stream bottom-expr))))
+
+(defun render-number (stream n)
+  (render-formatted stream "~a" n))
 
 (defun render-symbol (stream sym &key roman-font)
   (case sym
@@ -247,14 +258,12 @@
         (render-aligned-string "~c" #\DOT_OPERATOR))
       (render-aligned () (render-maxima-expression stream expr)))))
 
-(defun render-expt (stream a b)
+(defun %render-expt (stream fn-a fn-b)
   (let ((base (clim:with-output-to-output-record (stream)
-                (let ((*rop* 'maxima::mexpt))
-                 (render-maxima-expression stream a))))
+                (funcall fn-a stream)))
         (exp (clim:with-output-to-output-record (stream)
                (with-font-size-change (stream 2/3)
-                 (let ((*lop* 'maxima::mexpt))
-                   (render-maxima-expression stream b))))))
+                 (funcall fn-b stream)))))
     (dimension-bind (base :height base-height :y base-y :right base-right)
       (dimension-bind (exp :height exp-height)
         (clim:stream-add-output-record stream (make-boxed-output-record stream base))
@@ -267,6 +276,15 @@
                               ;; For now, just align them
                               base-y))
         (clim:stream-add-output-record stream (make-boxed-output-record stream exp))))))
+
+(defun render-expt (stream a b)
+  (%render-expt stream
+                (lambda (stream)
+                  (let ((*rop* 'maxima::mexpt))
+                    (render-maxima-expression stream a)))
+                (lambda (stream)
+                  (let ((*lop* 'maxima::mexpt))
+                    (render-maxima-expression stream b)))))
 
 (defun render-plain (stream spacing ch a b)
   (with-aligned-rendering (stream)
@@ -559,6 +577,31 @@
         (let ((line-x (+ (- right x) (* spacing 2))))
           (clim:draw-line* stream line-x y line-x bottom))))))
 
+(defun render-derivative (stream expr sym exp)
+  (labels ((render-sym (stream sym-p)
+             (with-aligned-rendering (stream)
+               (render-aligned () (render-symbol stream '$d))
+               (when sym-p
+                 (render-aligned () (render-symbol stream sym)))))
+           (render-sym-expt (stream sym-p)
+             (if (eql exp 1)
+                 (render-sym stream sym-p)
+                 (%render-expt stream
+                               (lambda (stream)
+                                 (render-sym stream sym-p))
+                               (lambda (stream)
+                                 (render-maxima-expression stream exp))))))
+    (with-aligned-rendering (stream)
+      (render-aligned () (let ((*inhibit-presentations* t))
+                           (%render-quotient stream
+                                             (lambda (stream)
+                                               (render-sym-expt stream nil))
+                                             (lambda (stream)
+                                               (render-sym-expt stream t)))))
+      (aligned-spacing 0.5)
+      (with-wrapped-parens (stream)
+        (render-aligned () (render-maxima-expression stream expr))))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -580,9 +623,10 @@
                (maxima::mprog (render-function stream '(maxima::$block) (cdr fixed)))
                (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                (maxima::mabs (render-mabs stream (second fixed)))
+               (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
                (t (render-function stream (car fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
-             (if toplevel-p
+             (if (or toplevel-p *inhibit-presentations*)
                  (render-inner fixed)
                  (clim:with-output-as-presentation (stream (make-instance 'maxima-native-expr :expr fixed)
                                                            'maxima-native-expr
@@ -592,7 +636,7 @@
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
       (etypecase fixed
-        (number (render-formatted stream "~a" fixed))
+        (number (render-number stream fixed))
         (symbol (render-symbol stream fixed))
         (string (render-string stream fixed))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
@@ -617,7 +661,6 @@
     (render-maxima-expression stream expr t)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view maxima-renderer-view) &key)
-  (log:info "STD present: ~s" obj)
   (let* ((expr (maxima-native-expr/expr obj))
          (output-record (make-expression-output-record stream expr)))
     (clim:with-room-for-graphics (stream)
@@ -625,11 +668,9 @@
         (clim:stream-add-output-record stream output-record)))))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view clim:textual-view) &key)
-  (log:info "TXT present: ~s" obj)
   (format stream "~a" (maxima-native-expr/src obj)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) (stream string-stream) (view t) &key)
-  (log:info "STR present: ~s" obj)
   (when obj
     (format stream "~a" (maxima-native-expr/src obj))))
 
