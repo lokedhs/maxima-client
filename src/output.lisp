@@ -5,14 +5,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass maxima-output (trivial-gray-streams:fundamental-character-output-stream)
-  ((stream :initform (make-string-output-stream)
-           :reader maxima-output/stream)
-   (update :initform nil
-           :accessor maxima-output/update)))
+  ((stream          :initform (make-string-output-stream)
+                    :reader maxima-output/stream)
+   (update          :initform nil
+                    :accessor maxima-output/update)
+   (column-position :initform 0
+                    :accessor maxima-output/column-position)))
 
 (defmethod trivial-gray-streams:stream-write-char ((stream maxima-output) char)
+  (log:info "Got character: ~s    :: ~s" char stream)
+  (if (eql char #\Newline)
+      (setf (maxima-output/column-position stream) 0)
+      (incf (maxima-output/column-position stream)))
   (setf (maxima-output/update stream) t)
   (write-char char (maxima-output/stream stream)))
+
+(defmethod trivial-gray-streams:stream-fresh-line ((stream maxima-output))
+  (unless (zerop (maxima-output/column-position stream))
+    (trivial-gray-streams:stream-write-char stream #\Newline)))
 
 (defun maxima-stream-updated-p (stream)
   (maxima-output/update stream))

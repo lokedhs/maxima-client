@@ -221,6 +221,7 @@
   (case sym
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
+    (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
     (t (let ((n (format-sym-name sym)))
          (if (or (eql (aref n 0) #\$)
                  (eql (aref n 0) #\%))
