@@ -13,7 +13,6 @@
                     :accessor maxima-output/column-position)))
 
 (defmethod trivial-gray-streams:stream-write-char ((stream maxima-output) char)
-  (log:info "Got character: ~s    :: ~s" char stream)
   (if (eql char #\Newline)
       (setf (maxima-output/column-position stream) 0)
       (incf (maxima-output/column-position stream)))
