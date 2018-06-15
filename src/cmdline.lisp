@@ -81,11 +81,9 @@ terminated by ;.")
   :inherit-from 'clim:form)
 
 (clim:define-presentation-method clim:present (obj (type plain-text) stream (view clim:textual-view) &key)
-  (log:info "STD TEXT present: ~s" obj)
   (format stream "~a" obj))
 
 (clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
-  (log:info "STR TEXT present: ~s" obj)
   (format stream "~a" obj))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream
@@ -133,8 +131,8 @@ terminated by ;.")
                                               query-identifier
                                               for-context-type)
   #+nil  (declare (ignore query-identifier for-context-type))
-  (log:info "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
-            obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
+  (log:trace "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
+             obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
   (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
          (append (if buffer-start-p (list :buffer-start buffer-start) nil)
                  (if rescan-p (list :rescan rescan) nil))))
@@ -336,6 +334,9 @@ terminated by ;.")
                                            (*standard-input* maxima-stream))
                                        (eval-maxima-expression (maxima-native-expr/expr cmd)))))
                          (log:debug "Result: ~s" result)
+                         (let ((content (maxima-stream-text maxima-stream)))
+                           (when content
+                             (format t "~a" content)))
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setf (symbol-value d-tag) result)
                            (let ((obj (make-instance 'maxima-native-expr :expr result)))

@@ -56,7 +56,7 @@
   (< (maxima-io/pos stream) (length (maxima-io/buffer stream))))
 
 (defun maxima-io-input-plain-text (stream)
-  (clim:accept 'plain-text :stream (maxima-io/clim-stream stream)))
+  (clim:accept 'plain-text :stream (maxima-io/clim-stream stream) :prompt nil))
 
 (defun read-string-and-update-stream (stream)
   (let ((s (maxima-stream-text stream)))
@@ -88,12 +88,10 @@
     ch))
 
 (defmethod trivial-gray-streams:stream-read-line ((stream maxima-io))
-  (let ((result (if (maxima-io-buffer-nonempty stream)
-                    (with-output-to-string (s)
-                      (loop
-                        for ch = (trivial-gray-streams:stream-read-char stream)
-                        until (eql ch #\Newline)
-                        do (princ ch)))
-                    (maxima-io-input-plain-text stream))))
+  (let ((result (with-output-to-string (s)
+                  (loop
+                    for ch = (trivial-gray-streams:stream-read-char stream)
+                    until (eql ch #\Newline)
+                    do (princ ch s)))))
     (log:trace "result from stream-read-line: ~s" result)
     result))
