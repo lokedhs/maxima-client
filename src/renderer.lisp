@@ -256,7 +256,7 @@
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mtimes :first-sym first)
       (unless first
-        (render-aligned-string "~c" #\DOT_OPERATOR))
+        (aligned-spacing 0.4))
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun %render-expt (stream fn-a fn-b)
