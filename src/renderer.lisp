@@ -259,11 +259,20 @@
         (aligned-spacing 0.4))
       (render-aligned () (render-maxima-expression stream expr)))))
 
+(defun render-mnctimes (stream exprs)
+  (with-aligned-rendering (stream)
+    (iterate-exprs (expr exprs 'maxima::mnctimes :first-sym first)
+      (unless first
+        (aligned-spacing 0.2)
+        (render-aligned-string "~c" #\DOT_OPERATOR)
+        (aligned-spacing 0.2))
+      (render-aligned () (render-maxima-expression stream expr)))))
+
 (defun %render-expt (stream fn-a fn-b)
   (let ((base (clim:with-output-to-output-record (stream)
                 (funcall fn-a stream)))
         (exp (clim:with-output-to-output-record (stream)
-               (with-font-size-change (stream 2/3)
+               (with-font-size-change (stream 0.8)
                  (funcall fn-b stream)))))
     (dimension-bind (base :height base-height :y base-y :right base-right)
       (dimension-bind (exp :height exp-height)
@@ -339,27 +348,42 @@
                        ,@body))))
          (wrap-with-parens ,stream ,rec)))))
 
-(defun render-param-list (stream prefix-renderer params)
+(defmacro with-wrapped-optional-parens ((stream enabled-p) &body body)
+  (alexandria:once-only (stream enabled-p)
+    (alexandria:with-gensyms (fn)
+      `(flet ((,fn () ,@body))
+         (if ,enabled-p
+             (with-wrapped-parens (,stream)
+               (,fn))
+             (,fn))))))
+
+(defun render-arg-list (stream params &key (spacing 0.5))
   (with-aligned-rendering (stream)
-    (render-aligned () (funcall prefix-renderer stream))
+    (loop
+      for expr in params
+      for first = t then nil
+      unless first
+        do (progn
+             (render-aligned-string ",")
+             (aligned-spacing spacing))
+      do (render-aligned ()
+           (with-paren-op
+             (render-maxima-expression stream expr))))))
+
+(defun render-param-list (stream params &key prefix-renderer (spacing 0.5))
+  (with-aligned-rendering (stream)
+    (when prefix-renderer
+      (render-aligned () (funcall prefix-renderer stream)))
     (let ((params (clim:with-output-to-output-record (stream)
-                    (with-aligned-rendering (stream)
-                      (loop
-                        for expr in params
-                        for first = t then nil
-                        unless first
-                          do (progn
-                               (render-aligned-string ",")
-                               (aligned-spacing 0.5))
-                        do (render-aligned ()
-                             (with-paren-op
-                               (render-maxima-expression stream expr))))))))
+                    (render-arg-list stream params :spacing spacing))))
       (render-aligned () (wrap-with-parens stream params)))))
 
-(defun render-function (stream name exprs)
-  (render-param-list stream
-                     (lambda (stream) (render-symbol stream (car name) :roman-font t))
-                     exprs))
+(defun render-function (stream name exprs &key paren-p)
+  (log:trace "Render function. name=~s, exprs=~s" name exprs)
+  (render-param-list stream exprs
+                     :prefix-renderer (lambda (stream)
+                                        (with-wrapped-optional-parens (stream paren-p)
+                                          (render-symbol stream name :roman-font t)))))
 
 (defun render-and-measure-string (stream string &optional (x 0) (y 0))
   (multiple-value-bind (width height final-x final-y baseline)
@@ -498,13 +522,13 @@
     ;; stucture can be passed in. If that's the case, we should
     ;; probably just call RENDER-MAXIMA-EXPRESSION on it.
     (with-aligned-rendering (stream)
-      (render-aligned () (render-param-list stream
-                                            (lambda (stream)
+      (render-aligned ()
+        (render-param-list stream function-args
+                           :prefix-renderer (lambda (stream)
                                               (unless (and (alexandria:sequence-of-length-p function-name 1)
                                                            (symbolp (car function-name)))
                                                 (error "Unexpected content in function name: ~s" function-name))
-                                              (render-symbol stream (car function-name) :roman-font t))
-                                            function-args))
+                                              (render-symbol stream (car function-name) :roman-font t))))
       (aligned-spacing 0.5)
       (render-aligned-string ":=")
       (aligned-spacing 0.5)
@@ -603,6 +627,49 @@
       (with-wrapped-parens (stream)
         (render-aligned () (render-maxima-expression stream expr))))))
 
+#+nil
+(defun xrender-array-reference (stream expr args &key paren-p)
+  (unless args
+    (error "Arg list should have at least one element"))
+  (let ((base (clim:with-output-to-output-record (stream)
+                (with-wrapped-optional-parens (stream paren-p)
+                  (render-maxima-expression stream expr))))
+        (args-rec (clim:with-output-to-output-record (stream)
+                    (with-font-size-change (stream 0.8)
+                      (render-arg-list stream args :spacing 0)))))
+    (dimension-bind (base :height base-height :y base-y :right base-right :bottom base-bottom)
+      (dimension-bind (args-rec :height args-height)
+        (clim:stream-add-output-record stream (make-boxed-output-record stream base))
+        (set-rec-position args-rec base-right
+                          (if (>= args-height (/ base-height 2))
+                              (+ base-y (/ base-height 2))
+                              (- base-bottom (/ args-))))
+        (clim:stream-add-output-record stream args-rec)))))
+
+(defun render-array-reference (stream expr args &key paren-p)
+  (unless args
+    (error "Arg list should have at least one element"))
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (with-wrapped-optional-parens (stream paren-p)
+                 (render-maxima-expression stream expr)))))
+    (clim:stream-add-output-record stream rec)
+    (dimension-bind (rec :y y :right right :bottom bottom :height height)
+      (with-font-size-change (stream 0.8)
+        (let ((args-rec (clim:with-output-to-output-record (stream)
+                          (render-arg-list stream args :spacing 0))))
+          (dimension-bind (args-rec :x args-x :y args-y :bottom args-bottom :height args-height)
+            (move-rec args-rec (- right args-x)
+                      (if (>= args-height (/ height 2))
+                          (- (+ y (/ height 2)) args-y)
+                          (let ((args-centre (/ (+ args-y args-bottom) 2)))
+                            (- bottom args-centre))))
+            (clim:stream-add-output-record stream args-rec)))))))
+
+(defun render-function-or-array-ref (stream arrayref-p paren-p expr args)
+  (if arrayref-p
+      (render-array-reference stream expr args :paren-p paren-p)
+      (render-function stream expr args :paren-p paren-p)))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -625,7 +692,9 @@
                (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                (maxima::mabs (render-mabs stream (second fixed)))
                (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
-               (t (render-function stream (car fixed) (cdr fixed)))))
+               (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
+               (maxima::mnctimes (render-mnctimes stream (cdr fixed)))
+               (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
                  (render-inner fixed)
