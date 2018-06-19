@@ -53,6 +53,17 @@
   (declare (ignore x y))
   nil)
 
+(defun gesture-modifier-p (gesture modifiers)
+  (let ((bitmap (cond
+                  ((keywordp modifiers) (clim:make-modifier-state modifiers))
+                  ((listp modifiers) (loop
+                                       for m in modifiers
+                                       for state = (clim:make-modifier-state m)
+                                       for b = state then (logior b state)
+                                       finally (return b)))
+                  (t (error "Unexpected modifiers value: ~s" modifiers)))))
+    (eql bitmap (logand (clim::event-modifier-state gesture) bitmap))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
