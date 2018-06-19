@@ -576,7 +576,6 @@
                    do (clim:formatting-row (stream)
                         (loop
                           for col in (maxima-list-to-list row)
-                          do (log:info "col=~s" col)
                           do (clim:formatting-cell (stream :align-y :center :align-x :center)
                                (with-paren-op
                                  (render-maxima-expression stream col))))))))))
