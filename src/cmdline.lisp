@@ -130,7 +130,7 @@ terminated by ;.")
                                             &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
                                               query-identifier
                                               for-context-type)
-  #+nil  (declare (ignore query-identifier for-context-type))
+  #+nil (declare (ignore query-identifier for-context-type))
   (log:trace "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
              obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
   (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
@@ -146,6 +146,12 @@ terminated by ;.")
       return (subseq string 0 i)
     while (eql ch #\Space)
     finally (return string)))
+
+(defmethod drei:handle-drei-condition (drei (condition maxima-expr-parse-error))
+  (drei::with-minibuffer-stream (minibuffer)
+    (format minibuffer "~a" condition))
+  ;; TODO: Move point to the error position
+  )
 
 (clim:define-presentation-method clim:accept
     ((type maxima-native-expr)
@@ -269,6 +275,11 @@ terminated by ;.")
   (log:trace "Converting to maxima expr: ~s" object)
   (string-to-native-expr object))
 
+(clim:define-presentation-translator maxima-to-lisp-expression (maxima-native-expr clim:expression maxima-commands)
+    (object)
+  (log:trace "Converting to lisp expression: ~s" object)
+  (maxima-native-expr/expr object))
+
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (handler-case
       (multiple-value-bind (object type)
@@ -364,8 +375,6 @@ terminated by ;.")
     ((form maxima-lisp-package-form :prompt "Form"))
   (let ((result (with-maxima-package
                   (maxima::eval form))))
-    #+nil
-    (present-to-stream result *standard-output* :record-type 'clim:form)
     (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
       (clim:present result 'clim:expression :stream *standard-output*))))
 

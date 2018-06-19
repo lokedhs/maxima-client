@@ -59,12 +59,7 @@
                 ((alexandria:sequence-of-length-p matches 1)
                  (insert-completed-symbol point (car matches)))
                 (t
-                 (let ((result (clim:frame-manager-menu-choose (clim:find-frame-manager)
-                                                               (mapcar (lambda (v)
-                                                                         (cons v v))
-                                                                       matches)
-                                                               :label "Completions"
-                                                               :scroll-bars :vertical)))
+                 (let ((result (select-completion-match (mapcar (lambda (v) (list v v)) matches))))
                    (when result
                      (insert-completed-symbol point result)))))))))
   nil)
@@ -72,3 +67,4 @@
 (drei::set-key 'complete-maxima-function
                'maxima-table
                '((#\Tab)))
+
