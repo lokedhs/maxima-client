@@ -20,7 +20,8 @@ terminated by ;.")
 (defparameter +maxima-pointer-documentation-view+ (make-instance 'maxima-pointer-documentation-view))
 
 (clim:define-application-frame maxima-main-frame ()
-  ()
+  ((info-app :initform nil
+             :accessor maxima-main-frame/info-app))
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+
@@ -376,6 +377,16 @@ terminated by ;.")
                   (maxima::eval form))))
     (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
       (clim:present result 'clim:expression :stream *standard-output*))))
+
+(clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
+    ((name plain-text :prompt "Name"))
+  (let* ((frame clim:*application-frame*)
+         (info (maxima-main-frame/info-app frame)
+               (let ((f (open-info-frame)))
+                 (setf (maxima-main-frame/info-app frame) f)
+                 f)))
+    (with-call-in-event-handler info
+      (add-info-page info name))))
 
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
