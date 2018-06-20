@@ -5,6 +5,7 @@
   :description "Maxima CLIM client"
   :depends-on (:alexandria
                :mcclim
+               :mcclim-fontconfig
                :trivial-gray-streams
                :log4cl
                :lambda-fiddle
