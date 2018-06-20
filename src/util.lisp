@@ -29,7 +29,9 @@
                (make-position-form ()
                  (if (or x-sym y-sym right-sym bottom-sym)
                      `(multiple-value-bind (,x ,y)
-                          (clim:output-record-position ,output-record)
+                          (etypecase ,output-record
+                            (clim:output-record (clim:output-record-position ,output-record))
+                            (clim:region (clim:bounding-rectangle-position ,output-record)))
                         (declare (ignorable ,x ,y))
                         (let (,@(if x-sym `((,x-sym ,x)))
                               ,@(if y-sym `((,y-sym ,y)))

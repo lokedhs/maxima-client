@@ -12,7 +12,15 @@
            :accessor popup-menu-element/record)))
 
 (defun display-popup-menu-entry (stream value element-selected)
-  (clim:draw-text* stream (second value) 0 0 :ink (if element-selected clim:+green+ clim:+black+)))
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (clim:draw-text* stream (second value) 0 0 :ink clim:+black+))))
+    (dimension-bind (rec :height h)
+      (clim:draw-rectangle* stream 0 0 (clim:rectangle-width (clim:pane-viewport-region stream)) h
+                            :ink (if element-selected
+                                     (clim:make-rgb-color 0.7 1 0.7)
+                                     clim:+white+)))
+    (set-rec-position rec 0 0)
+    (clim:stream-add-output-record stream rec)))
 
 (defun make-menu-entry-vector (stream values)
   (let ((vector (make-array (length values))))
@@ -44,11 +52,27 @@
         (dimension-bind (record :x x :y y :right right :bottom bottom)
           (clim:repaint-sheet stream (clim:make-bounding-rectangle x y right bottom)))))))
 
+(defun adjust-popup-dimensions (pane)
+  (let ((top-level-pane (labels ((searching (pane)
+				   (if (typep pane 'climi::top-level-sheet-pane)
+				       pane
+				       (searching (clim:sheet-parent pane)))))
+			  (searching pane))))
+    (clim:move-sheet top-level-pane 10 10)))
+
+(defun ensure-output-record-visible (pane output-record)
+  (dimension-bind ((clim:pane-viewport-region pane) :x viewport-x1 :y viewport-y1 :bottom viewport-y2 :height viewport-h)
+    (dimension-bind (output-record :y rec-y1 :bottom rec-y2)
+      (cond ((< rec-y1 viewport-y1)
+             (clim:scroll-extent pane viewport-x1 rec-y1))
+            ((> rec-y2 viewport-y2)
+             (clim:scroll-extent pane viewport-x1 (max (- rec-y2 viewport-h) 0)))))))
+
 (defun select-completion-match (values)
   (let* ((associated-frame clim:*application-frame*)
          (fm (clim:frame-manager associated-frame)))
     (clim:with-look-and-feel-realization (fm associated-frame)
-      (let* ((menu-pane (clim:make-pane-1 fm associated-frame 'clim:application-pane))
+      (let* ((menu-pane (clim:make-pane-1 fm associated-frame 'clim:clim-stream-pane))
              (menu-container (clim:scrolling (:scroll-bar :vertical) menu-pane))
              (frame (clim-internals::make-menu-frame (clim-internals::raising ()
                                                        (clim:labelling (:label "Completions" :name 'label :label-alignment :top)
@@ -61,6 +85,7 @@
                (setf (clim:stream-end-of-line-action menu-pane) :allow)
                (setf (clim:stream-end-of-page-action menu-pane) :allow)
                ;; Draw menu
+               (adjust-popup-dimensions menu-pane)
                (clim:enable-frame frame)
                (let ((entries (make-menu-entry-vector menu-pane values))
                      (selected-index 0))
@@ -68,11 +93,12 @@
                             (let ((new-pos (max (min (+ selected-index delta) (1- (length entries))) 0)))
                               (when (/= new-pos selected-index)
                                 (redraw-popup-menu-entry menu-pane (aref entries selected-index) nil)
-                                (redraw-popup-menu-entry menu-pane (aref entries new-pos) t)
+                                (let ((entry (aref entries new-pos)))
+                                  (redraw-popup-menu-entry menu-pane entry t)
+                                  (ensure-output-record-visible menu-pane (popup-menu-element/record entry)))
                                 (setq selected-index new-pos)))))
                    (loop
                      named control-loop
-                     with xx = 0
                      for gesture = (clim:with-input-context ('string :override nil)
                                        (object type)
                                        (clim:read-gesture :stream menu-pane)
