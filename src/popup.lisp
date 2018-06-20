@@ -58,7 +58,7 @@
 				       pane
 				       (searching (clim:sheet-parent pane)))))
 			  (searching pane))))
-    (clim:move-sheet top-level-pane 10 10)))
+    (clim:move-sheet top-level-pane 10 50)))
 
 (defun ensure-output-record-visible (pane output-record)
   (dimension-bind ((clim:pane-viewport-region pane) :x viewport-x1 :y viewport-y1 :bottom viewport-y2 :height viewport-h)

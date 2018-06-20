@@ -18,6 +18,7 @@
                                      (:file "renderer")
                                      (:file "output")
                                      (:file "queries")
+                                     (:file "info")
                                      (:file "maxima-syntax")
                                      (:file "cmdline")
                                      (:file "maxima-plot")
