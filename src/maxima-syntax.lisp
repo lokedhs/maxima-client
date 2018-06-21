@@ -59,7 +59,7 @@
           (cond ((null matches)
                  (esa:display-message "No completions"))
                 ((alexandria:sequence-of-length-p matches 1)
-                 (insert-completed-symbol point (car matches)))
+                 (insert-completed-symbol point (caar matches)))
                 (t
                  (let ((result (select-completion-match matches)))
                    (when result
