@@ -181,14 +181,14 @@
     (error "Argument is not a maxima list: ~s" expr))
   (cdr expr))
 
-(defun format-sym-as-string (sym) 
-  (let ((n (let ((*readtable* *invert-readtable*))
-             (princ-to-string sym))))
+(defun format-sym-as-string (sym)
+  (let ((n (format-sym-name sym)))
     (if (or (eql (aref n 0) #\$)
             (eql (aref n 0) #\%))
         (subseq n 1)
         (format nil "~s" sym))))
 
 (defun format-sym-name (sym)
+  (check-type sym symbol)
   (let ((*readtable* *invert-readtable*))
     (princ-to-string sym)))
