@@ -12,15 +12,20 @@
            :accessor popup-menu-element/record)))
 
 (defun display-popup-menu-entry (stream value element-selected)
-  (let ((rec (clim:with-output-to-output-record (stream)
-               (clim:draw-text* stream (second value) 0 0 :ink clim:+black+))))
+  (let* ((viewport-width (clim:rectangle-width (clim:pane-viewport-region stream)))
+         (rec (clim:with-output-to-output-record (stream)
+                (clim:draw-text* stream (first value) 0 0 :ink clim:+black+)
+                (alexandria:when-let ((args (second value)))
+                  (multiple-value-bind (width)
+                      (clim:text-size stream args)
+                    (clim:draw-text* stream args (- viewport-width width) 0))))))
     (dimension-bind (rec :height h)
-      (clim:draw-rectangle* stream 0 0 (clim:rectangle-width (clim:pane-viewport-region stream)) h
+      (clim:draw-rectangle* stream 0 0 viewport-width h
                             :ink (if element-selected
                                      (clim:make-rgb-color 0.7 1 0.7)
-                                     clim:+white+)))
-    (set-rec-position rec 0 0)
-    (clim:stream-add-output-record stream rec)))
+                                     clim:+white+))
+      (set-rec-position rec 0 0)
+      (clim:stream-add-output-record stream rec))))
 
 (defun make-menu-entry-vector (stream values)
   (let ((vector (make-array (length values))))
@@ -30,7 +35,7 @@
       for i from 0
       do (let* ((record (make-instance 'clim:standard-sequence-output-record))
                 (inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record record)
-                                (display-popup-menu-entry stream v (zerop i)))))
+                                (display-popup-menu-entry stream (second v) (zerop i)))))
            (clim:add-output-record inner-record record)
            (setf (clim:output-record-position record) (values 0 y))
            (clim:stream-add-output-record stream record)
@@ -45,7 +50,7 @@
     (dimension-bind (record :y prev-y)
       (clim:clear-output-record record)
       (let ((inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record)
-                            (display-popup-menu-entry stream (popup-menu-element/value entry) element-selected))))
+                            (display-popup-menu-entry stream (second (popup-menu-element/value entry)) element-selected))))
         (setf (clim:output-record-position inner-record) (values 0 0))
         (clim:add-output-record inner-record record)
         (setf (clim:output-record-position record) (values 0 prev-y))
@@ -58,6 +63,7 @@
 				       pane
 				       (searching (clim:sheet-parent pane)))))
 			  (searching pane))))
+    (clim:change-space-requirements top-level-pane :width 400 :height 400 :resize-frame t)
     (clim:move-sheet top-level-pane 10 50)))
 
 (defun ensure-output-record-visible (pane output-record)

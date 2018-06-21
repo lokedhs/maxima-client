@@ -21,8 +21,10 @@
                 when (and (cl-ppcre:scan "^[$%][a-zA-Z0-9_]+$" sym-name-fixed)
                           (or (and verb-prefix (alexandria:starts-with-subseq verb-prefix sym-name-fixed))
                               (and noun-prefix (alexandria:starts-with-subseq noun-prefix sym-name-fixed))))
-                  collect (subseq sym-name-fixed 1))))
-    (remove-duplicates (sort syms #'string<) :test #'equal)))
+                  collect (let ((s (subseq sym-name-fixed 1)))
+                            (list s (list s (function-signature sym)))))))
+    #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
+    syms))
 
 (defun symbol-constituent-p (ch)
   (let ((code (char-code ch)))
@@ -59,7 +61,7 @@
                 ((alexandria:sequence-of-length-p matches 1)
                  (insert-completed-symbol point (car matches)))
                 (t
-                 (let ((result (select-completion-match (mapcar (lambda (v) (list v v)) matches))))
+                 (let ((result (select-completion-match matches)))
                    (when result
                      (insert-completed-symbol point result)))))))))
   nil)

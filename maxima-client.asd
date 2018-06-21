@@ -5,8 +5,9 @@
   :description "Maxima CLIM client"
   :depends-on (:alexandria
                :mcclim
-               :trivial-gray-streams
                :log4cl
+               :trivial-gray-streams
+               :trivial-arguments
                :lambda-fiddle
                :cl-ppcre
                :maxima)
@@ -19,6 +20,7 @@
                                      (:file "output")
                                      (:file "queries")
                                      (:file "info")
+                                     (:file "reflect")
                                      (:file "maxima-syntax")
                                      (:file "cmdline")
                                      (:file "maxima-plot")

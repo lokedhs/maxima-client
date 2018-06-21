@@ -33,10 +33,6 @@
 
 (defparameter +listener-view+ (make-instance 'maxima-interactor-view))
 
-(defun format-sym-name (sym) 
-  (let ((*readtable* *invert-readtable*))
-    (princ-to-string sym)))
-
 (defclass maxima-native-expr ()
   ((src :initarg :src
         :initform nil)
@@ -222,12 +218,8 @@
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
-    (t (let ((n (format-sym-name sym)))
-         (if (or (eql (aref n 0) #\$)
-                 (eql (aref n 0) #\%))
-             (with-font (stream (if roman-font *font-roman* *font-italic*))
-               (render-formatted stream "~a" (subseq n 1)))
-             (render-formatted stream "~s" sym))))))
+    (t (with-font (stream (if roman-font *font-roman* *font-italic*))
+         (render-formatted stream "~a"(format-sym-as-string sym))))))
 
 (defun render-negation (stream expr spacing)
   (with-aligned-rendering (stream)
