@@ -390,11 +390,27 @@ terminated by ;.")
     (with-call-in-event-handler info
       (add-info-page info name))))
 
+(clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
+    ((size integer :prompt "points"))
+  (setq maxima::$font_size size)
+  (format t "~%Maths font size changed to ~a~%~%" size))
+
+(clim:define-command (enable-submit-on-return-command :name "Enable submit on return" :menu t :command-table maxima-commands)
+    ()
+  (setq maxima::$submit_on_return t)
+  (format t "~%Statements are terminated by typing RETURN.~%~%"))
+
+(clim:define-command (disable-submit-on-return-command :name "Enable submit on return" :menu t :command-table maxima-commands)
+    ()
+  (setq maxima::$submit_on_return nil)
+  (format t "~%Statements must be terminated by a semicolon.~%~%"))
+
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
                          :menu '(("File" :menu maxima-file-command-table)
                                  ("Plot" :menu maxima-plot-command-table)
-                                 ("Lisp" :menu maxima-lisp-command-table)))
+                                 ("Lisp" :menu maxima-lisp-command-table)
+                                 ("Display" :menu maxima-interaction-command-table)))
 
 (clim:make-command-table 'maxima-file-command-table
                          :errorp nil
@@ -409,3 +425,20 @@ terminated by ;.")
 (clim:make-command-table 'maxima-lisp-command-table
                          :errorp nil
                          :menu '(("Eval Lisp Form" :command maxima-eval-lisp-expression)))
+
+(clim:make-command-table 'font-size-command-table
+                         :errorp nil
+                         :menu '(("14" :command (font-size-command 14))
+                                 ("18" :command (font-size-command 18))
+                                 ("20" :command (font-size-command 20))
+                                 ("24" :command (font-size-command 24))))
+
+(clim:make-command-table 'submit-options-command-table
+                         :errorp nil
+                         :menu '(("Submit on return" :command enable-submit-on-return-command)
+                                 ("Require closing symbol" :command disable-submit-on-return-command)))
+
+(clim:make-command-table 'maxima-interaction-command-table
+                         :errorp nil
+                         :menu '(("Font size" :menu font-size-command-table)
+                                 ("Submit style" :menu submit-options-command-table)))
