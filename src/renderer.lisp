@@ -513,7 +513,7 @@
   (with-fix-text-style (stream)
     (render-formatted stream "~s" string)))
 
-(defun render-mdefine (stream f definition)
+(defun render-mdefine (stream f definition symbol)
   (let ((function-name (car f))
         (function-args (cdr f)))
     ;; FUNCTION-NAME should always be a list of a single symbol which
@@ -530,7 +530,7 @@
                                                 (error "Unexpected content in function name: ~s" function-name))
                                               (render-symbol stream (car function-name) :roman-font t))))
       (aligned-spacing 0.5)
-      (render-aligned-string ":=")
+      (render-aligned-string symbol)
       (aligned-spacing 0.5)
       (render-aligned () (render-maxima-expression stream definition)))))
 
@@ -680,7 +680,8 @@
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
-               (maxima::mdefine (render-mdefine stream (second fixed) (third fixed)))
+               (maxima::mdefine (render-mdefine stream (second fixed) (third fixed) ":="))
+               (maxima::mdefmacro (render-mdefine stream (second fixed) (third fixed) "::="))
                ((maxima::%sum maxima::$sum) (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                ((maxima::%integrate maxima::$integrate) (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                ((maxima::%product maxima::$product) (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
