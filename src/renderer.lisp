@@ -219,7 +219,7 @@
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
     (t (with-font (stream (if roman-font *font-roman* *font-italic*))
-         (render-formatted stream "~a"(format-sym-as-string sym))))))
+         (render-formatted stream "~a" (format-sym-name sym))))))
 
 (defun render-negation (stream expr spacing)
   (with-aligned-rendering (stream)

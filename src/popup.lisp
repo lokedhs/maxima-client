@@ -28,22 +28,28 @@
       (set-rec-position rec nil 0)
       (clim:stream-add-output-record stream rec))))
 
+(defclass popup-menu-clickable-element ()
+  ((value :initarg :value
+          :reader popup-menu-clickable-element/value)))
+
 (defun make-menu-entry-vector (stream values)
   (let ((vector (make-array (length values))))
     (loop
       with y = 0
       for v in values
       for i from 0
-      do (let* ((record (make-instance 'clim:standard-sequence-output-record))
-                (inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record record)
-                                (display-popup-menu-entry stream (second v) (zerop i)))))
-           (clim:add-output-record inner-record record)
-           (set-rec-position record nil y)
-           (clim:stream-add-output-record stream record)
-           (let ((element (make-instance 'popup-menu-element :value v :record record)))
-             (setf (aref vector i) element))
-           (dimension-bind (record :height height)
-             (incf y height))))
+      do (clim:with-output-as-presentation (stream (make-instance 'popup-menu-clickable-element :value v)
+                                                   'popup-menu-clickable-element)
+           (let* ((record (make-instance 'clim:standard-sequence-output-record))
+                  (inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record record)
+                                  (display-popup-menu-entry stream (second v) (zerop i)))))
+             (clim:add-output-record inner-record record)
+             (set-rec-position record nil y)
+             (clim:stream-add-output-record stream record)
+             (let ((element (make-instance 'popup-menu-element :value v :record record)))
+               (setf (aref vector i) element))
+             (dimension-bind (record :height height)
+               (incf y height)))))
     vector))
 
 (defun redraw-popup-menu-entry (stream entry element-selected)
@@ -106,10 +112,10 @@
                                 (setq selected-index new-pos)))))
                    (loop
                      named control-loop
-                     for gesture = (clim:with-input-context ('string :override nil)
+                     for gesture = (clim:with-input-context ('popup-menu-clickable-element :override nil)
                                        (object type)
                                        (clim:read-gesture :stream menu-pane)
-                                     (string (log:info "got string: ~s" object)))
+                                     (popup-menu-clickable-element (return-from control-loop (car (popup-menu-clickable-element/value object)))))
                      when (or (eql gesture #\Newline)
                               (eql gesture #\Tab))
                        do (return-from control-loop (first (popup-menu-element/value (aref entries selected-index))))

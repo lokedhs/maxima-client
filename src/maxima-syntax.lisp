@@ -13,16 +13,14 @@
   (unless (or verbs nouns)
     (error "At least one of :VERBS or :NOUNS must be provided"))
   (let ((syms (loop
-                with verb-prefix = (and verbs (concatenate 'string "$" prefix))
-                with noun-prefix = (and nouns (concatenate 'string "%" prefix))
                 with package = (find-package "MAXIMA")
                 for sym being each symbol in package
-                for sym-name-fixed = (format-sym-name sym)
-                when (and (cl-ppcre:scan "^[$%][a-zA-Z0-9_]+$" sym-name-fixed)
-                          (or (and verb-prefix (alexandria:starts-with-subseq verb-prefix sym-name-fixed))
-                              (and noun-prefix (alexandria:starts-with-subseq noun-prefix sym-name-fixed))))
-                  collect (let ((s (subseq sym-name-fixed 1)))
-                            (list s (list s (function-signature sym)))))))
+                for sym-string = (symbol-name sym)
+                when (or (and verbs (alexandria:starts-with-subseq "$" sym-string))
+                         (and nouns (alexandria:starts-with-subseq "%" sym-string)))
+                  append (let ((sym-name-fixed (format-sym-name sym)))
+                           (if (alexandria:starts-with-subseq prefix sym-name-fixed)
+                               (list (list sym-name-fixed (list sym-name-fixed (function-signature sym)))))))))
     #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
     syms))
 
