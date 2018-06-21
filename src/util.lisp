@@ -88,7 +88,9 @@
             :reader maxima-expr-parse-error/src)
    (message :type string
             :initarg :message
-            :reader maxima-expr-parse-error/message))
+            :reader maxima-expr-parse-error/message)
+   (pos     :initarg :pos
+            :reader maxima-expr-parse-error/pos))
   (:report (lambda (condition stream)
              (format stream "Parse error:~%~a"
                      (maxima-expr-parse-error/message condition)))))
@@ -103,7 +105,7 @@
                                            (progn ,@body)))
                            nil)))
          (if ,eval-ret
-             (funcall ,handler ,eval-ret (string-trim (format nil " ~c" #\Newline) (maxima-stream-text ,maxima-stream)))
+             (funcall ,handler ,eval-ret (maxima-stream-text ,maxima-stream))
              ,result)))))
 
 (defmacro wrap-function (name args &body body)
@@ -132,22 +134,22 @@
            (setq ,old-fn-ptr (symbol-function ',name))
            (setf (symbol-function ',name) #',wrapped-fn-name))))))
 
-#+nil
-(defun string-to-maxima-expr (string)
-  (with-input-from-string (s (format nil "~a;~%" string))
-    (let ((form (maxima::dbm-read s nil nil)))
-      (assert (and (listp form)
-                   (= (length form) 3)
-                   (equal (first form) '(maxima::displayinput))
-                   (null (second form))))
-      (third form))))
-
 (defun string-to-maxima-expr (string)
   (with-maxima-error-handler
       (lambda (type text)
         (declare (ignore type))
-        (error 'maxima-expr-parse-error :src string :message text))
-    (with-input-from-string (s (format nil "~a;~%" string))
+        ;; Copied from MAXIMA:MREAD-SYERR
+        (flet ((column ()
+                 (let ((n (get 'maxima::*parse-window* 'maxima::length))
+	               ch some)
+	           (loop for i from (1- n) downto (- n 20)
+	     	         while (setq ch (nth i maxima::*parse-window*))
+		         do (cond ((char= ch #\newline)
+			           (return-from column some))
+			          (t (push ch some))))
+	           some)))
+          (error 'maxima-expr-parse-error :src string :message text :pos (min (length string) (- (length (column)) 2)))))
+    (with-input-from-string (s (format nil "~a;" string))
       (let ((form (maxima::dbm-read s nil nil)))
         (assert (and (listp form)
                      (= (length form) 3)

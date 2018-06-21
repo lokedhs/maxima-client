@@ -152,7 +152,10 @@ terminated by ;.")
   (drei::with-minibuffer-stream (minibuffer)
     (format minibuffer "~a" condition))
   ;; TODO: Move point to the error position
-  )
+  (let ((view (clim:view drei)))
+    (when (drei:point-mark-view-p view)
+      (setf (drei-buffer:offset (drei:point view))
+            (maxima-expr-parse-error/pos condition)))))
 
 (clim:define-presentation-method clim:accept
     ((type maxima-native-expr)
@@ -222,7 +225,9 @@ terminated by ;.")
           finally 
              (progn
                (clim:unread-gesture gesture :stream stream)
-               (let* ((object (handler-case
+               (let* ((object (string-to-native-expr (cleanup-input current-command))
+                              #+nil
+                              (handler-case
                                   (string-to-native-expr (cleanup-input current-command))
                                 (maxima-expr-parse-error (condition)
                                   ;; Move point to the problematic form
@@ -349,6 +354,7 @@ terminated by ;.")
                            (when content
                              (format t "~a" content)))
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
+                           (setq maxima::$% result)
                            (setf (symbol-value d-tag) result)
                            (let ((obj (make-instance 'maxima-native-expr :expr result)))
                              (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
