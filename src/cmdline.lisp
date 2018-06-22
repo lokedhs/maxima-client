@@ -41,7 +41,8 @@ terminated by ;.")
   (maxima-client.markup:display-markup
    stream
    `((:heading "Maxima " ,(maxima::maxima-version1))
-     (:p (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
+     (:p (:newline) "Maxima project web site: " (:link "http://maxima.sourceforge.net/")
+         (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
      (:p (:newline) (:code ":Quit") " to quit the application")
      (:p (:code ":Lisp") " evaluates Lisp forms")
      (:newline) (:newline))))
