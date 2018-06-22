@@ -15,8 +15,10 @@
                         :serial t
                         :components ((:file "package")
                                      (:file "util")
-                                     (:file "popup")
+                                     (:file "wrap")
+                                     (:file "markup")
                                      (:file "renderer")
+                                     (:file "popup")
                                      (:file "output")
                                      (:file "queries")
                                      (:file "info")

@@ -1,6 +1,7 @@
 (in-package :maxima-client)
 
-(clim:define-command-table maxima-commands)
+(clim:define-command-table maxima-commands
+  :inherit-from (maxima-client.markup:text-commands))
 
 #+nil
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
@@ -25,6 +26,7 @@ terminated by ;.")
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+
+                                                    :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
@@ -33,6 +35,16 @@ terminated by ;.")
   (:layouts (default (clim:vertically ()
                        text-content
                        doc))))
+
+(defun display-cmdline-content (frame stream)
+  (declare (ignore frame))
+  (maxima-client.markup:display-markup
+   stream
+   `((:heading "Maxima " ,(maxima::maxima-version1))
+     (:p (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
+     (:p (:newline) (:code ":Quit") " to quit the application")
+     (:p (:code ":Lisp") " evaluates Lisp forms")))
+  (format stream "~&"))
 
 (defgeneric presentation-pointer-motion (presentation x y)
   (:method (presentation x y)
