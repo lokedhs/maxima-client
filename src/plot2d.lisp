@@ -148,7 +148,7 @@ to be adjusted by the same amount."))
 
 (clim:define-command (scroll-horizontal :name "Scroll X" :menu t :command-table maxima-commands)
     ((plot standard-plot :prompt "Plot")
-     (amount float :prompt "Amount"))
+     (amount number :prompt "Amount"))
   (let* ((range (standard-plot/active-range plot))
          (start (maxima-coerce-float (third range)))
          (end (maxima-coerce-float (fourth range)))
@@ -161,7 +161,7 @@ to be adjusted by the same amount."))
 
 (clim:define-command (zoom-horizontal :name "Zoom horizontal" :menu t :command-table maxima-commands)
     ((plot standard-plot :prompt "Plot")
-     (amount float :prompt "Amount"))
+     (amount number :prompt "Amount"))
   (let* ((range (standard-plot/active-range plot))
          (start (maxima-coerce-float (third range)))
          (end (maxima-coerce-float (fourth range)))
@@ -460,6 +460,7 @@ With ybounds:
                           (push-points x new-y))
                    do (setq prev-outside outside)
                    finally (draw-list)))))
+        ;; Draw the controls
         (labels ((add-plot-control (x label callback)
                    (add-button-gadget stream label (- (+ w left-margin) x) (+ h 25) callback :width 20)))
           (add-plot-control 160 (format nil "~c" #\LEFT_ARROW) (lambda () (scroll-horizontal obj 0.1)))
@@ -476,5 +477,5 @@ With ybounds:
                                          (log:info "~s pressed: pane=~s args=~s" label pane args)
                                          (funcall callback)))))
 
-(defmethod presentation-pointer-motion ((presentation standard-plot) x y)
-  (log:info "mouse moved: (~f,~f)" x y))
+(defmethod presentation-pointer-motion ((presentation plot2d-presentation) x y)
+  (log:trace "mouse moved: (~f,~f)" x y))

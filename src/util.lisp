@@ -51,9 +51,14 @@
 (defun clamp (n min max)
   (min (max n min) max))
 
-(defun find-presentation-at-pos (x y)
-  (declare (ignore x y))
-  nil)
+(defun find-presentation-at-pos (stream x y)
+  (let ((presentation (clim:find-innermost-applicable-presentation (list (cons t
+                                                                               (lambda (&rest rest)
+                                                                                 (log:info "Presentation test: ~s" rest))))
+                                                                   stream x y)))
+    (when presentation
+      (log:trace "Found presentation: ~s" presentation))
+    presentation))
 
 (defun gesture-modifier-p (gesture modifiers)
   (let ((bitmap (cond

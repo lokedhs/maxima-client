@@ -56,7 +56,7 @@ terminated by ;.")
                                                               event)
   (let* ((x (clim-internals::device-event-x event))
          (y (clim-internals::device-event-y event))
-         (presentation (find-presentation-at-pos x y)))
+         (presentation (find-presentation-at-pos stream x y)))
     (when presentation
       (presentation-pointer-motion presentation x y)))
   (call-next-method))
@@ -272,7 +272,7 @@ terminated by ;.")
 	  (if (member initial-char clim:*command-dispatchers*)
 	      (progn
 		(clim:read-gesture :stream stream)
-		(clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
+                (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
 	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
                                                :history 'maxima-expression-or-command :replace-input t)))
       (t
