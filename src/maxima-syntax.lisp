@@ -22,7 +22,7 @@
                            (if (alexandria:starts-with-subseq prefix sym-name-fixed)
                                (list (list sym-name-fixed (list sym-name-fixed (function-signature sym)))))))))
     #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
-    syms))
+    (sort syms #'string< :key #'car)))
 
 (defun symbol-constituent-p (ch)
   (let ((code (char-code ch)))
