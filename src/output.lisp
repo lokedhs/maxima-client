@@ -1,4 +1,4 @@
-(in-package :maxima-client)
+(in-package :maxima-client.common)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; output
@@ -19,9 +19,8 @@
   (setf (maxima-output/update stream) t)
   (write-char char (maxima-output/stream stream)))
 
-(defmethod trivial-gray-streams:stream-fresh-line ((stream maxima-output))
-  (unless (zerop (maxima-output/column-position stream))
-    (trivial-gray-streams:stream-write-char stream #\Newline)))
+(defmethod trivial-gray-streams:stream-line-column ((stream maxima-output))
+  (maxima-output/column-position stream))
 
 (defun maxima-stream-updated-p (stream)
   (maxima-output/update stream))

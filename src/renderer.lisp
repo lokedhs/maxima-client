@@ -21,10 +21,6 @@
 (defvar *lop*)
 (defvar *inhibit-presentations* nil)
 
-(defparameter *invert-readtable* (let ((readtable (copy-readtable)))
-                                   (setf (readtable-case readtable) :invert)
-                                   readtable))
-
 (defclass maxima-renderer-view ()
   ())
 
@@ -32,21 +28,6 @@
   ())
 
 (defparameter +listener-view+ (make-instance 'maxima-interactor-view))
-
-(defclass maxima-native-expr ()
-  ((src :initarg :src
-        :initform nil)
-   (expr :initarg :expr
-         :reader maxima-native-expr/expr)))
-
-(defmethod print-object ((obj maxima-native-expr) stream)
-  (print-unreadable-object (obj stream :type t)
-    (with-slots (src expr) obj
-      (format stream "SRC ~s EXPR ~s" src expr))))
-
-(defun maxima-native-expr/src (expr)
-  (or (slot-value expr 'src)
-      (maxima-expr-as-string (maxima-native-expr/expr expr))))
 
 (defun set-rec-position (output-record x y)
   (dimension-bind (output-record :x old-x :y old-y)
@@ -594,29 +575,34 @@
           (clim:draw-line* stream line-x y line-x bottom))))))
 
 (defun render-derivative (stream expr sym exp)
-  (labels ((render-sym (stream sym-p)
-             (with-aligned-rendering (stream)
-               (render-aligned () (render-symbol stream '$d))
-               (when sym-p
-                 (render-aligned () (render-symbol stream sym)))))
-           (render-sym-expt (stream sym-p)
-             (if (eql exp 1)
-                 (render-sym stream sym-p)
-                 (%render-expt stream
-                               (lambda (stream)
-                                 (render-sym stream sym-p))
-                               (lambda (stream)
-                                 (render-maxima-expression stream exp))))))
-    (with-aligned-rendering (stream)
-      (render-aligned () (let ((*inhibit-presentations* t))
-                           (%render-quotient stream
-                                             (lambda (stream)
-                                               (render-sym-expt stream nil))
-                                             (lambda (stream)
-                                               (render-sym-expt stream t)))))
-      (aligned-spacing 0.5)
-      (with-wrapped-parens (stream)
-        (render-aligned () (render-maxima-expression stream expr))))))
+  (let ((compressed-form-p (symbolp expr)))
+    (labels ((render-sym (stream bottom-sym-p)
+               (with-aligned-rendering (stream)
+                 (render-aligned () (render-symbol stream '$d))
+                 (when bottom-sym-p
+                   (render-aligned () (render-symbol stream sym)))))
+             (render-sym-expt (stream bottom-sym-p)
+               (if (eql exp 1)
+                   (render-sym stream bottom-sym-p)
+                   (%render-expt stream
+                                 (lambda (stream)
+                                   (render-sym stream bottom-sym-p))
+                                 (lambda (stream)
+                                   (render-maxima-expression stream exp))))))
+      (with-aligned-rendering (stream)
+        (render-aligned () (let ((*inhibit-presentations* t))
+                             (%render-quotient stream
+                                               (lambda (stream)
+                                                 (with-aligned-rendering (stream)
+                                                   (render-aligned () (render-sym-expt stream nil))
+                                                   (when compressed-form-p
+                                                     (render-aligned () (render-symbol stream expr)))))
+                                               (lambda (stream)
+                                                 (render-sym-expt stream t)))))
+        (unless compressed-form-p
+          (aligned-spacing 0.5)
+          (with-wrapped-parens (stream)
+            (render-aligned () (render-maxima-expression stream expr))))))))
 
 #+nil
 (defun xrender-array-reference (stream expr args &key paren-p)

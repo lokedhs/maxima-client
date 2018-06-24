@@ -1,4 +1,23 @@
-(in-package :maxima-client)
+(in-package :maxima-client.common)
+
+(defparameter *invert-readtable* (let ((readtable (copy-readtable)))
+                                   (setf (readtable-case readtable) :invert)
+                                   readtable))
+
+(defclass maxima-native-expr ()
+  ((src :initarg :src
+        :initform nil)
+   (expr :initarg :expr
+         :reader maxima-native-expr/expr)))
+
+(defmethod print-object ((obj maxima-native-expr) stream)
+  (print-unreadable-object (obj stream :type t)
+    (with-slots (src expr) obj
+      (format stream "SRC ~s EXPR ~s" src expr))))
+
+(defun maxima-native-expr/src (expr)
+  (or (slot-value expr 'src)
+      (maxima-expr-as-string (maxima-native-expr/expr expr))))
 
 (defun present-to-stream (obj stream &key (record-type 'clim:standard-presentation))
   (clim:present obj (clim:presentation-type-of obj) :stream stream

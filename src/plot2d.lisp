@@ -414,7 +414,7 @@ With ybounds:
                                (multiple-value-bind (width)
                                    (clim:text-size stream string)
                                  (let ((yp (y-to-pos y)))
-                                   (clim:draw-line* stream left-margin yp (+ left-margin 5) yp)
+1                                   (clim:draw-line* stream left-margin yp (+ left-margin 5) yp)
                                    (clim:draw-text* stream
                                                     string
                                                     (- left-margin width 5)
