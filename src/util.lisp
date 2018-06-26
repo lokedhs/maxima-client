@@ -177,7 +177,8 @@
       (let ((form (maxima::dbm-read s nil nil)))
         (assert (and (listp form)
                      (= (length form) 3)
-                     (equal (first form) '(maxima::displayinput))
+                     (or (equal (first form) '(maxima::displayinput))
+                         (equal (first form) '(maxima::nodisplayinput)))
                      (null (second form))))
         (third form)))))
 
