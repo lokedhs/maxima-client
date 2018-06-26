@@ -39,7 +39,8 @@
            #:*current-stream*
            #:maxima-error
            #:maxima-error/cmd
-           #:maxima-error/content))
+           #:maxima-error/content
+           #:plain-text))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

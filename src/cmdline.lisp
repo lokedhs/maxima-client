@@ -166,6 +166,11 @@ terminated by ;.")
       (setf (drei-buffer:offset (drei:point view))
             (maxima-expr-parse-error/pos condition)))))
 
+(defun submit-command-p (command)
+  (let ((trimmed (string-trim " " command)))
+    (or (alexandria:ends-with-subseq ";" trimmed)
+        (alexandria:ends-with-subseq "$" trimmed))))
+
 (clim:define-presentation-method clim:accept
     ((type maxima-native-expr)
      (stream drei:drei-input-editing-mixin)
@@ -222,7 +227,7 @@ terminated by ;.")
                                      (and (typep gesture-event 'clim:keyboard-event)
                                           (not (gesture-modifier-p gesture-event :shift)))))
                               (and (not maxima::$submit_on_return)
-                                   (alexandria:ends-with-subseq ";" (string-trim " " current-command))))))
+                                   (submit-command-p current-command)))))
           ;; We only want to process the gesture if it is fresh,
           ;; because if it isn't, it has already been processed at
           ;; some point in the past.
