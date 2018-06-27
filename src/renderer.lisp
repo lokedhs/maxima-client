@@ -269,16 +269,22 @@
                   (let ((*lop* 'maxima::mexpt))
                     (render-maxima-expression stream b)))))
 
-(defun render-plain (stream spacing ch a b)
-  (with-aligned-rendering (stream)
-    (render-aligned () (render-maxima-expression stream a))
-    (incf *aligned-rendering-pos* spacing)
-    (render-aligned-string "~c" ch)
-    (incf *aligned-rendering-pos* spacing)
-    (render-aligned () (render-maxima-expression stream b))))
-
-(defun render-equal (stream a b)
-  (render-plain stream 4 #\= a b))
+(defun render-plain (stream fun a b &key (spacing 0.4))
+  (let ((symbol (ecase fun
+                  (maxima::mgreaterp #\>)
+                  (maxima::mlessp #\<)
+                  (maxima::mleqp #\LESS_THAN_OR_EQUAL_TO)
+                  (maxima::mgeqp #\GREATER_THAN_OR_EQUAL_TO)
+                  (maxima::mnotequal #\NOT_EQUAL_TO)
+                  (maxima::mequal #\=))))
+    (with-aligned-rendering (stream)
+      (render-aligned () (let ((*rop* fun))
+                           (render-maxima-expression stream a)))
+      (aligned-spacing spacing)
+      (render-aligned-string "~c" symbol)
+      (aligned-spacing spacing)
+      (render-aligned () (let ((*lop* fun))
+                           (render-maxima-expression stream b))))))
 
 (defun find-paren-font (size)
   (cond ((< size 16)
@@ -356,7 +362,15 @@
   (render-param-list stream exprs
                      :prefix-renderer (lambda (stream)
                                         (with-wrapped-optional-parens (stream paren-p)
-                                          (render-symbol stream name :roman-font t)))))
+                                          ;; An array reference can be a function call. Here we simply call
+                                          ;; the normal rendering function, but perhaps the name not be in
+                                          ;; italics. If so, a special function is needed to render this properly.
+                                          ;; Also, the function will be wrapped in parens, which is different
+                                          ;; from what normal Maxima does. We'll just accept this since the
+                                          ;; extra parens shouldn't be an issue.
+                                          (typecase name
+                                            (symbol (render-symbol stream name :roman-font t))
+                                            (t (render-maxima-expression stream name)))))))
 
 (defun render-and-measure-string (stream string &optional (x 0) (y 0))
   (multiple-value-bind (width height final-x final-y baseline)
@@ -657,7 +671,6 @@
                (maxima::mminus (render-negation stream (second fixed) 0.2))
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
-               (maxima::mequal (render-equal stream (second fixed) (third fixed)))
                (maxima::mdefine (render-mdefine stream (second fixed) (third fixed) ":="))
                (maxima::mdefmacro (render-mdefine stream (second fixed) (third fixed) "::="))
                ((maxima::%sum maxima::$sum) (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
@@ -672,6 +685,8 @@
                (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
                (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
                (maxima::mnctimes (render-mnctimes stream (cdr fixed)))
+               ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
+                (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
