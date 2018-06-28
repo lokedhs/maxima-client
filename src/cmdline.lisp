@@ -395,6 +395,7 @@ terminated by ;.")
     ((form maxima-lisp-package-form :prompt "Form"))
   (let ((result (with-maxima-package
                   (maxima::eval form))))
+    (format t "~&")
     (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
       (clim:present result 'clim:expression :stream *standard-output*))))
 
