@@ -186,7 +186,9 @@ to be adjusted by the same amount."))
 
 (clim:define-command (reload-plot :name "Reload plot" :menu y :command-table maxima-commands)
     ((plot standard-plot :prompt "Plot"))
-  (let ((*plot2d-update-existing* plot))
+  (let ((*plot2d-update-existing* plot)
+        (*standard-output* (make-instance 'maxima-io)))
+    ;; TODO: We should report the output from the call to cplot2d
     (apply #'maxima::cplot2d
            (standard-plot/caller-fun plot)
            (or (standard-plot/active-range plot))
