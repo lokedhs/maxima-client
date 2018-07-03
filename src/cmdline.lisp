@@ -399,6 +399,9 @@ terminated by ;.")
     (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
       (clim:present result 'clim:expression :stream *standard-output*))))
 
+(defun maxima-eval-lisp-expr (expr)
+  (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
+
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
     ((name plain-text :prompt "Name"))
   (let* ((frame clim:*application-frame*)
@@ -427,6 +430,8 @@ terminated by ;.")
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
                          :menu '(("File" :menu maxima-file-command-table)
+                                 ("Algebra" :menu maxima-algebra-command-table)
+                                 ("Matrix" :menu maxima-matrix-command-table)
                                  ("Plot" :menu maxima-plot-command-table)
                                  ("Lisp" :menu maxima-lisp-command-table)
                                  ("Display" :menu maxima-interaction-command-table)))

@@ -26,4 +26,6 @@
                                      (:file "maxima-syntax")
                                      (:file "cmdline")
                                      (:file "maxima-plot")
-                                     (:file "plot2d")))))
+                                     (:file "plot2d")
+                                     (:file "algebra-cmd")
+                                     (:file "matrix-cmd")))))

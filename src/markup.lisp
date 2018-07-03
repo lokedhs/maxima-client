@@ -42,7 +42,7 @@
                                     (uiop/run-program:run-program (list "xdg-open" s))))))
 
 (defun display-markup-list (stream content)
-  (log:info "displaying markup list: ~s" content)
+  (log:trace "displaying markup list: ~s" content)
   (loop
     for v in content
     do (display-markup stream v)))
@@ -65,4 +65,3 @@
   (etypecase content
     (string (present-multiline-with-wordwrap stream content))
     (list (display-possibly-tagged-list stream content))))
-

@@ -368,8 +368,17 @@
                                           ;; Also, the function will be wrapped in parens, which is different
                                           ;; from what normal Maxima does. We'll just accept this since the
                                           ;; extra parens shouldn't be an issue.
-                                          (typecase name
-                                            (symbol (render-symbol stream name :roman-font t))
+                                          (cond
+                                            ((symbolp name) (render-symbol stream name :roman-font t))
+                                            ;; TODO: In some cases, the list (MAXIMA::$BLOCK) may be found
+                                            ;; in the name position. Currently it is not known if $BLOCK is a
+                                            ;; special case, or if there are other symbols that can be found
+                                            ;; in this list. For now, let's just implement it like this until
+                                            ;; a better way is proposed.
+                                            ((and (listp name)
+                                                  (alexandria:sequence-of-length-p name 1)
+                                                  (eq (car name) 'maxima::$block))
+                                             (render-symbol stream (car name) :roman-font t))
                                             (t (render-maxima-expression stream name)))))))
 
 (defun render-and-measure-string (stream string &optional (x 0) (y 0))
@@ -572,9 +581,9 @@
 (defun render-msetq (stream a b)
   (with-aligned-rendering (stream)
     (render-aligned () (render-maxima-expression stream a))
-    (aligned-spacing 0.1)
+    (aligned-spacing 0.5)
     (render-aligned-string ":")
-    (aligned-spacing 0.1)
+    (aligned-spacing 0.5)
     (render-aligned () (render-maxima-expression stream b))))
 
 (defun render-mabs (stream expr)
@@ -696,6 +705,7 @@
                                                            :view (clim:stream-default-view stream)
                                                            :allow-sensitive-inferiors t)
                    (render-inner fixed)))))
+    (log:trace "before nformat-check: ~s" expr)
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
       (etypecase fixed
