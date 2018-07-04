@@ -115,6 +115,57 @@
   (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
 
+(defun find-best-font (ch)
+  (let* ((match (mcclim-fontconfig:match-font `((:charset . (:charset ,ch))) '(:family :style) :kind :match-font)))
+    (log:trace "Match for ~s: ~s" ch match)
+    (let ((family (cdr (assoc :family match)))
+          (style (cdr (assoc :style match))))
+      (cond ((and family style)
+             (list family style))
+            (t
+             (log:warn "No font found for ~s" ch)
+             '(nil nil))))))
+
+(defun find-replacement-fonts (stream string)
+  (clim:with-sheet-medium (medium stream)
+    (let* ((port (clim:port medium))
+           (default-text-style (clim:medium-text-style stream))
+           (default-font (clim-clx::text-style-to-x-font port default-text-style))
+           (default-charset (clim-freetype::freetype-font-face/charset (clim-freetype::freetype-font/face default-font)))
+           (result nil)
+           (current-string (make-string-output-stream))
+           (current-text-style nil))
+      (labels ((push-string ()
+                 (let ((s (get-output-stream-string current-string)))
+                   (when (plusp (length s))
+                     (push (cons s current-text-style) result))))
+               (collect-result (ch text-style)
+                 (unless (equal current-text-style text-style)
+                   (push-string)
+                   (setq current-text-style text-style))
+                 (write-char ch current-string)))
+        (loop
+          for ch across string
+          do (log:info "checking if ~s is in ~s: ~s" ch default-text-style (mcclim-fontconfig:charset-contains-p default-charset ch))
+          do (collect-result ch (if (mcclim-fontconfig:charset-contains-p default-charset ch)
+                                    '(nil nil)
+                                    (find-best-font ch))))
+        (push-string)
+        (reverse result)))))
+
+(defun render-formatted-with-replacement (stream fmt &rest args)
+  (with-aligned-rendering (stream)
+    (let ((blocks (find-replacement-fonts stream (apply #'format nil fmt args)))
+          (font-size (clim:text-style-size (clim:medium-text-style stream))))
+      (log:info "blocks: ~s" blocks)
+      (loop
+        for (string family style) in blocks
+        if family
+          do (clim:with-text-style (stream (clim:make-text-style family style font-size))
+               (render-aligned-string "~a" string))
+        else
+          do (render-aligned-string "~a" string)))))
+
 (defmacro with-paren-op (&body body)
   `(let ((*lop* 'maxima::mparen)
          (*rop* 'maxima::mparen))
@@ -200,7 +251,7 @@
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
     (t (with-font (stream (if roman-font *font-roman* *font-italic*))
-         (render-formatted stream "~a" (format-sym-name sym))))))
+         (render-formatted-with-replacement stream "~a" (format-sym-name sym))))))
 
 (defun render-negation (stream expr spacing)
   (with-aligned-rendering (stream)
