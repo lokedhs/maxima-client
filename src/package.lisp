@@ -53,6 +53,3 @@
   (:use :cl :maxima-client.common)
   (:export #:display-markup
            #:text-commands))
-
-(defpackage :maxima-client.info-parser
-  (:use :cl :maxima-client.common))

@@ -25,12 +25,26 @@
                                       (clim:text-style-size merged-standard)
                                       (font-replacement-text-style/replacement style2))))
 
+;;; The text styles needs to be cached because the implementation of
+;;; CLIM-CLX::LOOKUP-TEXT-STYLE-TO-X-FONT calls
+;;; CLIM:TEXT-STYLE-MAPPING in order to avoid doing a full font
+;;; lookup. The implementation of TEXT-STYLE-MAPPING ends up doing a
+;;; hash lookup on the text-style instance, which for CLOS instances
+;;; uses object identity.
+;;;
+;;; Having this cache effectively interns instances of
+;;; FONT-REPLACEMENT-TEXT-STYLE, allowing the TEXT-STYLE-MAPPING cache
+;;; to work properly.
+(defvar *text-styles* (make-hash-table :test 'equal))
+
 (defun make-font-replacement-text-style (family face size replacement)
-  (make-instance 'font-replacement-text-style
-                 :text-family family
-                 :text-face face
-                 :text-size size
-                 :replacement replacement))
+  (alexandria:ensure-gethash (list family face size replacement)
+                             *text-styles*
+                             (make-instance 'font-replacement-text-style
+                                            :text-family family
+                                            :text-face face
+                                            :text-size size
+                                            :replacement replacement)))
 
 (defun find-best-font (ch)
   (let* ((match (mcclim-fontconfig:match-font `((:charset . (:charset ,ch))) '(:family :style) :kind :match-font)))
