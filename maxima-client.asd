@@ -15,6 +15,7 @@
                         :serial t
                         :components ((:file "package")
                                      (:file "util")
+                                     (:file "renderer-util")
                                      (:file "wrap")
                                      (:file "markup")
                                      (:file "renderer")

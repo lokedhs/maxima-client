@@ -40,7 +40,9 @@
            #:maxima-error
            #:maxima-error/cmd
            #:maxima-error/content
-           #:plain-text))
+           #:plain-text
+           #:set-rec-position
+           #:move-rec))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

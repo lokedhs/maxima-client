@@ -5,6 +5,7 @@
 (defvar *font-roman* '("MathJax_Main" "Regular"))
 (defvar *font-roman-math* '("MathJax_Math" "Regular"))
 (defvar *font-italic* '("MathJax_Main" "Italic"))
+(defvar *font-italic-math* '("MathJax_Math" "Italic"))
 (defvar *font-fixed* '("Source Code Pro" "Regular"))
 (defvar *font-sigma* '("MathJax_Main" "Regular"))
 (defvar *font-integrate-size1* '("MathJax_Size1" "Regular"))
@@ -29,18 +30,6 @@
 
 (defparameter +listener-view+ (make-instance 'maxima-interactor-view))
 
-(defun set-rec-position (output-record x y)
-  (dimension-bind (output-record :x old-x :y old-y)
-    (setf (clim:output-record-position output-record)
-          (values (or x old-x)
-                  (or y old-y)))))
-
-(defun move-rec (output-record dx dy)
-  (dimension-bind (output-record :x old-x :y old-y)
-    (setf (clim:output-record-position output-record)
-          (values (+ dx old-x)
-                  (+ dy old-y)))))
-
 (defun make-boxed-output-record (stream rec)
   (if *draw-boxes*
       (clim:with-output-to-output-record (stream)
@@ -49,11 +38,11 @@
           (clim:draw-rectangle* stream x y (1- right) (1- bottom) :filled nil)))
       rec))
 
-(defmacro with-font ((stream font &optional size) &body body)
+(defmacro with-font ((stream font &optional size replacement) &body body)
   (alexandria:once-only (stream font)
     (alexandria:with-gensyms (body-fn)
       `(labels ((,body-fn ()
-                  (clim:with-text-style (,stream (clim:make-text-style (first ,font) (second ,font) *font-size*))
+                  (clim:with-text-style (,stream (make-font-replacement-text-style (first ,font) (second ,font) *font-size* ,replacement))
                     ,@body)))
          ,(if size
               `(let ((*font-size* ,size))
@@ -61,11 +50,11 @@
               `(,body-fn))))))
 
 (defmacro with-roman-text-style ((stream &optional size) &body body)
-  `(with-font (,stream *font-roman* ,size)
+  `(with-font (,stream *font-roman* ,size (list *font-roman-math*))
      ,@body))
 
 (defmacro with-italic-text-style ((stream &optional size) &body body)
-  `(with-font (,stream *font-italic* ,size)
+  `(with-font (,stream *font-italic* ,size (list *font-italic-math*))
      ,@body))
 
 (defmacro with-fix-text-style ((stream) &body body)
@@ -114,44 +103,6 @@
 (defun render-formatted (stream fmt &rest args)
   (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
-
-(defun find-best-font (ch)
-  (let* ((match (mcclim-fontconfig:match-font `((:charset . (:charset ,ch))) '(:family :style) :kind :match-font)))
-    (log:trace "Match for ~s: ~s" ch match)
-    (let ((family (cdr (assoc :family match)))
-          (style (cdr (assoc :style match))))
-      (cond ((and family style)
-             (list family style))
-            (t
-             (log:warn "No font found for ~s" ch)
-             '(nil nil))))))
-
-(defun find-replacement-fonts (stream string)
-  (clim:with-sheet-medium (medium stream)
-    (let* ((port (clim:port medium))
-           (default-text-style (clim:medium-text-style stream))
-           (default-font (clim-clx::text-style-to-x-font port default-text-style))
-           (default-charset (clim-freetype::freetype-font-face/charset (clim-freetype::freetype-font/face default-font)))
-           (result nil)
-           (current-string (make-string-output-stream))
-           (current-text-style nil))
-      (labels ((push-string ()
-                 (let ((s (get-output-stream-string current-string)))
-                   (when (plusp (length s))
-                     (push (cons s current-text-style) result))))
-               (collect-result (ch text-style)
-                 (unless (equal current-text-style text-style)
-                   (push-string)
-                   (setq current-text-style text-style))
-                 (write-char ch current-string)))
-        (loop
-          for ch across string
-          do (log:info "checking if ~s is in ~s: ~s" ch default-text-style (mcclim-fontconfig:charset-contains-p default-charset ch))
-          do (collect-result ch (if (mcclim-fontconfig:charset-contains-p default-charset ch)
-                                    '(nil nil)
-                                    (find-best-font ch))))
-        (push-string)
-        (reverse result)))))
 
 (defun render-formatted-with-replacement (stream fmt &rest args)
   (with-aligned-rendering (stream)
@@ -250,8 +201,11 @@
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
-    (t (with-font (stream (if roman-font *font-roman* *font-italic*))
-         (render-formatted-with-replacement stream "~a" (format-sym-name sym))))))
+    (t (labels ((render ()
+                  (render-formatted-with-replacement stream "~a" (format-sym-name sym))))
+         (if roman-font
+             (with-roman-text-style (stream) (render))
+             (with-italic-text-style (stream) (render)))))))
 
 (defun render-negation (stream expr spacing)
   (with-aligned-rendering (stream)

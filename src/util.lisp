@@ -90,6 +90,18 @@
                   (t (error "Unexpected modifiers value: ~s" modifiers)))))
     (eql bitmap (logand (clim::event-modifier-state gesture) bitmap))))
 
+(defun set-rec-position (output-record x y)
+  (dimension-bind (output-record :x old-x :y old-y)
+    (setf (clim:output-record-position output-record)
+          (values (or x old-x)
+                  (or y old-y)))))
+
+(defun move-rec (output-record dx dy)
+  (dimension-bind (output-record :x old-x :y old-y)
+    (setf (clim:output-record-position output-record)
+          (values (+ dx old-x)
+                  (+ dy old-y)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maxima utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

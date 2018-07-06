@@ -1,7 +1,9 @@
 (in-package :maxima-client)
 
+(clim:define-command-table expression-commands)
+
 (clim:define-command-table maxima-commands
-  :inherit-from (maxima-client.markup:text-commands))
+  :inherit-from (maxima-client.markup:text-commands expression-commands))
 
 #+nil
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
@@ -426,6 +428,24 @@ terminated by ;.")
     ()
   (setq maxima::$submit_on_return nil)
   (format t "~%Statements must be terminated by a semicolon.~%~%"))
+
+(clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
+    (maxima-native-expr copy-expression-as-maxima-command expression-commands :echo nil)
+    (obj)
+  (list obj))
+
+(clim:define-presentation-to-command-translator select-maxima-expression-latex
+    (maxima-native-expr copy-expression-as-latex expression-commands)
+    (obj)
+  (list obj))
+
+(clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
+    ((expr maxima-native-expr :prompt "Expression"))
+  (log:info "Should copy expr as text here: ~s" expr))
+
+(clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
+    ((expr maxima-native-expr :prompt "Expression"))
+  (log:info "Should copy expr as latex here: ~s" expr))
 
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
