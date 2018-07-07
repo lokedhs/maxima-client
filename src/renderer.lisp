@@ -516,7 +516,6 @@ Each element should be an output record."
         with prev-right = 0
         for rec in rec-list
         do (dimension-bind (rec :y rec-y)
-             (log:info "rec-y = ~s" rec-y)
              (let ((new-y-offset (if prev-bottom
                                      (+ prev-bottom
                                         (- rec-y)
