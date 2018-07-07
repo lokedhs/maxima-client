@@ -104,19 +104,6 @@
   (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
 
-(defun render-formatted-with-replacement (stream fmt &rest args)
-  (with-aligned-rendering (stream)
-    (let ((blocks (mcclim-font:find-replacement-text-styles stream (apply #'format nil fmt args)))
-          (font-size (clim:text-style-size (clim:medium-text-style stream))))
-      (log:info "blocks: ~s" blocks)
-      (loop
-        for (string family style) in blocks
-        if family
-          do (clim:with-text-style (stream (clim:make-text-style family style font-size))
-               (render-aligned-string "~a" string))
-        else
-          do (render-aligned-string "~a" string)))))
-
 (defmacro with-paren-op (&body body)
   `(let ((*lop* 'maxima::mparen)
          (*rop* 'maxima::mparen))
@@ -497,18 +484,73 @@
         (move-rec exp x-offset 0)
         (clim:stream-add-output-record stream exp)))))
 
-(defun render-mlist (stream exprs)
+(defun render-mlist-one-line (stream rec-list)
+  "Render an mlist on a single line."
   (with-aligned-rendering (stream)
     (render-aligned () (render-formatted stream "["))
     (aligned-spacing 0.5)
     (loop
-      for expr in exprs
+      for rec in rec-list
       for first = t then nil
       unless first
         do (render-aligned-string ", ")
-      do (render-aligned () (render-maxima-expression stream expr)))
+      do (render-aligned () (clim:stream-add-output-record stream rec)))
     (aligned-spacing 0.5)
     (render-aligned () (render-formatted stream "]"))))
+
+(defun render-mlist-multi-line (stream rec-list)
+  "Render an mlist where each element goes on its own line.
+Each element should be an output record."
+  (let ((left-bracket (clim:with-output-to-output-record (stream)
+                        (render-formatted stream "[")))
+        (right-bracket (clim:with-output-to-output-record (stream)
+                         (render-formatted stream "]"))))
+    (clim:stream-add-output-record stream left-bracket)
+    (dimension-bind (left-bracket :right lb-right )
+      (loop
+        with bracket-space = (/ (char-width stream) 2)
+        with left-margin = (+ lb-right bracket-space)
+        with vertical-space = (/ (char-height stream) 2)
+        with prev-rec-baseline = 0
+        with prev-bottom = nil
+        with prev-right = 0
+        for rec in rec-list
+        do (dimension-bind (rec :y rec-y)
+             (log:info "rec-y = ~s" rec-y)
+             (let ((new-y-offset (if prev-bottom
+                                     (+ prev-bottom
+                                        (- rec-y)
+                                        vertical-space)
+                                     0)))
+               (set-rec-position rec left-margin (+ new-y-offset rec-y))
+               (clim:stream-add-output-record stream rec)
+               (setq prev-rec-baseline new-y-offset)
+               (dimension-bind (rec :bottom rec-bottom :right rec-right)
+                 (setq prev-bottom rec-bottom)
+                 (setq prev-right rec-right))))
+        finally (dimension-bind (right-bracket :y right-bracket-y)
+                  (set-rec-position right-bracket (+ prev-right bracket-space) (+ prev-rec-baseline right-bracket-y))
+                  (clim:stream-add-output-record stream right-bracket))))))
+
+(defun render-mlist (stream exprs)
+  ;; If the entie list can't be rendered on a single line, we render
+  ;; each element on its own line. We call one of two different
+  ;; functions to do this.
+  (let ((pane-width (clim:rectangle-width (clim:pane-viewport-region stream)))
+        (rec-list (mapcar (lambda (v)
+                            (clim:with-output-to-output-record (stream)
+                              (render-maxima-expression stream v)))
+                          exprs)))
+    (let ((width (reduce #'+ (mapcar (lambda (rec)
+                                       (dimension-bind (rec :width w)
+                                         w))
+                                     rec-list))))
+      (if (or (= (length rec-list) 1)
+               (<= width pane-width))
+          ;; Single-element lists, or narrow lists are rendered on a single line
+          (render-mlist-one-line stream rec-list)
+          ;; ELSE: The line is too wide, call the multi line renderer
+          (render-mlist-multi-line stream rec-list)))))
 
 (defun render-string (stream string)
   (with-fix-text-style (stream)
