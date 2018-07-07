@@ -11,10 +11,12 @@
                              maxima::$expand))))
 
 (clim:define-command (generate-matrix-command :name "Generate matrix" :menu t :command-table maxima-commands)
-    ((value maxima-native-expr :prompt "Expression (i,j)")
+    ((value maxima-native-expr :prompt "Expression")
      (width maxima-native-expr :prompt "Width")
      (height maxima-native-expr :prompt "Height"))
-  "Generates a matrix of the given dimensions"
+  "Generates a matrix of the given dimensions.
+The value is a function that is applied with the row and column of the
+value."
   (let ((value-expr (maxima-native-expr/expr value))
         (w (maxima-native-expr/expr width))
         (h (maxima-native-expr/expr height)))

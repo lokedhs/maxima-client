@@ -42,7 +42,7 @@
   (alexandria:once-only (stream font)
     (alexandria:with-gensyms (body-fn)
       `(labels ((,body-fn ()
-                  (clim:with-text-style (,stream (make-font-replacement-text-style (first ,font) (second ,font) *font-size* ,replacement))
+                  (clim:with-text-style (,stream (clim-freetype:make-font-replacement-text-style (first ,font) (second ,font) *font-size* ,replacement))
                     ,@body)))
          ,(if size
               `(let ((*font-size* ,size))
@@ -106,7 +106,7 @@
 
 (defun render-formatted-with-replacement (stream fmt &rest args)
   (with-aligned-rendering (stream)
-    (let ((blocks (find-replacement-fonts stream (apply #'format nil fmt args)))
+    (let ((blocks (mcclim-font:find-replacement-text-styles stream (apply #'format nil fmt args)))
           (font-size (clim:text-style-size (clim:medium-text-style stream))))
       (log:info "blocks: ~s" blocks)
       (loop
