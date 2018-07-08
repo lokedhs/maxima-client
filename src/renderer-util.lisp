@@ -4,6 +4,17 @@
 (defvar *aligned-rendering-stream*)
 (defvar *font-size*)
 
+(clim:define-presentation-type plain-text ()
+  :inherit-from 'string)
+
+(clim:define-presentation-type maxima-native-expr
+    ()
+  :inherit-from t)
+
+(clim:define-presentation-type maxima-native-symbol
+    ()
+  :inherit-from t)
+
 (defun %aligned-render-and-move (stream pos fn)
   (let ((output-record (clim:with-output-to-output-record (stream)
                          (funcall fn))))

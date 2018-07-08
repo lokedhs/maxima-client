@@ -151,7 +151,7 @@
 (defun render-number (stream n)
   (render-formatted stream "~a" n))
 
-(defun render-symbol (stream sym &key roman-font)
+(defun render-symbol-inner (stream sym roman-font)
   (case sym
     (maxima::$inf (render-formatted stream "~c" #\INFINITY))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
@@ -161,6 +161,10 @@
          (if roman-font
              (with-roman-text-style (stream) (render))
              (with-italic-text-style (stream) (render)))))))
+
+(defun render-symbol (stream sym &key roman-font)
+  (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
+    (render-symbol-inner stream sym roman-font)))
 
 (defun render-negation (stream expr spacing)
   (with-aligned-rendering (stream)

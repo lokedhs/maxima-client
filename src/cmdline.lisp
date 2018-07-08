@@ -79,14 +79,7 @@ terminated by ;.")
         (clim:formatting-cell (stream :align-y :center)
           (present-to-stream (labelled-expression/expr obj) stream))))))
 
-(clim:define-presentation-type plain-text ()
-  :inherit-from 'string)
-
 (clim:define-presentation-type maxima-empty-input ())
-
-(clim:define-presentation-type maxima-native-expr
-    ()
-  :inherit-from t)
 
 (clim:define-presentation-type maxima-lisp-package-form
     ()
@@ -325,6 +318,11 @@ terminated by ;.")
   (log:trace "Converting to lisp expression: ~s" object)
   (maxima-native-expr/expr object))
 
+(clim:define-presentation-translator symbol-to-plain-text (maxima-native-symbol plain-text maxima-commands)
+    (object)
+  (log:trace "Converting to string: ~s" object)
+  (format-sym-name object))
+
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (handler-case
       (multiple-value-bind (object type)
@@ -429,14 +427,18 @@ terminated by ;.")
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
 
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
-    ((name plain-text :prompt "Name"))
-  (let* ((frame clim:*application-frame*)
+    ((name (or plain-text maxima-native-symbol) :prompt "Name"))
+  (log:info "type: ~s" name)
+  (let* ((string (etypecase name
+                   (string name)
+                   (symbol (format-sym-name name))))
+         (frame clim:*application-frame*)
          (info (or (maxima-main-frame/info-app frame)
                    (let ((f (open-info-frame)))
                      (setf (maxima-main-frame/info-app frame) f)
                      f))))
     (with-call-in-event-handler info
-      (add-info-page info name))))
+      (add-info-page info string))))
 
 (clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
     ((size integer :prompt "points"))
