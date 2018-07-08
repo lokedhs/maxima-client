@@ -194,16 +194,17 @@ terminated by ;.")
           for gesture = (clim:with-input-context ('maxima-native-expr :override nil)
                             (object type)
                             (clim:read-gesture :stream stream)
-                          (maxima-native-expr (drei:performing-drei-operations (drei :with-undo t
-                                                                                     :redisplay t)
-                                                (clim:presentation-replace-input
-                                                 stream object type (clim:view drei)
-                                                 :buffer-start (clim:stream-insertion-pointer stream)
-                                                 :allow-other-keys t
-                                                 :accept-result nil
-                                                 :rescan t))
-                                              (clim:rescan-if-necessary stream)
-                                              nil))
+                          (maxima-native-expr
+                           (drei:performing-drei-operations (drei :with-undo t
+                                                                  :redisplay t)
+                             (clim:presentation-replace-input
+                              stream object type (clim:view drei)
+                              :buffer-start (clim:stream-insertion-pointer stream)
+                              :allow-other-keys t
+                              :accept-result nil
+                              :rescan t))
+                           (clim:rescan-if-necessary stream)
+                           nil))
 
           for current-command = (let* ((buffer (drei:buffer (clim:view drei)))
                                        (start (drei::input-position stream))
@@ -274,20 +275,39 @@ terminated by ;.")
 				              (view clim:textual-view)
 				              &key)
   (let ((command-ptype `(clim:command :command-table ,command-table)))
-    (clim:with-input-context (`(or ,command-ptype maxima-native-expr) :override nil)
+    (clim:with-input-context (command-ptype)
         (object type event options)
-        (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
-          (log:info "initial char: ~s" initial-char)
-	  (if (member initial-char clim:*command-dispatchers*)
-	      (progn
-		(clim:read-gesture :stream stream)
-                (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (progn
-                (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
-                                                 :history 'maxima-expression-or-command :replace-input t))))
-      (maxima-native-expr
-       (log:info "a native expr was found: obj=~s type=~s ev=~s options=~s" object type event options))
+        ;; There used to be only a single WITH-INPUT-CONTEXT here,
+        ;; using a type in the form (OR command maxima-native-expr),
+        ;; but that resulted in the wrong behaviour when an expression
+        ;; was clicked.
+        ;;
+        ;; What happened was that any presentation to command
+        ;; translators got higher priority than the regular handler in
+        ;; the input context. Thus, that handler was never called. By
+        ;; using two separate input contexts causes the handler to be
+        ;; called first.
+        ;;
+        ;; Arguably this should be the default behaviour, and if that
+        ;; is fixed, this hack should no longer be needed.
+        (clim:with-input-context ('maxima-native-expr :override nil)
+            (inner-object inner-type inner-event inner-options)
+            (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
+	      (if (member initial-char clim:*command-dispatchers*)
+	          (progn
+		    (clim:read-gesture :stream stream)
+                    (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
+	          (progn
+                    (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
+                                                     :history 'maxima-expression-or-command :replace-input t))))
+          (maxima-native-expr
+           (log:trace "a native expr was found: obj=~s type=~s ev=~s options=~s"
+                     inner-object inner-type inner-event inner-options)
+           (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
+                                            :history 'maxima-expression-or-command :replace-input t
+                                            :default inner-object :insert-default t)))
       (t
+       (log:trace "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
        (funcall (cdar clim:*input-context*) object type event options)))))
 
 (clim:define-presentation-translator maxima-to-plain-text (maxima-native-expr plain-text maxima-commands)
@@ -434,12 +454,14 @@ terminated by ;.")
   (format t "~%Statements must be terminated by a semicolon.~%~%"))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
-    (maxima-native-expr copy-expression-as-maxima-command expression-commands :echo nil)
+    (maxima-native-expr copy-expression-as-maxima-command expression-commands
+                        :echo nil :documentation "Copy expression as Maxima command")
     (obj)
   (list obj))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-latex
-    (maxima-native-expr copy-expression-as-latex expression-commands)
+    (maxima-native-expr copy-expression-as-latex expression-commands
+                        :echo nil :documentation "Copy expression as LaTeX")
     (obj)
   (list obj))
 
