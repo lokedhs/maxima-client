@@ -274,15 +274,19 @@ terminated by ;.")
 				              (view clim:textual-view)
 				              &key)
   (let ((command-ptype `(clim:command :command-table ,command-table)))
-    (clim:with-input-context (`(or ,command-ptype maxima-native-expr))
+    (clim:with-input-context (`(or ,command-ptype maxima-native-expr) :override nil)
         (object type event options)
         (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
+          (log:info "initial char: ~s" initial-char)
 	  (if (member initial-char clim:*command-dispatchers*)
 	      (progn
 		(clim:read-gesture :stream stream)
                 (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
-	      (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
-                                               :history 'maxima-expression-or-command :replace-input t)))
+	      (progn
+                (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
+                                                 :history 'maxima-expression-or-command :replace-input t))))
+      (maxima-native-expr
+       (log:info "a native expr was found: obj=~s type=~s ev=~s options=~s" object type event options))
       (t
        (funcall (cdar clim:*input-context*) object type event options)))))
 
