@@ -521,7 +521,7 @@ Each element should be an output record."
 
 (defun render-string (stream string)
   (with-fix-text-style (stream)
-    (render-formatted stream "~s" string)))
+    (render-formatted-with-replacement stream "~s" string)))
 
 (defun render-mdefine (stream f definition symbol)
   (let ((function-name (car f))
