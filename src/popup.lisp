@@ -1,4 +1,4 @@
-(in-package :maxima-client)
+(in-package :maxima-client.gui-tools)
 
 (defclass popup-selector-view (clim:textual-view)
   ())
@@ -11,15 +11,18 @@
    (record :initarg :record
            :accessor popup-menu-element/record)))
 
+(defgeneric render-element (value stream viewport-width)
+  (:method ((value string) stream viewport-width)
+    (clim:draw-text* stream value 0 0)))
+
+(defgeneric get-element-filter-name (value)
+  (:method ((value string))
+    value))
+
 (defun display-popup-menu-entry (stream value element-selected)
   (let* ((viewport-width (clim:rectangle-width (clim:pane-viewport-region stream)))
          (rec (clim:with-output-to-output-record (stream)
-                (clim:draw-text* stream (first value) 2 0 :ink clim:+black+)
-                (alexandria:when-let ((args (second value)))
-                  (clim:with-drawing-options (stream :ink (clim:make-rgb-color 0.6 0.6 0.6))
-                    (multiple-value-bind (width)
-                        (clim:text-size stream args)
-                      (clim:draw-text* stream args (- viewport-width width 2) 0)))))))
+                (render-element value stream viewport-width))))
     (dimension-bind (rec :height h)
       (clim:draw-rectangle* stream 0 0 viewport-width h
                             :ink (if element-selected
@@ -42,7 +45,7 @@
                                                    'popup-menu-clickable-element)
            (let* ((record (make-instance 'clim:standard-sequence-output-record))
                   (inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record record)
-                                  (display-popup-menu-entry stream (second v) (zerop i)))))
+                                  (display-popup-menu-entry stream v (zerop i)))))
              (clim:add-output-record inner-record record)
              (set-rec-position record nil y)
              (clim:stream-add-output-record stream record)
@@ -57,7 +60,7 @@
     (dimension-bind (record :y prev-y)
       (clim:clear-output-record record)
       (let ((inner-record (clim:with-output-to-output-record (stream 'clim:standard-sequence-output-record)
-                            (display-popup-menu-entry stream (second (popup-menu-element/value entry)) element-selected))))
+                            (display-popup-menu-entry stream (popup-menu-element/value entry) element-selected))))
         (setf (clim:output-record-position inner-record) (values 0 0))
         (clim:add-output-record inner-record record)
         (setf (clim:output-record-position record) (values 0 prev-y))
@@ -82,6 +85,7 @@
              (clim:scroll-extent pane viewport-x1 (max (- rec-y2 viewport-h) 0)))))))
 
 (defun select-completion-match (values)
+  "Display a popup allowing the user to select one of several elements."
   (let* ((associated-frame clim:*application-frame*)
          (fm (clim:frame-manager associated-frame)))
     (clim:with-look-and-feel-realization (fm associated-frame)
@@ -115,20 +119,22 @@
                      for gesture = (clim:with-input-context ('popup-menu-clickable-element :override nil)
                                        (object type)
                                        (clim:read-gesture :stream menu-pane)
-                                     (popup-menu-clickable-element (return-from control-loop (car (popup-menu-clickable-element/value object)))))
+                                     (popup-menu-clickable-element (return-from control-loop (popup-menu-clickable-element/value object))))
                      when (or (eql gesture #\Newline)
                               (eql gesture #\Tab))
-                       do (return-from control-loop (first (popup-menu-element/value (aref entries selected-index))))
+                       do (return-from control-loop (popup-menu-element/value (aref entries selected-index)))
                      when (typep gesture 'clim:key-press-event)
-                       do (progn
+                       do (let ((event-name (clim:keyboard-event-key-name gesture)))
                             (if (gesture-modifier-p gesture :control)
-                               (case (clim:keyboard-event-key-name gesture)
+                               (case event-name
                                  (:|p| (move -1))
                                  (:|n| (move 1)))
-                               (case (clim:keyboard-event-key-name gesture)
+                               (case event-name
                                  (:up (move -1))
                                  (:down (move 1))
                                  (:next (log:info "Scroll down one page"))
                                  (:prior (log:info "Scroll up one page"))
-                                 (:escape (return-from control-loop nil)))))))))
+                                 (:escape (return-from control-loop nil))
+                                 (t (when (characterp event-name)
+                                      )))))))))
           (clim:disown-frame fm frame))))))

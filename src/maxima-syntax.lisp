@@ -1,5 +1,13 @@
 (in-package :maxima-client)
 
+(defclass completion-popup-element ()
+  ((name :type string
+         :initarg :name
+         :reader completion-popup-element/name)
+   (args :type (or string null t)
+         :initarg :args
+         :reader completion-popup-element/args)))
+
 (drei-syntax:define-syntax-command-table maxima-table
   :errorp nil)
 
@@ -20,9 +28,11 @@
                          (and nouns (alexandria:starts-with-subseq "%" sym-string)))
                   append (let ((sym-name-fixed (format-sym-name sym)))
                            (if (alexandria:starts-with-subseq prefix sym-name-fixed)
-                               (list (list sym-name-fixed (list sym-name-fixed (function-signature sym)))))))))
+                               (list (make-instance 'completion-popup-element
+                                                    :name sym-name-fixed
+                                                    :args (list sym-name-fixed (function-signature sym)))))))))
     #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
-    (sort syms #'string< :key #'car)))
+    (sort syms #'string< :key #'completion-popup-element/name)))
 
 (defun symbol-constituent-p (ch)
   (let ((code (char-code ch)))
@@ -44,6 +54,17 @@
     do (drei-editing::forward-delete-object mark))
   (drei-buffer:insert-sequence mark string))
 
+(defmethod maxima-client.gui-tools:render-element ((value completion-popup-element) stream viewport-width)
+  (clim:draw-text* stream (completion-popup-element/name value) 2 0 :ink clim:+black+)
+  (alexandria:when-let ((args (completion-popup-element/name value)))
+    (clim:with-drawing-options (stream :ink (clim:make-rgb-color 0.6 0.6 0.6))
+      (multiple-value-bind (width)
+          (clim:text-size stream args)
+        (clim:draw-text* stream args (- viewport-width width 2) 0)))))
+
+(defmethod maxima-client.gui-tools:get-element-filter-name ((value completion-popup-element))
+  (completion-popup-element/name value))
+
 (clim:define-command (complete-maxima-function :name "Complete function" :command-table maxima-table)
     ()
   "Complete the name of the function at the curstor position."
@@ -59,12 +80,11 @@
                 ((alexandria:sequence-of-length-p matches 1)
                  (insert-completed-symbol point (caar matches)))
                 (t
-                 (let ((result (select-completion-match matches)))
+                 (let ((result (maxima-client.gui-tools:select-completion-match matches)))
                    (when result
-                     (insert-completed-symbol point result)))))))))
+                     (insert-completed-symbol point (completion-popup-element/name result))))))))))
   nil)
 
 (drei::set-key 'complete-maxima-function
                'maxima-table
                '((#\Tab)))
-

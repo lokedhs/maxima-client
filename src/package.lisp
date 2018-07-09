@@ -49,6 +49,13 @@
   (:documentation "CLIM Maxima client")
   (:export #:maxima-client))
 
+
+(defpackage :maxima-client.gui-tools
+  (:use :cl :maxima-client.common)
+  (:export #:render-element
+           #:get-element-filter-name
+           #:select-completion-match))
+
 (defpackage :maxima-client.markup
   (:use :cl :maxima-client.common)
   (:export #:display-markup
