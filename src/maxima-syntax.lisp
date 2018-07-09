@@ -30,7 +30,7 @@
                            (if (alexandria:starts-with-subseq prefix sym-name-fixed)
                                (list (make-instance 'completion-popup-element
                                                     :name sym-name-fixed
-                                                    :args (list sym-name-fixed (function-signature sym)))))))))
+                                                    :args (function-signature sym))))))))
     #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
     (sort syms #'string< :key #'completion-popup-element/name)))
 
@@ -56,7 +56,7 @@
 
 (defmethod maxima-client.gui-tools:render-element ((value completion-popup-element) stream viewport-width)
   (clim:draw-text* stream (completion-popup-element/name value) 2 0 :ink clim:+black+)
-  (alexandria:when-let ((args (completion-popup-element/name value)))
+  (alexandria:when-let ((args (completion-popup-element/args value)))
     (clim:with-drawing-options (stream :ink (clim:make-rgb-color 0.6 0.6 0.6))
       (multiple-value-bind (width)
           (clim:text-size stream args)
@@ -78,7 +78,7 @@
           (cond ((null matches)
                  (esa:display-message "No completions"))
                 ((alexandria:sequence-of-length-p matches 1)
-                 (insert-completed-symbol point (caar matches)))
+                 (insert-completed-symbol point (completion-popup-element/name (car matches))))
                 (t
                  (let ((result (maxima-client.gui-tools:select-completion-match matches)))
                    (when result

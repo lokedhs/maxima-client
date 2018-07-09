@@ -126,15 +126,13 @@
                      when (typep gesture 'clim:key-press-event)
                        do (let ((event-name (clim:keyboard-event-key-name gesture)))
                             (if (gesture-modifier-p gesture :control)
-                               (case event-name
-                                 (:|p| (move -1))
-                                 (:|n| (move 1)))
-                               (case event-name
-                                 (:up (move -1))
-                                 (:down (move 1))
-                                 (:next (log:info "Scroll down one page"))
-                                 (:prior (log:info "Scroll up one page"))
-                                 (:escape (return-from control-loop nil))
-                                 (t (when (characterp event-name)
-                                      )))))))))
+                                (case event-name
+                                  (:|p| (move -1))
+                                  (:|n| (move 1)))
+                                (case event-name
+                                  (:up (move -1))
+                                  (:down (move 1))
+                                  (:next (log:info "Scroll down one page"))
+                                  (:prior (log:info "Scroll up one page"))
+                                  (:escape (return-from control-loop nil)))))))))
           (clim:disown-frame fm frame))))))
