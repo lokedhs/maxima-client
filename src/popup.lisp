@@ -84,6 +84,53 @@
             ((> rec-y2 viewport-y2)
              (clim:scroll-extent pane viewport-x1 (max (- rec-y2 viewport-h) 0)))))))
 
+(defun menu-loop-inner (menu-pane entries)
+  (let ((selected-index 0))
+    (labels ((move (delta)
+               (let ((new-pos (max (min (+ selected-index delta) (1- (length entries))) 0)))
+                 (when (/= new-pos selected-index)
+                   (redraw-popup-menu-entry menu-pane (aref entries selected-index) nil)
+                   (let ((entry (aref entries new-pos)))
+                     (redraw-popup-menu-entry menu-pane entry t)
+                     (ensure-output-record-visible menu-pane (popup-menu-element/record entry)))
+                   (setq selected-index new-pos)))))
+      (loop
+        named control-loop
+        for gesture = (clim:with-input-context ('popup-menu-clickable-element :override nil)
+                          (object type)
+                          (clim:read-gesture :stream menu-pane)
+                        (popup-menu-clickable-element (return-from control-loop
+                                                        (list :result (popup-menu-clickable-element/value object)))))
+        if (characterp gesture)
+          do (if (or (eql gesture #\Newline)
+                     (eql gesture #\Tab))
+                 (return-from control-loop
+                   (list :result (popup-menu-element/value (aref entries selected-index))))
+                 ;; ELSE: Plain character, limit the filter
+                 (return-from control-loop
+                   (list :update-filter gesture)))
+        when (typep gesture 'clim:key-press-event)
+          do (let ((event-name (clim:keyboard-event-key-name gesture)))
+               (if (gesture-modifier-p gesture :control)
+                   (case event-name
+                     (:|p| (move -1))
+                     (:|n| (move 1)))
+                   (case event-name
+                     (:up (move -1))
+                     (:down (move 1))
+                     (:next (log:info "Scroll down one page"))
+                     (:prior (log:info "Scroll up one page"))
+                     (:escape (return-from control-loop '(:result . nil))))))))))
+
+(defun menu-loop (menu-pane values)
+  (loop
+    with entries = (make-menu-entry-vector menu-pane values)
+    for result = (menu-loop-inner menu-pane entries)
+    when (eq (car result) :result)
+      return (cadr result)
+    when (eq (car result) :update-filter)
+      do (log:info "Update filter with char: ~s" (cadr result))))
+
 (defun select-completion-match (values)
   "Display a popup allowing the user to select one of several elements."
   (let* ((associated-frame clim:*application-frame*)
@@ -101,38 +148,7 @@
              (progn
                (setf (clim:stream-end-of-line-action menu-pane) :allow)
                (setf (clim:stream-end-of-page-action menu-pane) :allow)
-               ;; Draw menu
                (adjust-popup-dimensions menu-pane)
                (clim:enable-frame frame)
-               (let ((entries (make-menu-entry-vector menu-pane values))
-                     (selected-index 0))
-                 (labels ((move (delta)
-                            (let ((new-pos (max (min (+ selected-index delta) (1- (length entries))) 0)))
-                              (when (/= new-pos selected-index)
-                                (redraw-popup-menu-entry menu-pane (aref entries selected-index) nil)
-                                (let ((entry (aref entries new-pos)))
-                                  (redraw-popup-menu-entry menu-pane entry t)
-                                  (ensure-output-record-visible menu-pane (popup-menu-element/record entry)))
-                                (setq selected-index new-pos)))))
-                   (loop
-                     named control-loop
-                     for gesture = (clim:with-input-context ('popup-menu-clickable-element :override nil)
-                                       (object type)
-                                       (clim:read-gesture :stream menu-pane)
-                                     (popup-menu-clickable-element (return-from control-loop (popup-menu-clickable-element/value object))))
-                     when (or (eql gesture #\Newline)
-                              (eql gesture #\Tab))
-                       do (return-from control-loop (popup-menu-element/value (aref entries selected-index)))
-                     when (typep gesture 'clim:key-press-event)
-                       do (let ((event-name (clim:keyboard-event-key-name gesture)))
-                            (if (gesture-modifier-p gesture :control)
-                                (case event-name
-                                  (:|p| (move -1))
-                                  (:|n| (move 1)))
-                                (case event-name
-                                  (:up (move -1))
-                                  (:down (move 1))
-                                  (:next (log:info "Scroll down one page"))
-                                  (:prior (log:info "Scroll up one page"))
-                                  (:escape (return-from control-loop nil)))))))))
+               (menu-loop menu-pane values))
           (clim:disown-frame fm frame))))))
