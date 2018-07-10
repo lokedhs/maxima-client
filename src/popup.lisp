@@ -131,14 +131,12 @@
                      (:escape (return-from control-loop '(:result . nil))))))))))
 
 (defun menu-loop (menu-pane values)
-  (let ((filter-string (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+  (let ((filter-string "")
         (filtered-values values))
-    (labels ((update-values ()
-               (setq filtered-values (remove-if-not (lambda (value)
-                                                      (alexandria:starts-with-subseq
-                                                       filter-string
-                                                       (get-element-filter-name value)))
-                                                    values))))
+    (labels ((filter-by-prefix (prefix)
+               (remove-if-not (lambda (value)
+                                (alexandria:starts-with-subseq prefix (get-element-filter-name value)))
+                              values)))
       (loop
         for entries = (make-menu-entry-vector menu-pane filtered-values)
         for result = (menu-loop-inner menu-pane entries)
@@ -146,12 +144,16 @@
              (:result
               (return (cadr result)))
              (:update-filter
-              (vector-push-extend (cadr result) filter-string)
-              (update-values))
+              (let ((ch (cadr result)))
+                (let* ((updated-filter (format nil "~a~c" filter-string ch))
+                       (result (filter-by-prefix updated-filter)))
+                  (when result
+                    (setq filter-string updated-filter)
+                    (setq filtered-values result)))))
              (:update-backspace
               (when (plusp (length filter-string))
-                (vector-pop filter-string)
-                (update-values))))))))
+                (setq filter-string (subseq filter-string 0 (1- (length filter-string))))
+                (setq filtered-values (filter-by-prefix filter-string)))))))))
 
 (defun select-completion-match (values)
   "Display a popup allowing the user to select one of several elements."
