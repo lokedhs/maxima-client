@@ -717,6 +717,18 @@ Each element should be an output record."
     (let ((*lop* 'maxima::mnot))
       (render-aligned () (render-maxima-expression stream expr)))))
 
+(defun render-mncexcept (stream a b)
+  (%render-expt stream
+                (lambda (stream)
+                  (let ((*rop* 'maxima::mncexpt))
+                    (render-maxima-expression stream a)))
+                (lambda (stream)
+                  (with-aligned-rendering (stream)
+                    (render-aligned-string "<")
+                    (render-aligned () (let ((*lop* 'maxima::mncexpt))
+                                         (render-maxima-expression stream b)))
+                    (render-aligned-string ">")))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -741,6 +753,7 @@ Each element should be an output record."
                (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
                (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
                (maxima::mnctimes (render-op-list stream 'maxima::mnctimes (format nil "~c" #\DOT_OPERATOR) (cdr fixed)))
+               (maxima::mncexpt (render-mncexcept stream (second fixed) (third fixed)))
                (maxima::mand (render-op-list stream 'maxima::mand (format nil "~c" #\LOGICAL_AND) (cdr fixed)))
                (maxima::mor (render-op-list stream 'maxima::mor (format nil "~c" #\LOGICAL_OR) (cdr fixed)))
                (maxima::|$`| (render-units stream (second fixed) (third fixed)))
