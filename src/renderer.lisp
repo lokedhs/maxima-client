@@ -123,9 +123,11 @@
 (defun %render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
         (top (clim:with-output-to-output-record (stream)
-               (funcall top-expr stream)))
+               (with-paren-op
+                 (funcall top-expr stream))))
         (bottom (clim:with-output-to-output-record (stream)
-                  (funcall bottom-expr stream))))
+                  (with-paren-op
+                    (funcall bottom-expr stream)))))
     (dimension-bind (top :width top-width :height top-height)
       (dimension-bind (bottom :width bottom-width)
         (let* ((max-width (max top-width bottom-width))
