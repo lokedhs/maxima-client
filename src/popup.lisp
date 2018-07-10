@@ -36,6 +36,8 @@
           :reader popup-menu-clickable-element/value)))
 
 (defun make-menu-entry-vector (stream values)
+  ;(clim:clear-output-record (clim:stream-output-history stream))
+  (clim:window-clear stream)
   (let ((vector (make-array (length values))))
     (loop
       with y = 0
@@ -53,6 +55,9 @@
                (setf (aref vector i) element))
              (dimension-bind (record :height height)
                (incf y height)))))
+    (clim:queue-repaint stream (make-instance 'clim:window-repaint-event
+                                              :region (clim:pane-viewport-region stream)
+                                              :sheet stream))
     vector))
 
 (defun redraw-popup-menu-entry (stream entry element-selected)
@@ -102,13 +107,16 @@
                         (popup-menu-clickable-element (return-from control-loop
                                                         (list :result (popup-menu-clickable-element/value object)))))
         if (characterp gesture)
-          do (if (or (eql gesture #\Newline)
-                     (eql gesture #\Tab))
-                 (return-from control-loop
-                   (list :result (popup-menu-element/value (aref entries selected-index))))
-                 ;; ELSE: Plain character, limit the filter
-                 (return-from control-loop
-                   (list :update-filter gesture)))
+          do (cond ((or (eql gesture #\Newline)
+                        (eql gesture #\Tab))
+                    (return-from control-loop
+                      (list :result (popup-menu-element/value (aref entries selected-index)))))
+                   ((eql gesture #\Backspace)
+                    (return-from control-loop
+                      (list :update-backspace nil)))
+                   (t
+                    (return-from control-loop
+                      (list :update-filter gesture))))
         when (typep gesture 'clim:key-press-event)
           do (let ((event-name (clim:keyboard-event-key-name gesture)))
                (if (gesture-modifier-p gesture :control)
@@ -123,13 +131,27 @@
                      (:escape (return-from control-loop '(:result . nil))))))))))
 
 (defun menu-loop (menu-pane values)
-  (loop
-    with entries = (make-menu-entry-vector menu-pane values)
-    for result = (menu-loop-inner menu-pane entries)
-    when (eq (car result) :result)
-      return (cadr result)
-    when (eq (car result) :update-filter)
-      do (log:info "Update filter with char: ~s" (cadr result))))
+  (let ((filter-string (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (filtered-values values))
+    (labels ((update-values ()
+               (setq filtered-values (remove-if-not (lambda (value)
+                                                      (alexandria:starts-with-subseq
+                                                       filter-string
+                                                       (get-element-filter-name value)))
+                                                    values))))
+      (loop
+        for entries = (make-menu-entry-vector menu-pane filtered-values)
+        for result = (menu-loop-inner menu-pane entries)
+        do (ecase (car result)
+             (:result
+              (return (cadr result)))
+             (:update-filter
+              (vector-push-extend (cadr result) filter-string)
+              (update-values))
+             (:update-backspace
+              (when (plusp (length filter-string))
+                (vector-pop filter-string)
+                (update-values))))))))
 
 (defun select-completion-match (values)
   "Display a popup allowing the user to select one of several elements."

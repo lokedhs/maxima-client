@@ -88,3 +88,7 @@
 (drei::set-key 'complete-maxima-function
                'maxima-table
                '((#\Tab)))
+
+(drei::set-key 'select-char
+               'maxima-table
+               '((#\s :meta)))
