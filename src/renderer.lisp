@@ -153,9 +153,13 @@
 (defun render-number (stream n)
   (render-formatted stream "~a" n))
 
+(defun render-inf (stream)
+  (render-formatted stream "~c" #\INFINITY))
+
 (defun render-symbol-inner (stream sym roman-font)
   (case sym
-    (maxima::$inf (render-formatted stream "~c" #\INFINITY))
+    (maxima::$inf (render-inf stream))
+    (maxima::$minf (%render-negation stream (lambda (stream) (render-inf stream))))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
     (t (labels ((render ()
@@ -168,12 +172,18 @@
   (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
     (render-symbol-inner stream sym roman-font)))
 
-(defun render-negation (stream expr spacing)
+(defun %render-negation (stream fn &optional (spacing 0.2))
   (with-aligned-rendering (stream)
     (render-aligned-string "~c" #\MINUS_SIGN)
     (aligned-spacing spacing)
     (let ((*lop* 'maxima::mminus))
-      (render-aligned () (render-maxima-expression stream expr)))))
+      (render-aligned () (funcall fn stream)))))
+
+(defun render-negation (stream expr &optional (spacing 0.2))
+  (%render-negation stream
+                    (lambda (stream)
+                      (render-maxima-expression stream expr))
+                    spacing))
 
 (defun render-plus (stream exprs)
   (with-aligned-rendering (stream)
@@ -184,7 +194,7 @@
                   (alexandria:length= (length expr) 2)
                   (listp (car expr))
                   (eq (caar expr) 'maxima::mminus))
-             (render-aligned () (render-negation stream (second expr) 0.2)))
+             (render-aligned () (render-negation stream (second expr))))
             (t
              (unless first
                (render-aligned-string "+")
@@ -196,15 +206,6 @@
     (iterate-exprs (expr exprs 'maxima::mtimes :first-sym first)
       (unless first
         (aligned-spacing 0.4))
-      (render-aligned () (render-maxima-expression stream expr)))))
-
-(defun render-mnctimes (stream exprs)
-  (with-aligned-rendering (stream)
-    (iterate-exprs (expr exprs 'maxima::mnctimes :first-sym first)
-      (unless first
-        (aligned-spacing 0.2)
-        (render-aligned-string "~c" #\DOT_OPERATOR)
-        (aligned-spacing 0.2))
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun %render-expt (stream fn-a fn-b)
@@ -235,6 +236,15 @@
                   (let ((*lop* 'maxima::mexpt))
                     (render-maxima-expression stream b)))))
 
+(defun render-op-list (stream maxima-sym displayed-sym exprs)
+  (with-aligned-rendering (stream)
+    (iterate-exprs (expr exprs maxima-sym :first-sym first)
+      (unless first
+        (aligned-spacing 0.2)
+        (render-aligned-string "~a" displayed-sym)
+        (aligned-spacing 0.2))
+      (render-aligned () (render-maxima-expression stream expr)))))
+
 (defun render-plain (stream fun a b &key (spacing 0.4))
   (let ((symbol (ecase fun
                   (maxima::mgreaterp #\>)
@@ -242,9 +252,7 @@
                   (maxima::mleqp #\LESS_THAN_OR_EQUAL_TO)
                   (maxima::mgeqp #\GREATER_THAN_OR_EQUAL_TO)
                   (maxima::mnotequal #\NOT_EQUAL_TO)
-                  (maxima::mequal #\=)
-                  (maxima::mor #\LOGICAL_OR)
-                  (maxima::mand #\LOGICAL_AND))))
+                  (maxima::mequal #\=))))
     (with-aligned-rendering (stream)
       (render-aligned () (let ((*rop* fun))
                            (render-maxima-expression stream a)))
@@ -716,7 +724,7 @@ Each element should be an output record."
                (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
                (maxima::rat (render-quotient stream (second fixed) (third fixed)))
                (maxima::mplus (render-plus stream (cdr fixed)))
-               (maxima::mminus (render-negation stream (second fixed) 0.2))
+               (maxima::mminus (render-negation stream (second fixed)))
                (maxima::mtimes (render-times stream (cdr fixed)))
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mdefine (render-mdefine stream (second fixed) (third fixed) ":="))
@@ -732,11 +740,12 @@ Each element should be an output record."
                (maxima::mabs (render-mabs stream (second fixed)))
                (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
                (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
-               (maxima::mnctimes (render-mnctimes stream (cdr fixed)))
+               (maxima::mnctimes (render-op-list stream 'maxima::mnctimes (format nil "~c" #\DOT_OPERATOR) (cdr fixed)))
+               (maxima::mand (render-op-list stream 'maxima::mand (format nil "~c" #\LOGICAL_AND) (cdr fixed)))
+               (maxima::mor (render-op-list stream 'maxima::mor (format nil "~c" #\LOGICAL_OR) (cdr fixed)))
                (maxima::|$`| (render-units stream (second fixed) (third fixed)))
                (maxima::mnot (render-mnot stream (second fixed)))
-               ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal
-                                   maxima::mor maxima::mand)
+               ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
