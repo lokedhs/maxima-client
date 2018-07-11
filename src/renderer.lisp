@@ -729,6 +729,13 @@ Each element should be an output record."
                                          (render-maxima-expression stream b)))
                     (render-aligned-string ">")))))
 
+(defun render-factorial (stream expr)
+  (with-aligned-rendering (stream)
+    (render-aligned () (let ((*rop* 'maxima::mfactorial))
+                         (render-maxima-expression stream expr)))
+    (aligned-spacing 0.4)
+    (render-aligned-string "!")))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -758,6 +765,7 @@ Each element should be an output record."
                (maxima::mor (render-op-list stream 'maxima::mor (format nil "~c" #\LOGICAL_OR) (cdr fixed)))
                (maxima::|$`| (render-units stream (second fixed) (third fixed)))
                (maxima::mnot (render-mnot stream (second fixed)))
+               (maxima::mfactorial (render-factorial stream (second fixed)))
                ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
