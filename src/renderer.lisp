@@ -161,7 +161,7 @@
     (maxima::$inf (render-inf stream))
     (maxima::$minf (%render-negation stream (lambda (stream) (render-inf stream))))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
-    (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMBDA)))
+    (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
     (t (labels ((render ()
                   (render-formatted-with-replacement stream "~a" (format-sym-name sym))))
          (if roman-font
@@ -169,8 +169,13 @@
              (with-italic-text-style (stream) (render)))))))
 
 (defun render-symbol (stream sym &key roman-font)
-  (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
-    (render-symbol-inner stream sym roman-font)))
+  (case sym
+    (maxima::$aa (render-size-test stream))
+    (maxima::$bb (render-paren-test stream))
+    (maxima::$cc (render-sqrt-test stream))
+    (t
+     (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
+       (render-symbol-inner stream sym roman-font)))))
 
 (defun %render-negation (stream fn &optional (spacing 0.2))
   (with-aligned-rendering (stream)
@@ -249,8 +254,8 @@
   (let ((symbol (ecase fun
                   (maxima::mgreaterp #\>)
                   (maxima::mlessp #\<)
-                  (maxima::mleqp #\LESS_THAN_OR_EQUAL_TO)
-                  (maxima::mgeqp #\GREATER_THAN_OR_EQUAL_TO)
+                  (maxima::mleqp #\LESS-THAN_OR_EQUAL_TO)
+                  (maxima::mgeqp #\GREATER-THAN_OR_EQUAL_TO)
                   (maxima::mnotequal #\NOT_EQUAL_TO)
                   (maxima::mequal #\=))))
     (with-aligned-rendering (stream)
@@ -262,19 +267,11 @@
       (render-aligned () (let ((*lop* fun))
                            (render-maxima-expression stream b))))))
 
-(defun find-paren-font (size)
-  (cond ((< size 16)
-         (list *font-roman* size))
-        ((< size 80)
-         (list *font-paren-size3* (* size 0.4)))
-        (t
-         (list *font-paren-size4* (* size 0.35)))))
-
 (defun wrap-with-parens (stream output-record
                          &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
   (dimension-bind (output-record :x x :y y :width width :height height)
     (destructuring-bind (paren-font paren-size)
-        (find-paren-font height)
+        (find-paren-font stream height)
       (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
           (with-font (stream paren-font paren-size)
             (render-and-measure-string stream left-paren))
@@ -295,13 +292,13 @@
               (move-rec right-paren (+ x left-paren-width width left-spacing right-spacing) p-offset)
               (clim:stream-add-output-record stream right-paren))))))))
 
-(defmacro with-wrapped-parens ((stream) &body body)
-  (alexandria:once-only (stream)
+(defmacro with-wrapped-parens ((stream &key (left-paren "(") (right-paren ")")) &body body)
+  (alexandria:once-only (stream left-paren right-paren)
     (alexandria:with-gensyms (rec)
       `(let ((,rec (clim:with-output-to-output-record (,stream)
                      (with-paren-op
                        ,@body))))
-         (wrap-with-parens ,stream ,rec)))))
+         (wrap-with-parens ,stream ,rec :left-paren ,left-paren :right-paren ,right-paren)))))
 
 (defmacro with-wrapped-optional-parens ((stream enabled-p) &body body)
   (alexandria:once-only (stream enabled-p)
@@ -450,11 +447,21 @@
 (defun render-product (stream f var from to)
   (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
 
+#+nil
 (defun render-sqrt (stream expr)
   (let ((exp (clim:with-output-to-output-record (stream)
                (let ((*lop* 'maxima::mparen))
                  (render-maxima-expression stream expr)))))
-    (dimension-bind (exp :height height :x x :y y :bottom bottom :right right)
+    (dimension-bind (exp :height height :bottom bottom)
+      (with-font (stream *font-roman* height)
+        (destructuring-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent)
+            (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 bottom)
+          (declare (ignore sqrt-sym-ascent sqrt-sym-descent))
+          (clim:stream-add-output-record stream sqrt-sym)
+          (dimension-bind (sqrt-sym :right sqrt-sym-right)
+            (move-rec exp sqrt-sym-right 0)
+            (clim:stream-add-output-record stream exp))))
+      #+nil
       (let* ((angle 0.2)
              (hg 0.4)
              (hg-angle 0.4)
@@ -735,6 +742,95 @@ Each element should be an output record."
                          (render-maxima-expression stream expr)))
     (aligned-spacing 0.4)
     (render-aligned-string "!")))
+
+(defun xfind-paren-font (stream size)
+  (let ((height (char-height stream)))
+    (cond ((<= size (* height 2))
+           (list *font-roman* size))
+          ((< size (* height 3))
+           (list *font-integrate-size1* (* size 0.7)))
+          ((< size (* height 4))
+           (list *font-integrate-size2* (* size 0.45)))
+          ((< size (* height 5.6))
+           (list *font-paren-size3* (* size 0.4)))
+          (t
+           (list *font-paren-size4* (* size 0.3))))))
+
+(defun find-paren-font (stream size)
+  (let ((result (xfind-paren-font stream size)))
+    (log:info "findPF[size=~s ch=~s] → ~s" size (char-height stream) (car result))
+    result))
+
+(defun render-size-test (stream)
+  (flet ((draw (font y m)
+           (loop
+             for size from 12 to 80 by 4
+             for x = 10 then (+ x (* size 1.5))
+             do (with-font (stream font (* size m))
+                  (clim:draw-text* stream "(" x y))
+             do (with-font (stream *font-roman* size)
+                  (clim:draw-text* stream "A" (+ x (char-width stream)) y)))))
+    (draw *font-roman* 10 1)
+    (draw *font-integrate-size1* 60 0.7)
+    (draw *font-integrate-size2* 120 0.45)
+    (draw *font-paren-size3* 180 0.4)
+    (draw *font-paren-size4* 240 0.3)))
+
+(defun render-paren-test (stream)
+  (loop
+    with y = 20
+    for i from 1 to 8
+    do (let ((rec (clim:with-output-to-output-record (stream)
+                    (with-wrapped-parens (stream :left-paren "[" :right-paren "]")
+                      (loop
+                        with h = (char-height stream)
+                        for n from 0 below i
+                        do (clim:draw-text* stream "a" 0 (* n h)))))))
+         (move-rec rec 0 y)
+         (clim:stream-add-output-record stream rec)
+         (dimension-bind (rec :height h)
+           (incf y h)))))
+
+(defun render-sqrt-test (stream)
+  (loop
+    with y = 20
+    for i from 1 to 8
+    do (let ((rec (clim:with-output-to-output-record (stream)
+                    (%render-sqrt stream (lambda (stream)
+                                           (loop
+                                             with h = (char-height stream)
+                                             for n from 0 below i
+                                             do (clim:draw-text* stream "a" 0 (* n h))))))))
+         (move-rec rec 0 y)
+         (clim:stream-add-output-record stream rec)
+         (dimension-bind (rec :height h)
+           (incf y h)))))
+
+(defun %render-sqrt (stream fn)
+  (let ((exp (clim:with-output-to-output-record (stream)
+               (with-paren-op
+                 (funcall fn stream)))))
+    (dimension-bind (exp :y exp-y :width exp-width :height exp-height )
+      (destructuring-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent)
+          (destructuring-bind (font size)
+              (find-paren-font stream exp-height)
+            (with-font (stream font size)
+              (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 0)))
+        (declare (ignore sqrt-sym-descent))
+        ;; Move the sqrt symbol to align the top of the symbol with the top of the expr
+        (move-rec sqrt-sym 0 (+ sqrt-sym-ascent exp-y) #+nil (- exp-y sqrt-sym-ascent))
+        (clim:stream-add-output-record stream sqrt-sym)
+        ;; Move the expr to the right of the sqrt symbol
+        (dimension-bind (sqrt-sym :right sqrt-sym-right)
+          (move-rec exp sqrt-sym-right 0)
+          (clim:stream-add-output-record stream exp)
+          ;; Draw line above the expr
+          (let ((y exp-y))
+            (clim:draw-line* stream sqrt-sym-right y (+ sqrt-sym-right exp-width (/ (char-width stream) 4)) y)))))))
+
+(defun render-sqrt (stream expr)
+  (%render-sqrt stream (lambda (stream)
+                         (render-maxima-expression stream expr))))
 
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)

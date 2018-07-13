@@ -465,10 +465,10 @@ With ybounds:
         ;; Draw the controls
         (labels ((add-plot-control (x label callback)
                    (add-button-gadget stream label (- (+ w left-margin) x) (+ h 25) callback :width 20)))
-          (add-plot-control 160 (format nil "~c" #\LEFT_ARROW) (lambda () (scroll-horizontal obj 0.1)))
+          (add-plot-control 160 (format nil "~c" #\LEFTWARDS_ARROW) (lambda () (scroll-horizontal obj 0.1)))
           (add-plot-control 120 "+" (lambda () (zoom-horizontal obj 0.75)))
           (add-plot-control 80 "-" (lambda () (zoom-horizontal obj (/ 0.75))))
-          (add-plot-control 40 (format nil "~c" #\RIGHT_ARROW) (lambda () (scroll-horizontal obj -0.1))))))))
+          (add-plot-control 40 (format nil "~c" #\RIGHTWARDS_ARROW) (lambda () (scroll-horizontal obj -0.1))))))))
 
 (defun add-button-gadget (stream label x y callback &key width)
   (clim:with-output-as-gadget (stream :x x :y y)
