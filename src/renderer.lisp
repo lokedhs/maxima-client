@@ -919,6 +919,5 @@ Each element should be an output record."
 
 (defun render-error-message (stream message)
   (let ((size (clim:text-style-size (clim:medium-text-style stream))))
-    (clim:surrounding-output-with-border (stream :ink clim:+black+ :line-thickness 1)
-      (clim:with-drawing-options (stream :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
-        (format stream "~a~%" message)))))
+    (clim:with-drawing-options (stream :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
+      (format stream "~a~%" message))))

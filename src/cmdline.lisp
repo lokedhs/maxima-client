@@ -79,6 +79,12 @@ terminated by ;.")
         (clim:formatting-cell (stream :align-y :center)
           (present-to-stream (labelled-expression/expr obj) stream))))))
 
+(defclass maxima-input-error ()
+  ((command :initarg :command
+            :reader maxima-input-error/command)
+   (message :initarg :message
+            :reader maxima-input-error/message)))
+
 (clim:define-presentation-type maxima-empty-input ())
 
 (clim:define-presentation-type maxima-lisp-package-form
@@ -139,6 +145,17 @@ terminated by ;.")
   (log:trace "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
              obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
   (apply #'clim:presentation-replace-input stream (maxima-native-expr/src obj) 'plain-text view
+         (append (if buffer-start-p (list :buffer-start buffer-start) nil)
+                 (if rescan-p (list :rescan rescan) nil))))
+
+(defmethod clim:presentation-replace-input ((stream drei:drei-input-editing-mixin) (obj maxima-input-error) type view
+                                            &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
+                                              query-identifier
+                                              for-context-type)
+  #+nil (declare (ignore query-identifier for-context-type))
+  (log:trace "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
+             obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
+  (apply #'clim:presentation-replace-input stream (maxima-input-error/command obj) 'plain-text view
          (append (if buffer-start-p (list :buffer-start buffer-start) nil)
                  (if rescan-p (list :rescan rescan) nil))))
 
@@ -235,22 +252,30 @@ terminated by ;.")
           finally 
              (progn
                (clim:unread-gesture gesture :stream stream)
-               (let* ((object (string-to-native-expr (cleanup-input current-command))
-                              #+nil
-                              (handler-case
-                                  (string-to-native-expr (cleanup-input current-command))
-                                (maxima-expr-parse-error (condition)
-                                  ;; Move point to the problematic form
-                                  ;; and signal a rescan.
-                                  (setf (drei::activation-gesture stream) nil)
-                                  (drei:handle-drei-condition drei condition)
-                                  (drei:display-drei drei :redisplay-minibuffer t)
-                                  (clim:immediate-rescan stream))))
-                      (ptype (clim:presentation-type-of object)))
-                 (return-from control-loop
-                   (values object
-                           (if (clim:presentation-subtypep ptype 'maxima-native-expr)
-                               ptype 'maxima-native-expr))))))))))
+               (let ((string (cleanup-input current-command)))
+                 (handler-case
+                     (let* ((object (string-to-native-expr string)
+                                    #+nil
+                                    (handler-case
+                                        (string-to-native-expr (cleanup-input current-command))
+                                      (maxima-expr-parse-error (condition)
+                                        ;; Move point to the problematic form
+                                        ;; and signal a rescan.
+                                        (setf (drei::activation-gesture stream) nil)
+                                        (drei:handle-drei-condition drei condition)
+                                        (drei:display-drei drei :redisplay-minibuffer t)
+                                        (clim:immediate-rescan stream))))
+                            (ptype (clim:presentation-type-of object)))
+                       (return-from control-loop
+                         (values object
+                                 (if (clim:presentation-subtypep ptype 'maxima-native-expr)
+                                     ptype 'maxima-native-expr))))
+                   (maxima-native-error (condition)
+                     (return-from control-loop
+                       (values (make-instance 'maxima-input-error
+                                              :command string
+                                              :message (maxima-expr-parse-error/message condition))
+                               'maxima-input-error)))))))))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream
@@ -324,27 +349,27 @@ terminated by ;.")
   (format-sym-name object))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
-  (handler-case
-      (multiple-value-bind (object type)
-          (let ((clim:*command-dispatchers* '(#\:))
-                (clim:*command-unparser* (lambda (command-table stream command)
-                                           (log:info "unparsing ~s (~s ~s)" command command-table stream))))
-            (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-              (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
-                                                         :default nil :default-type 'maxima-empty-input
-                                                         :history 'maxima-expression-or-command
-                                                         :replace-input t)))
-        (log:trace "Got input: object=~s, type=~s" object type)
-        (cond
-          ((null object)
-           nil)
-          ((eq type 'maxima-native-expr)
-           `(maxima-eval ,object))
-          ((and (listp type) (eq (car type) 'clim:command))
-           object)))
-    (maxima-native-error (condition)
-      (render-error-message stream (format nil "~a" condition))
-      nil)))
+  (multiple-value-bind (object type)
+      (let ((clim:*command-dispatchers* '(#\:))
+            (clim:*command-unparser* (lambda (command-table stream command)
+                                       (log:info "unparsing ~s (~s ~s)" command command-table stream))))
+        (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
+          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
+                                                     :default nil :default-type 'maxima-empty-input
+                                                     :history 'maxima-expression-or-command
+                                                     :replace-input t)))
+    (log:trace "Got input: object=~s, type=~s" object type)
+    (cond
+      ((null object)
+       nil)
+      ((eq type 'maxima-native-expr)
+       `(maxima-eval ,object))
+      ((eq type 'maxima-input-error)
+       (let ((size (clim:text-style-size (clim:medium-text-style stream))))
+         (clim:with-drawing-options (stream :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
+           (format stream "~a" (maxima-input-error/message object)))))
+      ((and (listp type) (eq (car type) 'clim:command))
+       object))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
