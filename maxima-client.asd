@@ -14,6 +14,7 @@
   :components ((:module src
                         :serial t
                         :components ((:file "package")
+                                     (:file "clipboard")
                                      (:file "util")
                                      (:file "renderer-util")
                                      (:file "wrap")
