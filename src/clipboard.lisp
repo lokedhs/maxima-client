@@ -18,7 +18,7 @@
   (xlib:convert-selection :primary :UTF8_STRING requestor :bounce time))
 
 (defmethod climb:get-selection-from-event ((port clim-clx::clx-port) (event clim-clx::clx-selection-notify-event))
-  (log:info "get selection")
+  (log:info "get selection: ~s" (clim-clx::selection-event-property event))
   (if (null (clim-clx::selection-event-property event))
       (progn
         (format *trace-output* "~&;; Oops, selection-notify property is null. Trying the cut buffer instead..~%")
@@ -33,65 +33,68 @@
           (:utf8_string (babel:octets-to-string v :encoding :utf-8))))))
 
 (defmethod climb:send-selection ((port clim-clx::clx-port) (event clim-clx::clx-selection-request-event) string)
-  (log:info "sending selection")
   (let ((requestor (climb::selection-event-requestor event))
         (property  (clim-clx::selection-event-property event))
         (target    (clim-clx::selection-event-target event))
         (time      (clim:event-timestamp event)))
-    (flet ((send-event (&key target (property property))
-	     ;; debugging output, but the KDE Klipper client turns out
-	     ;; to poll other clients for selection, which means it
-	     ;; would be bad to print at every request.
-             (xlib:send-event requestor
-			      :selection-notify nil
-			      :window requestor
-			      :event-window requestor
-			      :selection (climi::selection-event-selection event)
-			      :target target
-			      :property property
-			      :time time)))
-      (case target
-	((:UTF8_STRING)
-	 (xlib:change-property requestor property
-                               (babel:string-to-octets string :encoding :utf-8)
-			       :UTF8_STRING 8)
-	 (send-event :target :UTF8_STRING))
-	((:STRING :COMPOUND_TEXT)
-	 (xlib:change-property requestor property
-			       (babel:string-to-octets string :encoding :utf-8)
-			       target 8)            
-	 (send-event :target target))
-	((:TEXT)
-	 (cond
-	   ((clim-clx::exactly-encodable-as-string-p string)
+    (case (climi::selection-event-selection event)
+      (:clipboard
+       (send-clipboard-content port event))
+      (:selection
+       (flet ((send-event (&key target (property property))
+	        ;; debugging output, but the KDE Klipper client turns out
+	        ;; to poll other clients for selection, which means it
+	        ;; would be bad to print at every request.
+                (xlib:send-event requestor
+			         :selection-notify nil
+			         :window requestor
+			         :event-window requestor
+			         :selection (climi::selection-event-selection event)
+			         :target target
+			         :property property
+			         :time time)))
+         (case target
+	   ((:UTF8_STRING)
 	    (xlib:change-property requestor property
                                   (babel:string-to-octets string :encoding :utf-8)
-				  :STRING 8)
-	    (send-event :target :STRING))
-	   (t 
+			          :UTF8_STRING 8)
+	    (send-event :target :UTF8_STRING))
+	   ((:STRING :COMPOUND_TEXT)
 	    (xlib:change-property requestor property
-				  (babel:string-to-octets string :encoding :utf-8)
-				  :UTF8_STRING 8)
-	    (send-event :target :UTF8_STRING))))
-	((:TARGETS)
-	 (let* ((display (clim-clx::clx-port-display port))
-		(targets (mapcar (lambda (x) (xlib:intern-atom display x))
-				 '(:TARGETS :STRING :TEXT :UTF8_STRING
-				   :COMPOUND_TEXT :TIMESTAMP))))
-	   (xlib:change-property requestor property targets target 32))
-	 (send-event :target :TARGETS))
-	((:TIMESTAMP)
-	 (when (null (climb::selection-timestamp port))
-	   (format *trace-output* "~&;; selection-timestamp is null!~%"))
-	 (xlib:change-property requestor property
-			       (list (climb::selection-timestamp port))
-			       target 32)
-	 (send-event :target :TIMESTAMP))
-	(t
-	 (format *trace-output*
-		 "~&;; Warning, unhandled type \"~A\". ~
+			          (babel:string-to-octets string :encoding :utf-8)
+			          target 8)            
+	    (send-event :target target))
+	   ((:TEXT)
+	    (cond
+	      ((clim-clx::exactly-encodable-as-string-p string)
+	       (xlib:change-property requestor property
+                                     (babel:string-to-octets string :encoding :utf-8)
+				     :STRING 8)
+	       (send-event :target :STRING))
+	      (t 
+	       (xlib:change-property requestor property
+				     (babel:string-to-octets string :encoding :utf-8)
+				     :UTF8_STRING 8)
+	       (send-event :target :UTF8_STRING))))
+	   ((:TARGETS)
+	    (let* ((display (clim-clx::clx-port-display port))
+		   (targets (mapcar (lambda (x) (xlib:intern-atom display x))
+				    '(:TARGETS :STRING :TEXT :UTF8_STRING
+				      :COMPOUND_TEXT :TIMESTAMP))))
+	      (xlib:change-property requestor property targets target 32))
+	    (send-event :target :TARGETS))
+	   ((:TIMESTAMP)
+	    (when (null (climb::selection-timestamp port))
+	      (format *trace-output* "~&;; selection-timestamp is null!~%"))
+	    (xlib:change-property requestor property
+			          (list (climb::selection-timestamp port))
+			          target 32)
+	    (send-event :target :TIMESTAMP))
+	   (t
+	    (format *trace-output*
+		    "~&;; Warning, unhandled type \"~A\". ~
                   Sending property NIL to target.~%" target)
-	 (send-event :target target :property nil))))
+	    (send-event :target target :property nil))))))
     (xlib:display-force-output (xlib:window-display requestor))))
 
 (defvar *port-clipboard-owners* (trivial-garbage:make-weak-hash-table :test 'eq :weakness :key :weakness-matters nil))
@@ -110,3 +113,40 @@
 
 (defmethod get-clipboard-value (port (value string) (target (eql :targets)))
   (values (list (xlib:intern-atom (clim-clx::clx-port-display port) :utf8_string)) 32))
+
+(defun send-clipboard-content (port event)
+  (let ((value (gethash port *port-clipboard-owners*)))
+    (when value
+      (let ((requestor (climb::selection-event-requestor event))
+            (property (clim-clx::selection-event-property event))
+            (target (clim-clx::selection-event-target event))
+            (time (clim:event-timestamp event))
+            (display (clim-clx::clx-port-display port)))
+        (flet ((send-event (target)
+	         ;; debugging output, but the KDE Klipper client turns out
+	         ;; to poll other clients for selection, which means it
+	         ;; would be bad to print at every request.
+                 (xlib:send-event requestor
+			          :selection-notify nil
+			          :window requestor
+			          :event-window requestor
+			          :selection (climi::selection-event-selection event)
+			          :target target
+			          :property property
+			          :time time)))
+          (case target
+            (:targets
+             (xlib:change-property requestor property
+                                   (mapcar (lambda (x) (xlib:intern-atom display x)) '(:targets :utf8_string))
+                                   :targets 32)
+             (send-event :targets))
+            (:utf8_string
+             (xlib:change-property requestor property
+                                   (babel:string-to-octets value :encoding :utf-8)
+                                   :utf8_string 8)
+             (send-event :utf8_string))
+            (:string
+             (xlib:change-property requestor property
+                                   (babel:string-to-octets value :encoding :utf-8)
+                                   :string 8)
+             (send-event :string))))))))

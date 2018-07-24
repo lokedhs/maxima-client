@@ -42,7 +42,8 @@
            #:maxima-error/content
            #:plain-text
            #:set-rec-position
-           #:move-rec))
+           #:move-rec
+           #:maxima-expr-to-latex))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
@@ -63,5 +64,4 @@
 
 (defpackage :maxima-client.clipboard
   (:use :cl)
-  (:export
-   #:bind-clipboard))
+  (:export #:bind-clipboard))

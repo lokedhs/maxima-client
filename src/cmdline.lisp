@@ -494,12 +494,11 @@ terminated by ;.")
 
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (log:info "Should copy expr as text here: ~s" expr)
   (maxima-client.clipboard:bind-clipboard *standard-output* (maxima-native-expr/src expr)))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (log:info "Should copy expr as latex here: ~s" expr))
+  (maxima-client.clipboard:bind-clipboard *standard-output* (maxima-expr-to-latex (maxima-native-expr/expr expr))))
 
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil
