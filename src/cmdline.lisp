@@ -328,6 +328,16 @@ terminated by ;.")
        (log:trace "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
        (funcall (cdar clim:*input-context*) object type event options)))))
 
+(clim:define-presentation-method clim:accept ((type maxima-native-symbol)
+                                              stream
+                                              (view clim:textual-view)
+                                              &key prompt default)
+  (let* ((result (clim:accept 'plain-text :stream stream :prompt prompt :default default))
+         (expr (string-to-maxima-expr result)))
+    (unless (symbolp expr)
+      (error "Input was not a symbol"))
+    (values expr 'maxima-native-symbol)))
+
 (clim:define-presentation-translator maxima-to-plain-text (maxima-native-expr plain-text maxima-commands)
     (object)
   (log:trace "Converting to text: ~s" object)

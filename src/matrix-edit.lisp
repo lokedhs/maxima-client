@@ -11,7 +11,8 @@
         :reader matrix-edit-value/col)
    (row :initarg :row
         :reader matrix-edit-value/row)
-   (orig :initarg :orig)
+   (orig :initarg :orig
+         :reader matrix-edit-value/orig)
    (output-record :accessor matrix-edit-value/record)
    (edit-stream :accessor matrix-edit-value/edit-stream)))
 
@@ -44,41 +45,73 @@
                                                              (matrix-edit-value/row value)
                                                              (matrix-edit-value/col value))
                                             :id-test #'equal)
-                (setf edit-stream (make-instance 'clim:standard-input-editing-stream
-                                                 :stream stream
-                                                 :cursor-visibility nil
-                                                 :single-line t)))))
-    (format stream "some content")
+                (clim:with-output-as-presentation (stream value 'matrix-edit-value :allow-sensitive-inferiors nil)
+                  (let ((expr-rec (make-rendered-output-record (stream)
+                               (render-maxima-expression stream (matrix-edit-value/orig value)))))
+                    (clim:stream-add-output-record stream expr-rec))))))
     (setf (matrix-edit-value/record value) rec)
     (setf (matrix-edit-value/edit-stream value) edit-stream)))
 
 (clim:define-command (edit-matrix-command :name "Edit matrix" :menu t :command-table maxima-commands)
     ((varname maxima-native-symbol :prompt "Variable"))
-  (declare (ignore varname))
-  (let ((stream *standard-output*))
-    (let ((values (make-array '(5 3))))
-      (let ((rec (clim:updating-output (stream)
-                   (clim:formatting-table (stream)
-                     (loop
-                       for row from 0 below (array-dimension values 0)
-                       do (clim:formatting-row (stream)
-                            (loop
-                              for col from 0 below (array-dimension values 1)
-                              for value = (make-instance 'matrix-edit-value
-                                                         :orig (string-to-native-expr "0")
-                                                         :row row
-                                                         :col col)
-                              do (setf (aref values row col) value)
-                              do (clim:formatting-cell (stream)
-                                   (make-matrix-edit-field stream value))))))))))
-      (loop
-        with curr-row = 0
-        with curr-col = 0
-        do (clim:with-input-context ('(command :command-table edit-matrix-commands))
-               (object)
-               (let ((value (aref values curr-row curr-col)))
-                 (multiple-value-bind (object type)
-                     (clim:accept 'maxima-native-expr :stream (matrix-edit-value/edit-stream value)
-                                                      :view +matrix-edit-view+
-                                                      :prompt nil)
-                   (log:info "got object=~s type=~s" object type))))))))
+  (let ((matrix-content (symbol-value varname)))
+    (unless (eq (caar matrix-content) 'maxima::$matrix)
+      (error "Variable does not contain a matrix"))
+    (let* ((stream *standard-output*)
+           (rec nil)
+           (values nil))
+      (setq rec (clim:updating-output (stream)
+                  (clim:formatting-table (stream)
+                    (loop
+                      for matrix-row in (cdr matrix-content)
+                      for row from 0
+                      for row-values = (let ((col-values nil))
+                                         (assert (eq (caar matrix-row) 'maxima::mlist))
+                                         (clim:formatting-row (stream)
+                                           (loop
+                                             for matrix-col in (cdr matrix-row)
+                                             for col from 0
+                                             for value = (make-instance 'matrix-edit-value
+                                                                        :orig matrix-col
+                                                                        :row row
+                                                                        :col col)
+                                             do (clim:formatting-cell (stream)
+                                                  (make-matrix-edit-field stream value))
+                                             collect value into result
+                                             finally (setq col-values result)))
+                                         col-values)
+                      collect row-values into result
+                      finally (setq values result)))))
+      (let ((curr-row 0)
+            (curr-col 0))
+        (labels ((p ()
+                   (log:info "pos: ~s,~s" curr-row curr-col))
+                 (constrain-col (new-col)
+                   (let ((row (nth curr-row values)))
+                     (setf curr-col (max (min new-col (1- (length row))) 0))))
+                 (move-x (delta)
+                   (constrain-col (+ curr-col delta))
+                   (p))
+                 (move-y (delta)
+                   (setf curr-row (max (min (+ curr-row delta) (1- (length values))) 0))
+                   (constrain-col curr-col)
+                   (p)))
+          (loop
+            for gesture = (clim:with-input-context ('matrix-edit-value :override t)
+                              (object type)
+                              (clim:read-gesture :stream stream)
+                            (matrix-edit-value
+                             (log:info "value clicked = ~s" object)))
+            when (typep gesture 'clim:key-press-event)
+              do (let ((event-name (clim:keyboard-event-key-name gesture)))
+                   (if (gesture-modifier-p gesture :control)
+                       (case event-name
+                         (:|p| (move-y -1))
+                         (:|n| (move-y 1))
+                         (:|b| (move-x -1))
+                         (:|f| (move-x 1)))
+                       (case event-name
+                         (:up (move-y -1))
+                         (:down (move-y 1))
+                         (:left (move-x -1))
+                         (:right (move-x 1)))))))))))
