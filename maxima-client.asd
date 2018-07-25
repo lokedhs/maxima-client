@@ -31,4 +31,5 @@
                                      (:file "maxima-plot")
                                      (:file "plot2d")
                                      (:file "algebra-cmd")
+                                     (:file "matrix-edit")
                                      (:file "matrix-cmd")))))
