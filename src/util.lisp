@@ -235,7 +235,7 @@
   (let ((string (with-output-to-string (s)
                   (maxima::tex1 expr s))))
     (multiple-value-bind (result parts)
-        (cl-ppcre:scan-to-strings #.(format nil "(?m)^\\$\\$(.*)\\$\\$~c$" #\Newline) string)
+        (cl-ppcre:scan-to-strings #.(format nil "(?s)^\\$\\$(.*)\\$\\$~c$" #\Newline) string)
       (if result
           (aref parts 0)
           string))))
