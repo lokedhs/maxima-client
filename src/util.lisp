@@ -295,7 +295,8 @@
                              (draw-button stream "OK")))
                          (clim:formatting-cell (stream)
                            (clim:with-output-as-presentation (stream nil 'cancel-button)
-                             (draw-button stream "Cancel")))))))))
+                             (draw-button stream "Cancel")))))
+                     (format stream "~%")))))
         (unwind-protect
              (funcall loop-fn rec)
           (setq active nil)

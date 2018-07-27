@@ -13,6 +13,7 @@
 (defgeneric sheet-render-value (sheet row col stream))
 (defgeneric sheet-render-col-title (sheet col stream))
 (defgeneric sheet-render-row-title (sheet row stream))
+(defgeneric sheet-edit-value-at-pos (sheet row col stream))
 
 (defclass sheet-edit-value ()
   ((col :initarg :col
@@ -84,9 +85,13 @@
                            (log:info "ok button clicked: ~s" object))
                           (cancel-button
                            (return-from matrix-edit-main-loop nil)))
+          when (characterp gesture)
+            do (case gesture
+                 (#\Newline
+                  (sheet-edit-value-at-pos sheet curr-row curr-col stream)
+                  (redraw)))
           when (typep gesture 'clim:key-press-event)
             do (let ((event-name (clim:keyboard-event-key-name gesture)))
-                 (log:info "event name: ~s" event-name)
                  (if (gesture-modifier-p gesture :control)
                      (case event-name
                        (:|p| (move-y -1))
@@ -139,6 +144,16 @@
 
 (defmethod sheet-render-row-title ((sheet matrix-sheet) row stream)
   (format stream "~a" (1+ row)))
+
+(defmethod sheet-edit-value-at-pos ((sheet matrix-sheet) row col stream)
+  (let ((prev-value (aref (matrix-sheet/matrix sheet) row col)))
+    (log:info "prev value is: ~s" prev-value)
+    (multiple-value-bind (result type)
+        (clim:accept 'maxima-native-expr :default (make-instance 'maxima-native-expr :expr prev-value) :insert-default t)
+      (log:info "Got result: ~s, type: ~s" result type)
+      (ecase type
+        (maxima-native-expr (setf (aref (matrix-sheet/matrix sheet) row col)
+                                  (eval-maxima-expression (maxima-native-expr/expr result))))))))
 
 (clim:define-command (edit-matrix-command :name "Edit matrix" :menu t :command-table maxima-commands)
     ((varname maxima-native-symbol :prompt "Variable"))
