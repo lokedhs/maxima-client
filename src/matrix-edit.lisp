@@ -83,7 +83,7 @@
                           (ok-button
                            (log:info "ok button clicked: ~s" object))
                           (cancel-button
-                           (log:info "cancel button clicked: ~s" object)))
+                           (return-from matrix-edit-main-loop nil)))
           when (typep gesture 'clim:key-press-event)
             do (let ((event-name (clim:keyboard-event-key-name gesture)))
                  (log:info "event name: ~s" event-name)
