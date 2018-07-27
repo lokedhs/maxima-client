@@ -253,3 +253,59 @@
       (if result
           (aref parts 0)
           string))))
+
+(defparameter *button-border* (clim:make-rgb-color 0.7 0.7 0.7))
+(defparameter *button-background* (clim:make-rgb-color 0.95 0.95 0.95))
+
+(clim:define-presentation-type ok-button ()
+  :inherit-from t)
+
+(clim:define-presentation-type cancel-button ()
+  :inherit-from t)
+
+(defun draw-button (stream label)
+  (clim:surrounding-output-with-border (stream :ink *button-border*
+                                               :background *button-background*
+                                               :move-cursor nil
+                                               :padding 2)
+    (clim:with-text-style (stream (clim:make-text-style :sans-serif :roman 14))
+      (format stream "~a" label))))
+
+(defun call-with-temp-form (stream fn)
+  (let ((old-cursor-pos (multiple-value-list (clim:stream-cursor-position stream))))
+    (unwind-protect
+         (funcall fn)
+      (setf (clim:stream-cursor-position stream) (apply #'values old-cursor-pos)))))
+
+(defmacro with-temp-form ((stream) &body body)
+  (check-type stream symbol)
+  `(call-with-temp-form ,stream (lambda () ,@body)))
+
+(defun call-with-interactive-form (stream builder-fn loop-fn)
+  (with-temp-form (stream)
+    (let ((active t))
+      (let ((rec (clim:updating-output (stream)
+                   (when active
+                     (funcall builder-fn)
+                     (format stream "~%")
+                     (clim:formatting-table (stream)
+                       (clim:formatting-row (stream)
+                         (clim:formatting-cell (stream)
+                           (clim:with-output-as-presentation (stream nil 'ok-button)
+                             (draw-button stream "OK")))
+                         (clim:formatting-cell (stream)
+                           (clim:with-output-as-presentation (stream nil 'cancel-button)
+                             (draw-button stream "Cancel")))))))))
+        (unwind-protect
+             (funcall loop-fn rec)
+          (setq active nil)
+          (clim:redisplay rec stream))))))
+
+(defmacro with-interactive-form ((stream record-name) builder &body body)
+  (check-type stream symbol)
+  (alexandria:with-gensyms (rec)
+    `(call-with-interactive-form ,stream
+                                 (lambda () ,builder)
+                                 (lambda (,rec)
+                                   (let ((,record-name ,rec))
+                                     ,@body)))))

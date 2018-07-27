@@ -163,16 +163,22 @@
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
     (t (labels ((render ()
-                  (render-formatted-with-replacement stream "~a" (format-sym-name sym))))
+                  (let ((formatted (format-sym-name sym)))
+                    (if (alexandria:starts-with-subseq "%" formatted)
+                        (with-aligned-rendering (stream)
+                          (with-font-size-change (stream (- (* (char-height stream) 0.6)))
+                            (render-aligned-string "%"))
+                          (render-aligned () (render-formatted-with-replacement stream "~a" (subseq formatted 1))))
+                        (render-formatted-with-replacement stream "~a" formatted)))))
          (if roman-font
              (with-roman-text-style (stream) (render))
              (with-italic-text-style (stream) (render)))))))
 
 (defun render-symbol (stream sym &key roman-font)
   (case sym
-    (maxima::$aa (render-size-test stream))
-    (maxima::$bb (render-paren-test stream))
-    (maxima::$cc (render-sqrt-test stream))
+    (maxima::$test_aa (render-size-test stream))
+    (maxima::$test_bb (render-paren-test stream))
+    (maxima::$test_cc (render-sqrt-test stream))
     (t
      (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
        (render-symbol-inner stream sym roman-font)))))
@@ -758,7 +764,7 @@ Each element should be an output record."
 
 (defun find-paren-font (stream size)
   (let ((result (xfind-paren-font stream size)))
-    (log:info "findPF[size=~s ch=~s] → ~s" size (char-height stream) (car result))
+    (log:trace "findPF[size=~s ch=~s] → ~s" size (char-height stream) (car result))
     result))
 
 (defun render-size-test (stream)

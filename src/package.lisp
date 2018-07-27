@@ -43,7 +43,12 @@
            #:plain-text
            #:set-rec-position
            #:move-rec
-           #:maxima-expr-to-latex))
+           #:maxima-expr-to-latex
+           #:with-temp-form
+           #:with-interactive-form
+           #:button
+           #:ok-button
+           #:cancel-button))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
