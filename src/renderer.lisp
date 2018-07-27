@@ -453,34 +453,6 @@
 (defun render-product (stream f var from to)
   (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
 
-#+nil
-(defun render-sqrt (stream expr)
-  (let ((exp (clim:with-output-to-output-record (stream)
-               (let ((*lop* 'maxima::mparen))
-                 (render-maxima-expression stream expr)))))
-    (dimension-bind (exp :height height :bottom bottom)
-      (with-font (stream *font-roman* height)
-        (destructuring-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent)
-            (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 bottom)
-          (declare (ignore sqrt-sym-ascent sqrt-sym-descent))
-          (clim:stream-add-output-record stream sqrt-sym)
-          (dimension-bind (sqrt-sym :right sqrt-sym-right)
-            (move-rec exp sqrt-sym-right 0)
-            (clim:stream-add-output-record stream exp))))
-      #+nil
-      (let* ((angle 0.2)
-             (hg 0.4)
-             (hg-angle 0.4)
-             (hg-height (* height hg))
-             (x-offset (+ (* height angle) (* hg-height hg-angle))))
-        (clim:draw-design stream (clim:make-polyline* (list x (- bottom hg-height)
-                                                            (+ x (* hg-height hg-angle)) bottom
-                                                            (+ x x-offset) y
-                                                            (+ right x-offset) y))
-                          :line-thickness 1)
-        (move-rec exp x-offset 0)
-        (clim:stream-add-output-record stream exp)))))
-
 (defun render-mlist-one-line (stream rec-list)
   "Render an mlist on a single line."
   (with-aligned-rendering (stream)
@@ -669,25 +641,6 @@ Each element should be an output record."
           (aligned-spacing 0.5)
           (with-wrapped-parens (stream)
             (render-aligned () (render-maxima-expression stream expr))))))))
-
-#+nil
-(defun xrender-array-reference (stream expr args &key paren-p)
-  (unless args
-    (error "Arg list should have at least one element"))
-  (let ((base (clim:with-output-to-output-record (stream)
-                (with-wrapped-optional-parens (stream paren-p)
-                  (render-maxima-expression stream expr))))
-        (args-rec (clim:with-output-to-output-record (stream)
-                    (with-font-size-change (stream 0.8)
-                      (render-arg-list stream args :spacing 0)))))
-    (dimension-bind (base :height base-height :y base-y :right base-right :bottom base-bottom)
-      (dimension-bind (args-rec :height args-height)
-        (clim:stream-add-output-record stream (make-boxed-output-record stream base))
-        (set-rec-position args-rec base-right
-                          (if (>= args-height (/ base-height 2))
-                              (+ base-y (/ base-height 2))
-                              (- base-bottom (/ args-))))
-        (clim:stream-add-output-record stream args-rec)))))
 
 (defun render-array-reference (stream expr args &key paren-p)
   (unless args
