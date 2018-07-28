@@ -278,7 +278,7 @@
   (dimension-bind (output-record :x x :y y :width width :height height)
     (destructuring-bind (paren-font paren-size)
         (find-paren-font stream height)
-      (destructuring-bind (left-paren left-paren-ascent left-paren-descent)
+      (multiple-value-bind (left-paren left-paren-ascent left-paren-descent)
           (with-font (stream paren-font paren-size)
             (render-and-measure-string stream left-paren))
         (let ((right-paren (clim:with-output-to-output-record (stream)
@@ -363,10 +363,10 @@
 (defun render-and-measure-string (stream string &optional (x 0) (y 0))
   (multiple-value-bind (width height final-x final-y baseline)
       (clim:text-size stream string)
-    (declare (ignore width final-x final-y))
+    (declare (ignore final-x final-y))
     (let ((rec (clim:with-output-to-output-record (stream)
                  (clim:draw-text* stream string x y))))
-      (list rec baseline (- height baseline)))))
+      (values rec baseline (- height baseline) width))))
 
 (defun render-intsum-inner (stream f var from to symbol sym2 font-fn)
   (let ((exp (clim:with-output-to-output-record (stream)
@@ -374,7 +374,7 @@
                      (*rop* 'maxima::mparen))
                  (render-maxima-expression stream f)))))
     (dimension-bind (exp :height exp-height)
-      (destructuring-bind (sigma sigma-ascent sigma-descent)
+      (multiple-value-bind (sigma sigma-ascent sigma-descent)
           (destructuring-bind (sigma-font sigma-size)
               (funcall font-fn exp-height)
             (with-font (stream sigma-font sigma-size)
@@ -547,7 +547,7 @@ Each element should be an output record."
 
 (defun render-limit (stream expr sym to direction)
   (log:trace "rendering limit: expr=~s, sym=~s, to=~s, direction=~s" expr sym to direction)
-  (destructuring-bind (top top-ascent top-descent)
+  (multiple-value-bind (top top-ascent top-descent)
       (with-roman-text-style (stream)
         (render-and-measure-string stream "lim"))
     (declare (ignore top-ascent))
@@ -702,7 +702,7 @@ Each element should be an output record."
     (aligned-spacing 0.4)
     (render-aligned-string "!")))
 
-(defun xfind-paren-font (stream size)
+(defun %find-paren-font (stream size)
   (let ((height (char-height stream)))
     (cond ((<= size (* height 2))
            (list *font-roman* size))
@@ -716,7 +716,7 @@ Each element should be an output record."
            (list *font-paren-size4* (* size 0.3))))))
 
 (defun find-paren-font (stream size)
-  (let ((result (xfind-paren-font stream size)))
+  (let ((result (%find-paren-font stream size)))
     (log:trace "findPF[size=~s ch=~s] → ~s" size (char-height stream) (car result))
     result))
 
@@ -769,8 +769,8 @@ Each element should be an output record."
   (let ((exp (clim:with-output-to-output-record (stream)
                (with-paren-op
                  (funcall fn stream)))))
-    (dimension-bind (exp :y exp-y :width exp-width :height exp-height )
-      (destructuring-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent)
+    (dimension-bind (exp :y exp-y :width exp-width :height exp-height)
+      (multiple-value-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent sqrt-sym-width)
           (destructuring-bind (font size)
               (find-paren-font stream exp-height)
             (with-font (stream font size)
@@ -785,7 +785,7 @@ Each element should be an output record."
           (clim:stream-add-output-record stream exp)
           ;; Draw line above the expr
           (let ((y exp-y))
-            (clim:draw-line* stream sqrt-sym-right y (+ sqrt-sym-right exp-width (/ (char-width stream) 4)) y)))))))
+            (clim:draw-line* stream sqrt-sym-width y (+ sqrt-sym-right exp-width (/ (char-width stream) 4)) y)))))))
 
 (defun render-sqrt (stream expr)
   (%render-sqrt stream (lambda (stream)
