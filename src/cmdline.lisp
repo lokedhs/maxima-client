@@ -201,20 +201,24 @@ terminated by ;.")
           ;; The input context permits the user to mouse-select displayed
           ;; Lisp objects and put them into the input buffer as literal
           ;; objects.
-          for gesture = (clim:with-input-context ('maxima-native-expr :override nil)
-                            (object type)
-                            (clim:read-gesture :stream stream)
-                          (maxima-native-expr
-                           (drei:performing-drei-operations (drei :with-undo t
-                                                                  :redisplay t)
-                             (clim:presentation-replace-input
-                              stream object type (clim:view drei)
-                              :buffer-start (clim:stream-insertion-pointer stream)
-                              :allow-other-keys t
-                              :accept-result nil
-                              :rescan t))
-                           (clim:rescan-if-necessary stream)
-                           nil))
+          for gesture = (labels ((insert-into-editor (object)
+                                   (drei:performing-drei-operations (drei :with-undo t
+                                                                          :redisplay t)
+                                     (clim:presentation-replace-input
+                                      stream object type (clim:view drei)
+                                      :buffer-start (clim:stream-insertion-pointer stream)
+                                      :allow-other-keys t
+                                      :accept-result nil
+                                      :rescan t))
+                                   (clim:rescan-if-necessary stream)
+                                   nil))
+                          (clim:with-input-context ('(or maxima-native-expr maxima-input-error) :override nil)
+                              (object type)
+                              (clim:read-gesture :stream stream)
+                            (maxima-native-expr
+                             (insert-into-editor object))
+                            (maxima-input-error
+                             (insert-into-editor object))))
 
           for current-command = (let* ((buffer (drei:buffer (clim:view drei)))
                                        (start (drei::input-position stream))
