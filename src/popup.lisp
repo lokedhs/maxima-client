@@ -72,14 +72,16 @@
         (dimension-bind (record :x x :y y :right right :bottom bottom)
           (clim:repaint-sheet stream (clim:make-bounding-rectangle x y right bottom)))))))
 
-(defun adjust-popup-dimensions (pane)
+(defun adjust-popup-dimensions (pane x-pos y-pos)
   (let ((top-level-pane (labels ((searching (pane)
 				   (if (typep pane 'climi::top-level-sheet-pane)
 				       pane
 				       (searching (clim:sheet-parent pane)))))
 			  (searching pane))))
     (clim:change-space-requirements top-level-pane :width 400 :height 400 :resize-frame t)
-    (clim:move-sheet top-level-pane 10 50)))
+    (if (and x-pos y-pos)
+        (clim:move-sheet top-level-pane x-pos y-pos)
+        (clim:move-sheet top-level-pane 10 50))))
 
 (defun ensure-output-record-visible (pane output-record)
   (dimension-bind ((clim:pane-viewport-region pane) :x viewport-x1 :y viewport-y1 :bottom viewport-y2 :height viewport-h)
@@ -155,7 +157,7 @@
                 (setq filter-string (subseq filter-string 0 (1- (length filter-string))))
                 (setq filtered-values (filter-by-prefix filter-string)))))))))
 
-(defun select-completion-match (values)
+(defun select-completion-match (values &key x-pos y-pos)
   "Display a popup allowing the user to select one of several elements."
   (let* ((associated-frame clim:*application-frame*)
          (fm (clim:frame-manager associated-frame)))
@@ -172,7 +174,7 @@
              (progn
                (setf (clim:stream-end-of-line-action menu-pane) :allow)
                (setf (clim:stream-end-of-page-action menu-pane) :allow)
-               (adjust-popup-dimensions menu-pane)
+               (adjust-popup-dimensions menu-pane x-pos y-pos)
                (clim:enable-frame frame)
                (menu-loop menu-pane values))
           (clim:disown-frame fm frame))))))

@@ -65,6 +65,12 @@
 (defmethod maxima-client.gui-tools:get-element-filter-name ((value completion-popup-element))
   (completion-popup-element/name value))
 
+(defun get-screen-position-of-pane (drei)
+  (dimension-bind (drei :x x :y y)
+    (multiple-value-bind (px py)
+        (clim:transform-position (clim:sheet-delta-transformation (drei:editor-pane drei) nil) x y)
+      (values px py))))
+
 (clim:define-command (complete-maxima-function :name "Complete function" :command-table maxima-table)
     ()
   "Complete the name of the function at the curstor position."
@@ -80,9 +86,11 @@
                 ((alexandria:sequence-of-length-p matches 1)
                  (insert-completed-symbol point (completion-popup-element/name (car matches))))
                 (t
-                 (let ((result (maxima-client.gui-tools:select-completion-match matches)))
-                   (when result
-                     (insert-completed-symbol point (completion-popup-element/name result))))))))))
+                 (multiple-value-bind (editor-x editor-y)
+                     (get-screen-position-of-pane (drei:drei-instance))
+                   (let ((result (maxima-client.gui-tools:select-completion-match matches :x-pos editor-x :y-pos editor-y)))
+                     (when result
+                       (insert-completed-symbol point (completion-popup-element/name result)))))))))))
   nil)
 
 (drei::set-key 'complete-maxima-function
