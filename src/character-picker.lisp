@@ -69,7 +69,9 @@
   (let ((values (mapcar (lambda (v)
                           (make-instance 'char-popup-element :char (second v) :description (first v)))
                         *char-list*)))
-    (let ((result (maxima-client.gui-tools:select-completion-match values)))
-      (when result
-        (let ((point (drei:point)))
-          (drei-buffer:insert-sequence point (char-popup-element/char result)))))))
+    (multiple-value-bind (editor-x editor-y)
+        (get-screen-position-of-pane (drei:drei-instance))
+      (let ((result (maxima-client.gui-tools:select-completion-match values :x-pos editor-x :y-pos editor-y)))
+        (when result
+          (let ((point (drei:point)))
+            (drei-buffer:insert-sequence point (char-popup-element/char result))))))))
