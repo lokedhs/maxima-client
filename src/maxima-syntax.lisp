@@ -18,21 +18,25 @@
   (:command-table maxima-table))
 
 (defun find-maxima-completions (prefix &key (verbs t) (nouns t))
-  (unless (or verbs nouns)
-    (error "At least one of :VERBS or :NOUNS must be provided"))
-  (let ((syms (loop
-                with package = (find-package "MAXIMA")
-                for sym being each symbol in package
-                for sym-string = (symbol-name sym)
-                when (or (and verbs (alexandria:starts-with-subseq "$" sym-string))
-                         (and nouns (alexandria:starts-with-subseq "%" sym-string)))
-                  append (let ((sym-name-fixed (format-sym-name sym)))
-                           (if (alexandria:starts-with-subseq prefix sym-name-fixed)
-                               (list (make-instance 'completion-popup-element
-                                                    :name sym-name-fixed
-                                                    :args (function-signature sym))))))))
-    #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
-    (sort syms #'string< :key #'completion-popup-element/name)))
+  (cond ((not (and verbs nouns))
+         (error "At least one of :VERBS or :NOUNS must be provided"))
+        ((equal prefix "")
+         ;; Don't allow matching all symbols
+         nil)
+        (t
+         (let ((syms (loop
+                       with package = (find-package "MAXIMA")
+                       for sym being each symbol in package
+                       for sym-string = (symbol-name sym)
+                       when (or (and verbs (alexandria:starts-with-subseq "$" sym-string))
+                                (and nouns (alexandria:starts-with-subseq "%" sym-string)))
+                         append (let ((sym-name-fixed (format-sym-name sym)))
+                                  (if (alexandria:starts-with-subseq prefix sym-name-fixed)
+                                      (list (make-instance 'completion-popup-element
+                                                           :name sym-name-fixed
+                                                           :args (function-signature sym))))))))
+           #+nil(remove-duplicates (sort syms #'string<) :test #'equal)
+           (sort syms #'string< :key #'completion-popup-element/name)))))
 
 (defun symbol-constituent-p (ch)
   (let ((code (char-code ch)))
@@ -88,7 +92,13 @@
                 (t
                  (multiple-value-bind (editor-x editor-y)
                      (get-screen-position-of-pane (drei:drei-instance))
-                   (let ((result (maxima-client.gui-tools:select-completion-match matches :x-pos editor-x :y-pos editor-y)))
+                   (let ((result (maxima-client.gui-tools:select-completion-match
+                                  (lambda (prefix)
+                                    (let ((matches (find-maxima-completions prefix)))
+                                      matches))
+                                  :x-pos editor-x
+                                  :y-pos editor-y
+                                  :initial-prefix (aref strings 0))))
                      (when result
                        (insert-completed-symbol point (completion-popup-element/name result)))))))))))
   nil)

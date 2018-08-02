@@ -156,33 +156,29 @@ maximum size according to `frame')."
                      (:prior (log:info "Scroll up one page"))
                      (:escape (return-from control-loop '(:result . nil))))))))))
 
-(defun menu-loop (menu-pane values)
-  (let ((filter-string "")
-        (filtered-values values))
-    (labels ((filter-by-prefix (prefix)
-               (remove-if-not (lambda (value)
-                                (alexandria:starts-with-subseq prefix (get-element-filter-name value)))
-                              values)))
-      (loop
-        for entries = (make-menu-entry-vector menu-pane filtered-values)
-        for result = (menu-loop-inner menu-pane entries)
-        do (ecase (car result)
-             (:result
-              (return (cadr result)))
-             (:update-filter
-              (let ((ch (cadr result)))
-                (let* ((updated-filter (format nil "~a~c" filter-string ch))
-                       (result (filter-by-prefix updated-filter)))
-                  (when result
-                    (setq filter-string updated-filter)
-                    (setq filtered-values result)))))
-             (:update-backspace
-              (when (plusp (length filter-string))
-                (setq filter-string (subseq filter-string 0 (1- (length filter-string))))
-                (setq filtered-values (filter-by-prefix filter-string)))))))))
+(defun menu-loop (menu-pane load-fn initial-prefix)
+  (let ((filter-string initial-prefix))
+    (loop
+      for entries = (make-menu-entry-vector menu-pane (funcall load-fn filter-string))
+      for result = (menu-loop-inner menu-pane entries)
+      do (ecase (car result)
+           (:result
+            (return (cadr result)))
+           (:update-filter
+            (let ((ch (cadr result)))
+              (when result
+                (setq filter-string (format nil "~a~c" filter-string ch)))))
+           (:update-backspace
+            (when (plusp (length filter-string))
+              (setq filter-string (subseq filter-string 0 (1- (length filter-string))))))))))
 
-(defun select-completion-match (values &key x-pos y-pos)
-  "Display a popup allowing the user to select one of several elements."
+(defun select-completion-match (load-fn &key x-pos y-pos (initial-prefix ""))
+  "Display a popup allowing the user to select one of several elements.
+LOAD-FN is called with a string prefix and is responsible for
+returning a list of matches that match that prefix. This function can
+also return :ERROR to indicate that there was a problem retrieving the
+matches (this is different from NIL which indicates that no matches
+were found)."
   (let* ((associated-frame clim:*application-frame*)
          (fm (clim:frame-manager associated-frame)))
     (clim:with-look-and-feel-realization (fm associated-frame)
@@ -200,5 +196,5 @@ maximum size according to `frame')."
                (setf (clim:stream-end-of-page-action menu-pane) :allow)
                (adjust-popup-dimensions menu-pane x-pos y-pos 400 400)
                (clim:enable-frame frame)
-               (menu-loop menu-pane values))
+               (menu-loop menu-pane load-fn initial-prefix))
           (clim:disown-frame fm frame))))))
