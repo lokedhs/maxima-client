@@ -72,16 +72,40 @@
         (dimension-bind (record :x x :y y :right right :bottom bottom)
           (clim:repaint-sheet stream (clim:make-bounding-rectangle x y right bottom)))))))
 
-(defun adjust-popup-dimensions (pane x-pos y-pos)
+(defun max-x-y (frame)
+  "Return the maximum X and Y coordinate values for a menu for
+`frame' (essentially, the screen resolution with a slight
+padding.)"
+  ;; FIXME? There may be a better way.
+  (let* ((port (clim:port (clim:frame-manager frame)))
+         (graft (clim:find-graft :port port)))
+    (values (- (clim:graft-width graft) 50)
+            (- (clim:graft-height graft) 50))))
+
+(defun menu-size (menu frame)
+  "Return two values, the height and width of MENU (adjusted for
+maximum size according to `frame')."
+  (multiple-value-bind (max-width max-height)
+      (max-x-y frame)
+    (clim:with-bounding-rectangle* (x1 y1 x2 y2) menu
+      (declare (ignore x1 y1))
+      (values (min x2 max-width)
+              (min y2 max-height)))))
+
+(defun adjust-popup-dimensions (pane x-pos y-pos width height)
   (let ((top-level-pane (labels ((searching (pane)
 				   (if (typep pane 'climi::top-level-sheet-pane)
 				       pane
 				       (searching (clim:sheet-parent pane)))))
 			  (searching pane))))
-    (clim:change-space-requirements top-level-pane :width 400 :height 400 :resize-frame t)
-    (if (and x-pos y-pos)
-        (clim:move-sheet top-level-pane x-pos y-pos)
-        (clim:move-sheet top-level-pane 10 50))))
+    (clim:change-space-requirements top-level-pane :width width :height height :resize-frame t)
+    (multiple-value-bind (frame-width frame-height)
+        (menu-size top-level-pane clim:*application-frame*)
+      (multiple-value-bind (screen-width screen-height)
+          (max-x-y clim:*application-frame*)
+        (clim:move-sheet top-level-pane
+                         (max (min x-pos (- screen-width frame-width)) 0)
+                         (max (min y-pos (- screen-height frame-height)) 0))))))
 
 (defun ensure-output-record-visible (pane output-record)
   (dimension-bind ((clim:pane-viewport-region pane) :x viewport-x1 :y viewport-y1 :bottom viewport-y2 :height viewport-h)
@@ -174,7 +198,7 @@
              (progn
                (setf (clim:stream-end-of-line-action menu-pane) :allow)
                (setf (clim:stream-end-of-page-action menu-pane) :allow)
-               (adjust-popup-dimensions menu-pane x-pos y-pos)
+               (adjust-popup-dimensions menu-pane x-pos y-pos 400 400)
                (clim:enable-frame frame)
                (menu-loop menu-pane values))
           (clim:disown-frame fm frame))))))
