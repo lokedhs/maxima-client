@@ -115,16 +115,53 @@ maximum size according to `frame')."
             ((> rec-y2 viewport-y2)
              (clim:scroll-extent pane viewport-x1 (max (- rec-y2 viewport-h) 0)))))))
 
+(defun find-visible-elements (viewport-y1 viewport-y2 entries)
+  (labels ((element-visible-p (entry)
+             (dimension-bind ((popup-menu-element/record entry) :y rec-y1 :bottom rec-y2)
+               (and (< viewport-y1 rec-y2)
+                    (> viewport-y2 rec-y1)))))
+    (loop
+      with prev-visible-p = nil
+      with first-visible-index = nil
+      with last-visible-index = nil
+      for i from 0
+      for entry across entries
+      for visible-p = (element-visible-p entry)
+      if (and (not prev-visible-p) visible-p (not first-visible-index))
+        do (setq first-visible-index i)
+      if (and prev-visible-p (not visible-p) (not last-visible-index))
+        do (setq last-visible-index i)
+      do (setq prev-visible-p visible-p)
+      until (and first-visible-index last-visible-index)
+      finally (return (list first-visible-index (or last-visible-index (1- (length entries))))))))
+
 (defun menu-loop-inner (menu-pane entries)
   (let ((selected-index 0))
-    (labels ((move (delta)
-               (let ((new-pos (max (min (+ selected-index delta) (1- (length entries))) 0)))
-                 (when (/= new-pos selected-index)
+    (labels ((update-selected (new-pos)
+               (let ((updated-pos (max (min new-pos (1- (length entries))) 0)))
+                 (when (/= updated-pos selected-index)
                    (redraw-popup-menu-entry menu-pane (aref entries selected-index) nil)
-                   (let ((entry (aref entries new-pos)))
+                   (let ((entry (aref entries updated-pos)))
                      (redraw-popup-menu-entry menu-pane entry t)
                      (ensure-output-record-visible menu-pane (popup-menu-element/record entry)))
-                   (setq selected-index new-pos)))))
+                   (setq selected-index updated-pos))))
+             (move (delta)
+               (update-selected (+ selected-index delta)))
+             (pagedown ()
+               (dimension-bind ((clim:pane-viewport-region menu-pane) :y viewport-y1 :bottom viewport-y2)
+                 (destructuring-bind (start end)
+                     (find-visible-elements viewport-y1 viewport-y2 entries)
+                   (declare (ignore start))
+                   (ensure-output-record-visible menu-pane (popup-menu-element/record (aref entries end)))
+                   (update-selected end))))
+             (pageup ()
+               (dimension-bind ((clim:pane-viewport-region menu-pane) :y viewport-y1 :bottom viewport-y2)
+                 (destructuring-bind (start end)
+                     (find-visible-elements viewport-y1 viewport-y2 entries)
+                   (declare (ignore end))
+                   (let ((new-pos (max (1- start) 0)))
+                     (ensure-output-record-visible menu-pane (popup-menu-element/record (aref entries new-pos)))
+                     (update-selected new-pos))))))
       (loop
         named control-loop
         for gesture = (clim:with-input-context ('popup-menu-clickable-element :override nil)
@@ -145,16 +182,21 @@ maximum size according to `frame')."
                       (list :update-filter gesture))))
         when (typep gesture 'clim:key-press-event)
           do (let ((event-name (clim:keyboard-event-key-name gesture)))
-               (if (gesture-modifier-p gesture :control)
-                   (case event-name
-                     (:|p| (move -1))
-                     (:|n| (move 1)))
-                   (case event-name
-                     (:up (move -1))
-                     (:down (move 1))
-                     (:next (log:info "Scroll down one page"))
-                     (:prior (log:info "Scroll up one page"))
-                     (:escape (return-from control-loop '(:result . nil))))))))))
+               (cond ((gesture-modifier-p gesture :control)
+                      (case event-name
+                        (:|p| (move -1))
+                        (:|n| (move 1))
+                        (:|v| (pagedown))))
+                     ((gesture-modifier-p gesture :meta)
+                      (case event-name
+                        (:|v| (pageup))))
+                     (t
+                      (case event-name
+                        (:up (move -1))
+                        (:down (move 1))
+                        (:next (pagedown))
+                        (:prior (pageup))
+                        (:escape (return-from control-loop '(:result . nil)))))))))))
 
 (defun menu-loop (menu-pane load-fn initial-prefix)
   (let ((filter-string initial-prefix))
