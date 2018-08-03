@@ -47,6 +47,44 @@
     for v in content
     do (display-markup stream v)))
 
+(defun keyword->key-label (key)
+  (ecase key
+    (:control "Control")
+    (:shift "Shift")
+    (:meta "Meta")
+    (:super "Super")
+    (:hyper "Hyper")))
+
+(defun call-with-key-string (stream fn)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (funcall fn stream))))
+    (multiple-value-bind (x y)
+        (clim:stream-cursor-position stream)
+      (set-rec-position rec x y))
+    (clim:stream-add-output-record stream rec)
+    (let ((x-spacing 2))
+      (dimension-bind (rec :x x :y y :right right :bottom bottom :width width)
+        (clim:draw-rectangle* stream (- x x-spacing) y (+ right x-spacing) bottom :filled nil )
+        (clim:stream-increment-cursor-position stream (+ width (* x-spacing 2)) 0)))))
+
+(defmacro with-key-string ((stream) &body body)
+  (check-type stream symbol)
+  `(call-with-key-string ,stream (lambda (,stream) ,@body)))
+
+(defun render-key-command (stream key-seq)
+  (clim:with-text-style (stream (clim:make-text-style :fix :roman nil))
+    (loop
+      for group in key-seq
+      do (with-key-string (stream)
+           (loop
+             for key in group
+             for first = t then nil
+             unless first
+               do (format stream "-")
+             do (etypecase key
+                  (keyword (format stream "~a" (keyword->key-label key)))
+                  (string (format stream "~a" key))))))))
+
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
              (display-markup-list stream v)))
@@ -57,6 +95,7 @@
       (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
       (:code (clim:with-text-family (stream :fix) (display (cdr content))))
       (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
+      (:key (render-key-command stream (cdr content)))
       (:p (format stream "~&") (display (cdr content)))
       (:newline (format stream "~%"))
       (t (display-markup-list stream content)))))

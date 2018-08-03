@@ -160,3 +160,5 @@
   (let ((stream *standard-output*)
         (sheet (make-instance 'matrix-sheet :matrix-content (symbol-value varname))))
     (sheet-edit stream sheet)))
+
+rounded :padding-x 27 :padding-top 17 :padding-bottom 24

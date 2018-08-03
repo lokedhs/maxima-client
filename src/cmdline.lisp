@@ -45,6 +45,10 @@ terminated by ;.")
    `((:heading "Maxima " ,(maxima::maxima-version1))
      (:p (:newline) "Maxima project web site: " (:link "http://maxima.sourceforge.net/")
          (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
+     (:p (:newline) (:key (:meta "p")) ", " (:key (:meta "n")) " iterates through the command history."
+         (:newline) (:key (:meta "s")) " inserts special symbols."
+         (:newline) (:key ("TAB")) " provides command completion for Maxima symbols."
+         (:newline) "The : character is used as a prefix to access CLIM commands.")
      (:p (:newline) (:code ":Quit") " to quit the application")
      (:p (:code ":Lisp") " evaluates Lisp forms")
      (:newline) (:newline))))
