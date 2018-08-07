@@ -3,7 +3,7 @@
 (clim:define-command-table expression-commands)
 
 (clim:define-command-table maxima-commands
-  :inherit-from (maxima-client.markup:text-commands expression-commands))
+  :inherit-from (maxima-client.markup:text-commands expression-commands maxima-client.workbench:workbench-commands))
 
 #+nil
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
@@ -30,12 +30,14 @@ terminated by ;.")
                                                     :default-view +listener-view+
                                                     :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
+          (notes (clim:make-pane 'drei:drei-pane))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       text-content
+                       (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
+                                                               :panels (list notes))
                        doc))))
 
 (defun display-cmdline-content (frame stream)
@@ -421,12 +423,13 @@ terminated by ;.")
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
-  (let ((c-tag (maxima::makelabel maxima::$inchar)))
+  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor))
+        (c-tag (maxima::makelabel maxima::$inchar)))
     (setf (symbol-value c-tag) (maxima-native-expr/expr cmd))
-    (let* ((maxima-stream (make-instance 'maxima-io :clim-stream *standard-output*))
+    (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
            (eval-ret (catch 'maxima::macsyma-quit
                        (let ((result (let ((*use-clim-retrieve* t)
-                                           (*current-stream* *standard-output*)
+                                           (*current-stream* stream)
                                            (*standard-output* maxima-stream)
                                            (*standard-input* maxima-stream))
                                        (eval-maxima-expression (maxima-native-expr/expr cmd)))))
@@ -438,18 +441,18 @@ terminated by ;.")
                            (setq maxima::$% result)
                            (setf (symbol-value d-tag) result)
                            (let ((obj (make-instance 'maxima-native-expr :expr result)))
-                             (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
-                               (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
+                             (clim:with-room-for-graphics (stream :first-quadrant nil)
+                               (clim:surrounding-output-with-border (stream :padding 10 :ink clim:+transparent-ink+)
                                  (present-to-stream (make-instance 'labelled-expression
                                                                    :tag d-tag
                                                                    :expr obj)
-                                                    *standard-output*)))))))))
+                                                    stream)))))))))
       (let ((content (maxima-stream-text maxima-stream)))
         (cond ((eq eval-ret 'maxima::maxima-error)
                (present-to-stream (make-instance 'maxima-error
                                                  :cmd cmd
                                                  :content content)
-                                  *standard-output*))
+                                  stream))
               (t
                (when (plusp (length content))
                  (log:info "Output from command: ~s" content))))))))
@@ -460,11 +463,12 @@ terminated by ;.")
 
 (clim:define-command (maxima-eval-lisp-expression :name "Lisp" :menu "Eval Lisp form" :command-table maxima-commands)
     ((form maxima-lisp-package-form :prompt "Form"))
-  (let ((result (with-maxima-package
+  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor))
+        (result (with-maxima-package
                   (maxima::eval form))))
     (format t "~&")
-    (clim:with-output-as-presentation (*standard-output* result (clim:presentation-type-of result) :single-box t)
-      (clim:present result 'clim:expression :stream *standard-output*))))
+    (clim:with-output-as-presentation (stream result (clim:presentation-type-of result) :single-box t)
+      (clim:present result 'clim:expression :stream stream))))
 
 (defun maxima-eval-lisp-expr (expr)
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
@@ -512,11 +516,20 @@ terminated by ;.")
 
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (maxima-client.clipboard:bind-clipboard *standard-output* (maxima-native-expr/src expr)))
+  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
+    (maxima-client.clipboard:bind-clipboard stream (maxima-native-expr/src expr))))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (maxima-client.clipboard:bind-clipboard *standard-output* (maxima-expr-to-latex (maxima-native-expr/expr expr))))
+  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
+    (maxima-client.clipboard:bind-clipboard stream (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
+
+(clim:define-command (foo-command :name "Foo" :menu t :command-table maxima-commands)
+    ()
+  (let ((ws (clim:find-pane-named clim:*application-frame* 'workbench)))
+    (multiple-value-bind (w h)
+        (clim:rectangle-size (clim:sheet-region ws))
+      (log:info "ws: ~s  size: (~s,~s)" ws w h))))
 
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil

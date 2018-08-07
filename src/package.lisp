@@ -70,3 +70,8 @@
 (defpackage :maxima-client.clipboard
   (:use :cl)
   (:export #:bind-clipboard))
+
+(defpackage :maxima-client.workbench
+  (:use :cl)
+  (:export #:make-workbench
+           #:workbench-commands))

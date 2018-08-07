@@ -15,6 +15,7 @@
                         :serial t
                         :components ((:file "package")
                                      (:file "clipboard")
+                                     (:file "workbench")
                                      (:file "util")
                                      (:file "renderer-util")
                                      (:file "wrap")
