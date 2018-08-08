@@ -438,7 +438,7 @@ terminated by ;.")
                          (log:debug "Result: ~s" result)
                          (let ((content (maxima-stream-text maxima-stream)))
                            (when content
-                             (format t "~a" content)))
+                             (format stream "~a" content)))
                          (let ((d-tag (maxima::makelabel maxima::$outchar)))
                            (setq maxima::$% result)
                            (setf (symbol-value d-tag) result)
