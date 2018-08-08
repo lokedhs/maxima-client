@@ -30,14 +30,16 @@ terminated by ;.")
                                                     :default-view +listener-view+
                                                     :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
-          (notes (clim:make-pane 'drei:drei-pane))
+          (notes (clim:make-pane 'drei:drei-gadget-pane))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
                        (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
-                                                               :panels (list notes))
+                                                               :panels `((,notes :select-fn ,(lambda ()
+                                                                                               (log:info "setting focus")
+                                                                                               (clim:stream-set-input-focus notes)))))
                        doc))))
 
 (defun display-cmdline-content (frame stream)
