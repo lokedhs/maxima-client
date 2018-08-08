@@ -39,7 +39,8 @@ terminated by ;.")
   (:layouts (default (clim:vertically ()
                        (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
                                                                :panels `((,notes :title "Notes"
-                                                                                 :image ,(load-image "notepad-32.png"))))
+                                                                                 :image ,(load-image "notepad-32.png")
+                                                                                 :select-fn ,#'maxima-client.notes:focus-notes-pane)))
                        doc))))
 
 (defun display-cmdline-content (frame stream)
@@ -516,6 +517,12 @@ terminated by ;.")
     (obj)
   (list obj))
 
+(clim:define-presentation-to-command-translator select-maxima-expression-notes
+    (maxima-native-expr copy-maxima-expr-to-notes-command maxima-commands
+                        :echo nil :documentation "Add expression to current notes")
+    (obj)
+  (list obj))
+
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
@@ -526,12 +533,10 @@ terminated by ;.")
   (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
     (maxima-client.clipboard:bind-clipboard stream (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
 
-(clim:define-command (foo-command :name "Foo" :menu t :command-table maxima-commands)
-    ()
-  (let ((ws (clim:find-pane-named clim:*application-frame* 'workbench)))
-    (multiple-value-bind (w h)
-        (clim:rectangle-size (clim:sheet-region ws))
-      (log:info "ws: ~s  size: (~s,~s)" ws w h))))
+(clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
+    ((expr maxima-native-expr :prompt "Expression"))
+  (let ((notes-panel (clim:find-pane-named clim:*application-frame* 'notes)))
+    (maxima-client.notes:insert-maxima-expr notes-panel expr)))
 
 (clim:make-command-table 'maxima-menubar-command-table
                          :errorp nil

@@ -19,9 +19,9 @@
     (setf (workbench-pane/right-panel ws) right-panel)
     (clim:sheet-adopt-child ws right-panel)
     (dolist (panel-descriptor panels)
-      (destructuring-bind (panel &key title image select-fn)
+      (destructuring-bind (panel &key title image select-fn close-fn)
           panel-descriptor
-        (add-drawer-panel ws panel :title title :image image :select-fn select-fn)))))
+        (add-drawer-panel ws panel :title title :image image :select-fn select-fn :close-fn close-fn)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; workbench-main
@@ -54,7 +54,7 @@
   (let ((width (+ *side-panel-icon-width* (* 2 *side-panel-margin*))))
     (clim:change-space-requirements panel :width width :min-width width :max-width width)))
 
-(defun add-drawer-panel (ws panel &key title image select-fn)
+(defun add-drawer-panel (ws panel &key title image select-fn close-fn)
   (let ((side-panel (workbench-pane/right-panel ws))
         (root-panel (workbench-pane/content ws))
         (p (clim:make-pane 'drawer-panel
@@ -62,7 +62,8 @@
                            :title title
                            :image image
                            :workbench ws
-                           :select-fn select-fn)))
+                           :select-fn select-fn
+                           :close-fn close-fn)))
     (setf (workbench-side-panel/panels side-panel)
           (append (workbench-side-panel/panels side-panel)
                   (list p)))
@@ -84,7 +85,10 @@
               :reader drawer-panel/workbench)
    (select-fn :initarg :select-fn
               :initform nil
-              :reader drawer-panel/select-fn)))
+              :reader drawer-panel/select-fn)
+   (close-fn  :initarg :close-fn
+              :initform nil
+              :reader drawer-panel/close-fn)))
 
 (defmethod initialize-instance :after ((obj drawer-panel) &key panel)
   (clim:sheet-adopt-child obj panel))
@@ -107,11 +111,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; display code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(clim:define-presentation-to-command-translator select-drawer-panel
-    (panel-button select-drawer-panel-command workbench-commands)
-    (obj)
-  (list (panel-button/pane obj)))
 
 (defun display-side-panel (frame pane)
   (declare (ignore frame))
@@ -148,17 +147,24 @@
       (multiple-value-bind (width height)
           (clim:rectangle-size (clim:sheet-region ws-content))
         (clim:move-sheet panel (/ width 2) 0)
-        (clim:allocate-space panel (/ width 2) height)
-        (alexandria:when-let ((fn (drawer-panel/select-fn panel)))
-          (funcall fn))))))
+        (clim:allocate-space panel (/ width 2) height)))))
 
 (defun set-drawer-panel-active (panel)
   (let ((enable (not (clim:sheet-enabled-p panel))))
     (setf (clim:sheet-enabled-p panel) enable)
-    (when enable
-      (update-side-panel-position panel))))
+    (cond (enable
+           (update-side-panel-position panel)
+           (alexandria:when-let ((fn (drawer-panel/select-fn panel)))
+             (funcall fn (first (clim:sheet-children panel)))))
+          (t
+           (alexandria:when-let ((fn (drawer-panel/close-fn panel)))
+             (funcall fn (first (clim:sheet-children panel))))))))
+
+(clim:define-presentation-to-command-translator select-drawer-panel
+    (panel-button select-drawer-panel-command workbench-commands)
+    (obj)
+  (list (panel-button/pane obj)))
 
 (clim:define-command (select-drawer-panel-command :name "Select panel" :menu t :command-table workbench-commands)
     ((panel drawer-panel :prompt "Panel"))
-  (log:info "Displaying sheet: ~s" panel)
   (set-drawer-panel-active panel))

@@ -78,5 +78,7 @@
            #:workbench-commands))
 
 (defpackage :maxima-client.notes
-  (:use :cl)
-  (:export #:notes-pane))
+  (:use :cl :maxima-client.common)
+  (:export #:notes-pane
+           #:focus-notes-pane
+           #:insert-maxima-expr))
