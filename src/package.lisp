@@ -48,7 +48,8 @@
            #:with-interactive-form
            #:button
            #:ok-button
-           #:cancel-button))
+           #:cancel-button
+           #:load-image))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
@@ -75,3 +76,7 @@
   (:use :cl)
   (:export #:make-workbench
            #:workbench-commands))
+
+(defpackage :maxima-client.notes
+  (:use :cl)
+  (:export #:notes-pane))

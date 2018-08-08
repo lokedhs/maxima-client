@@ -310,3 +310,8 @@
                                  (lambda (,rec)
                                    (let ((,record-name ,rec))
                                      ,@body)))))
+
+(defun load-image (name)
+  (let* ((img-dir (merge-pathnames #p"images/" (asdf:system-source-directory :maxima-client)))
+         (img-filename (merge-pathnames name img-dir)))
+    (clim:make-pattern-from-bitmap-file img-filename)))

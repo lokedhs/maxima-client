@@ -19,9 +19,9 @@
     (setf (workbench-pane/right-panel ws) right-panel)
     (clim:sheet-adopt-child ws right-panel)
     (dolist (panel-descriptor panels)
-      (destructuring-bind (panel &key select-fn)
+      (destructuring-bind (panel &key title image select-fn)
           panel-descriptor
-        (add-drawer-panel ws panel :select-fn select-fn)))))
+        (add-drawer-panel ws panel :title title :image image :select-fn select-fn)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; workbench-main
@@ -54,13 +54,13 @@
   (let ((width (+ *side-panel-icon-width* (* 2 *side-panel-margin*))))
     (clim:change-space-requirements panel :width width :min-width width :max-width width)))
 
-(defun add-drawer-panel (ws panel &key select-fn)
+(defun add-drawer-panel (ws panel &key title image select-fn)
   (let ((side-panel (workbench-pane/right-panel ws))
         (root-panel (workbench-pane/content ws))
         (p (clim:make-pane 'drawer-panel
                            :panel panel
-                           :image (clim:make-pattern-from-bitmap-file (merge-pathnames #p"images/notepad-32.png"
-                                                                                       (asdf:system-source-directory :maxima-client)))
+                           :title title
+                           :image image
                            :workbench ws
                            :select-fn select-fn)))
     (setf (workbench-side-panel/panels side-panel)

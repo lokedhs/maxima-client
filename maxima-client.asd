@@ -28,6 +28,7 @@
                                      (:file "reflect")
                                      (:file "maxima-syntax")
                                      (:file "character-picker")
+                                     (:file "notes")
                                      (:file "cmdline")
                                      (:file "maxima-plot")
                                      (:file "plot2d")

@@ -23,6 +23,7 @@ terminated by ;.")
 (defparameter +maxima-pointer-documentation-view+ (make-instance 'maxima-pointer-documentation-view))
 
 (clim:define-application-frame maxima-main-frame ()
+
   ((info-app :initform nil
              :accessor maxima-main-frame/info-app))
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
@@ -30,16 +31,15 @@ terminated by ;.")
                                                     :default-view +listener-view+
                                                     :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
-          (notes (clim:make-pane 'drei:drei-gadget-pane))
+          (notes (clim:make-pane 'maxima-client.notes:notes-pane))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
                        (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
-                                                               :panels `((,notes :select-fn ,(lambda ()
-                                                                                               (log:info "setting focus")
-                                                                                               (clim:stream-set-input-focus notes)))))
+                                                               :panels `((,notes :title "Notes"
+                                                                                 :image ,(load-image "notepad-32.png"))))
                        doc))))
 
 (defun display-cmdline-content (frame stream)
