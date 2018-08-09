@@ -424,6 +424,9 @@ terminated by ;.")
                                             :height 600)))
     (clim:run-frame-top-level frame)))
 
+(defun handle-lisp-error (condition)
+  (format t "Maxima encountered a Lisp error:~%    ~a" condition))
+
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
   (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor))
@@ -431,27 +434,36 @@ terminated by ;.")
     (setf (symbol-value c-tag) (maxima-native-expr/expr cmd))
     (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
            (eval-ret (catch 'maxima::macsyma-quit
-                       (let ((result (let ((*use-clim-retrieve* t)
-                                           (*current-stream* stream)
-                                           (*standard-output* maxima-stream)
-                                           (*standard-input* maxima-stream))
-                                       (eval-maxima-expression (maxima-native-expr/expr cmd)))))
-                         (log:debug "Result: ~s" result)
-                         (let ((content (maxima-stream-text maxima-stream)))
-                           (when content
-                             (format stream "~a" content)))
-                         (let ((d-tag (maxima::makelabel maxima::$outchar)))
-                           (setq maxima::$% result)
-                           (setf (symbol-value d-tag) result)
-                           (let ((obj (make-instance 'maxima-native-expr :expr result)))
-                             (clim:with-room-for-graphics (stream :first-quadrant nil)
-                               (clim:surrounding-output-with-border (stream :padding 10 :ink clim:+transparent-ink+)
-                                 (present-to-stream (make-instance 'labelled-expression
-                                                                   :tag d-tag
-                                                                   :expr obj)
-                                                    stream)))))))))
+                       (catch 'eval-expr-error
+                         (let ((result (let ((*use-clim-retrieve* t)
+                                             (*current-stream* stream)
+                                             (*standard-output* maxima-stream)
+                                             (*standard-input* maxima-stream))
+                                         (handler-bind ((error (lambda (condition)
+                                                                 (handle-lisp-error condition)
+                                                                 (throw 'eval-expr-error :lisp-error))))
+                                           (eval-maxima-expression (maxima-native-expr/expr cmd))))))
+                           (log:debug "Result: ~s" result)
+                           (let ((content (maxima-stream-text maxima-stream)))
+                             (when content
+                               (format stream "~a" content)))
+                           (let ((d-tag (maxima::makelabel maxima::$outchar)))
+                             (setq maxima::$% result)
+                             (setf (symbol-value d-tag) result)
+                             (let ((obj (make-instance 'maxima-native-expr :expr result)))
+                               (clim:with-room-for-graphics (stream :first-quadrant nil)
+                                 (clim:surrounding-output-with-border (stream :padding 10 :ink clim:+transparent-ink+)
+                                   (present-to-stream (make-instance 'labelled-expression
+                                                                     :tag d-tag
+                                                                     :expr obj)
+                                                      stream))))))))))
       (let ((content (maxima-stream-text maxima-stream)))
         (cond ((eq eval-ret 'maxima::maxima-error)
+               (present-to-stream (make-instance 'maxima-error
+                                                 :cmd cmd
+                                                 :content content)
+                                  stream))
+              ((eq eval-ret :lisp-error)
                (present-to-stream (make-instance 'maxima-error
                                                  :cmd cmd
                                                  :content content)
