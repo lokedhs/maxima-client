@@ -49,7 +49,8 @@
            #:button
            #:ok-button
            #:cancel-button
-           #:load-image))
+           #:load-image
+           #:find-interactor-pane))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

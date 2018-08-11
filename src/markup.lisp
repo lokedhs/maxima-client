@@ -36,8 +36,9 @@
 
 (clim:define-command (open-url :name "Open URL" :menu t :command-table text-commands)
     ((url 'text-link :prompt "URL"))
-  (let ((s (text-link/src url)))
-    (format t "Opening URL: ~a" s)
+  (let ((s (text-link/src url))
+        (stream (find-interactor-pane)))
+    (format stream "Opening URL: ~a" s)
     (bordeaux-threads:make-thread (lambda ()
                                     (uiop/run-program:run-program (list "xdg-open" s))))))
 

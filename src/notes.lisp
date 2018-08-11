@@ -2,21 +2,36 @@
 
 (clim:define-command-table notes-commands)
 
+(drei-syntax:define-syntax-command-table notes-table
+  :errorp nil)
+
+(drei-syntax:define-syntax notes-syntax (drei-fundamental-syntax:fundamental-syntax)
+  ()
+  (:name "Maxima notes")
+  (:pathname-types "org")
+  (:command-table notes-table))
+
 (defclass notes-pane (clim:vrack-pane)
   ((edit-pane :initarg :edit-pane
               :reader notes-pane/edit-pane)))
 
+(defmacro with-notes-active ((notes) &body body)
+  `(drei:with-bound-drei-special-variables ((notes-pane/edit-pane ,notes))
+     ,@body))
+
 (defmethod initialize-instance :after ((obj notes-pane) &key)
   (let ((drei (clim:make-pane 'drei:drei-gadget-pane)))
     (setf (slot-value obj 'edit-pane) drei)
-    (clim:sheet-adopt-child obj drei)))
+    (clim:sheet-adopt-child obj drei)
+    (drei:with-bound-drei-special-variables (drei)
+      (drei-core:set-syntax (drei:current-view) "Maxima notes"))))
 
 (defun focus-notes-pane (pane)
   (let ((drei (notes-pane/edit-pane pane)))
     (setf (clim:port-keyboard-input-focus (clim:port drei)) drei)))
 
 (defun insert-maxima-expr (notes expr)
-  (drei:with-bound-drei-special-variables ((notes-pane/edit-pane notes))
+  (with-notes-active (notes)
     (let ((point (drei:point)))
       (drei-buffer:insert-object point expr))))
 

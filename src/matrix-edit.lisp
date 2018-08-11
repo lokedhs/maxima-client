@@ -157,6 +157,6 @@
 
 (clim:define-command (edit-matrix-command :name "Edit matrix" :menu t :command-table maxima-commands)
     ((varname maxima-native-symbol :prompt "Variable"))
-  (let ((stream *standard-output*)
+  (let ((stream (find-interactor-pane))
         (sheet (make-instance 'matrix-sheet :matrix-content (symbol-value varname))))
     (sheet-edit stream sheet)))

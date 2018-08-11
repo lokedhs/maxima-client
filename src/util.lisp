@@ -315,3 +315,6 @@
   (let* ((img-dir (merge-pathnames #p"images/" (asdf:system-source-directory :maxima-client)))
          (img-filename (merge-pathnames name img-dir)))
     (clim:make-pattern-from-bitmap-file img-filename)))
+
+(defun find-interactor-pane ()
+  (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor))

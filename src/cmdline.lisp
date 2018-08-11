@@ -373,9 +373,7 @@ terminated by ;.")
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (multiple-value-bind (object type)
-      (let ((clim:*command-dispatchers* '(#\:))
-            (clim:*command-unparser* (lambda (command-table stream command)
-                                       (log:info "unparsing ~s (~s ~s)" command command-table stream))))
+      (let ((clim:*command-dispatchers* '(#\:)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
           (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
                                                      :default nil :default-type 'maxima-empty-input
@@ -429,7 +427,7 @@ terminated by ;.")
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
-  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor))
+  (let ((stream (find-interactor-pane))
         (c-tag (maxima::makelabel maxima::$inchar)))
     (setf (symbol-value c-tag) (maxima-native-expr/expr cmd))
     (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
@@ -478,7 +476,7 @@ terminated by ;.")
 
 (clim:define-command (maxima-eval-lisp-expression :name "Lisp" :menu "Eval Lisp form" :command-table maxima-commands)
     ((form maxima-lisp-package-form :prompt "Form"))
-  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor))
+  (let ((stream (find-interactor-pane))
         (result (with-maxima-package
                   (maxima::eval form))))
     (format t "~&")
@@ -537,13 +535,11 @@ terminated by ;.")
 
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
-    (maxima-client.clipboard:bind-clipboard stream (maxima-native-expr/src expr))))
+  (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-native-expr/src expr)))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (let ((stream (clim:find-pane-named clim:*application-frame* 'maxima-interactor)))
-    (maxima-client.clipboard:bind-clipboard stream (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
+  (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-expr-to-latex (maxima-native-expr/expr expr))))
 
 (clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
     ((expr maxima-native-expr :prompt "Expression"))
