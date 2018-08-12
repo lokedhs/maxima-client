@@ -32,6 +32,7 @@ terminated by ;.")
                                                     :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
           (notes (clim:make-pane 'maxima-client.notes:notes-pane))
+          (info-panel (maxima-client.doc:make-info-panel))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
@@ -39,8 +40,10 @@ terminated by ;.")
   (:layouts (default (clim:vertically ()
                        (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
                                                                :panels `((,notes :title "Notes"
-                                                                                 :image ,(load-image "notepad-32.png")
-                                                                                 :select-fn ,#'maxima-client.notes:focus-notes-pane)))
+                                                                                 :image ,(load-image "outline-notes-32.png")
+                                                                                 :select-fn ,#'maxima-client.notes:focus-notes-pane)
+                                                                         (,info-panel :title "Info"
+                                                                                      :image ,(load-image "outline-info-32.png"))))
                        doc))))
 
 (defun display-cmdline-content (frame stream)
@@ -489,16 +492,10 @@ terminated by ;.")
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
     ((name (or plain-text maxima-native-symbol) :prompt "Name"))
   (log:info "type: ~s" name)
-  (let* ((string (etypecase name
-                   (string name)
-                   (symbol (format-sym-name name))))
-         (frame clim:*application-frame*)
-         (info (or (maxima-main-frame/info-app frame)
-                   (let ((f (open-info-frame)))
-                     (setf (maxima-main-frame/info-app frame) f)
-                     f))))
-    (with-call-in-event-handler info
-      (add-info-page info string))))
+  (let ((string (etypecase name
+                  (string name)
+                  (symbol (format-sym-name name)))))
+    (maxima-client.doc:add-info-page string)))
 
 (clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
     ((size integer :prompt "points"))

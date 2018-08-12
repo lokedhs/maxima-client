@@ -1,67 +1,47 @@
-(in-package :maxima-client)
+(in-package :maxima-client.doc)
 
-(clim:define-application-frame maxima-info-frame ()
-  ((nodes                 :initform (make-hash-table :test 'equal)
-                          :accessor maxima-info-frame/nodes)
-   (frame-ready           :initform nil
-                          :accessor maxima-info-frame/frame-ready)
-   (frame-ready-lock      :initform (bordeaux-threads:make-lock)
-                          :reader maxima-info-frame/frame-ready-lock)
-   (frame-ready-condition :initform (bordeaux-threads:make-condition-variable)
-                          :reader maxima-info-frame/frame-ready-condition))
-  (:panes (entry-list (clim:make-pane 'clim:list-pane
-                                      :items nil
-                                      :value-changed-callback 'selected-page-changed))
-          (text-content :application
-                        :display-function 'redraw-info-frame-content))
-  (:layouts (default (clim:horizontally ()
-                       (2/10 (clim:scrolling () entry-list))
-                       (8/10 text-content)))))
+(defclass info-content-panel (clim:application-pane)
+  ((text-content :initform ""
+                 :accessor info-content-panel/content)))
 
-(defun redraw-info-frame-content (frame stream)
-  (declare (ignore stream))
-  ;; By the time the redraw function is called, the info frame should
-  ;; be ready to accept requests
-  (bordeaux-threads:with-lock-held ((maxima-info-frame/frame-ready-lock frame))
-    (unless (maxima-info-frame/frame-ready frame)
-      (setf (maxima-info-frame/frame-ready frame) t)
-      (bordeaux-threads:condition-notify (maxima-info-frame/frame-ready-condition frame)))))
+(defun make-info-panel ()
+  (clim:vertically ()
+    (clim:horizontally ()
+      (clim:make-pane 'clim:label-pane :label "Keyword:")
+      (clim:make-pane 'clim:text-field-pane :name 'search-field
+                                            :activate-callback 'search-updated))
+    (2/10 (clim:scrolling ()
+            (clim:make-pane 'clim:list-pane
+                            :items nil
+                            :name 'entry-list
+                            :name-key (lambda (v) (first (first (second v))))
+                            :value-changed-callback 'entry-list-selection)))
+    (8/10 (clim:scrolling ()
+            (clim:make-pane 'info-content-panel :name 'text-content :display-function 'redraw-info-frame-content)))))
 
-(defun open-info-frame ()
-  (let ((frame (clim:make-application-frame 'maxima-info-frame
-                                            :width 800
-                                            :height 800)))
-    (bordeaux-threads:make-thread (lambda () (clim:run-frame-top-level frame)))
-    ;; Wait until the frame is ready to accept requests before returning
-    (bordeaux-threads:with-lock-held ((maxima-info-frame/frame-ready-lock frame))
-      (loop
-        until (maxima-info-frame/frame-ready frame)
-        do (bordeaux-threads:condition-wait (maxima-info-frame/frame-ready-condition frame)
-                                            (maxima-info-frame/frame-ready-lock frame))))
-    frame))
+(defun redraw-info-frame-content (frame info-content-panel)
+  (declare (ignore frame))
+  (clim:with-text-style (info-content-panel (clim:make-text-style :fix :roman nil))
+    (format info-content-panel "~a" (info-content-panel/content info-content-panel))))
 
-(defun selected-page-changed (pane value)
+(defun add-info-page (name)
+  (log:info "adding info page for symbol: ~s" name))
+
+(defun search-updated (pane)
+  (let* ((entry-list (clim:find-pane-named (clim:pane-frame pane) 'entry-list))
+         (value (clim:gadget-value pane))
+         (matches (loop
+                    for (path entries) in (cl-info::inexact-topic-match value)
+                    append (loop
+                             for v in entries
+                             collect (list path (list v))))))
+    (setf (climb::list-pane-items entry-list :invoke-callback nil)
+          matches)))
+
+(defun entry-list-selection (pane value)
   (let* ((frame (clim:pane-frame pane))
-         (text-content (clim:find-pane-named frame 'text-content)))
-    (display-info-page text-content value)))
-
-(defun add-info-page (frame name)
-  (let ((name-list (clim:find-pane-named frame 'entry-list))
-        (content (with-output-to-string (s)
-                   (let ((*standard-output* s))
-                     (unless (cl-info::info-exact name)
-                       (return-from add-info-page nil))))))
-    (let ((prev-content (gethash name (maxima-info-frame/nodes frame))))
-      (setf (gethash name (maxima-info-frame/nodes frame)) content)
-      (unless prev-content
-        (push name (clime:list-pane-items name-list)))
-      (setf (clim:gadget-value name-list) name)
-      (display-info-page (clim:find-pane-named frame 'text-content) name))))
-
-(defun display-info-page (content-pane value)
-  (let ((frame (clim:pane-frame content-pane)))
-    (clim:window-clear content-pane)
-    (let ((content (gethash value (maxima-info-frame/nodes frame))))
-      (when content
-        (clim:with-text-style (content-pane (clim:make-text-style :fix :roman 12))
-          (format content-pane "~a" content))))))
+         (info-content-panel (clim:find-pane-named frame 'text-content))
+         (result (with-output-to-string (*standard-output*)
+                   (cl-info::display-items (list value)))))
+    (setf (info-content-panel/content info-content-panel) result)
+    (clim:redisplay-frame-pane frame info-content-panel)))

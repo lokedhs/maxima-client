@@ -83,3 +83,9 @@
   (:export #:notes-pane
            #:focus-notes-pane
            #:insert-maxima-expr))
+
+(defpackage :maxima-client.doc
+  (:use :cl :maxima-client.common)
+  (:export #:add-info-page
+           #:info-pane
+           #:make-info-panel))
