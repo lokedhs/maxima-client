@@ -24,24 +24,33 @@
   (clim:with-text-style (info-content-panel (clim:make-text-style :fix :roman nil))
     (format info-content-panel "~a" (info-content-panel/content info-content-panel))))
 
+(defun rearrange-matches-list (matches)
+  (loop
+    for (path entries) in matches
+    append (loop
+             for v in entries
+             collect (list path (list v)))))
+
 (defun add-info-page (name)
-  (log:info "adding info page for symbol: ~s" name))
+  (let ((matches (rearrange-matches-list (cl-info::exact-topic-match name))))
+    (when matches
+      (if (alexandria:sequence-of-length-p matches 1)
+          (update-content-panel clim:*application-frame* (car matches))
+          (error "More than one result")))))
 
 (defun search-updated (pane)
   (let* ((entry-list (clim:find-pane-named (clim:pane-frame pane) 'entry-list))
          (value (clim:gadget-value pane))
-         (matches (loop
-                    for (path entries) in (cl-info::inexact-topic-match value)
-                    append (loop
-                             for v in entries
-                             collect (list path (list v))))))
+         (matches (rearrange-matches-list (cl-info::inexact-topic-match value))))
     (setf (climb::list-pane-items entry-list :invoke-callback nil)
           matches)))
 
-(defun entry-list-selection (pane value)
-  (let* ((frame (clim:pane-frame pane))
-         (info-content-panel (clim:find-pane-named frame 'text-content))
-         (result (with-output-to-string (*standard-output*)
-                   (cl-info::display-items (list value)))))
+(defun update-content-panel (frame value)
+  (let ((info-content-panel (clim:find-pane-named frame 'text-content))
+        (result (with-output-to-string (*standard-output*)
+                  (cl-info::display-items (list value)))))
     (setf (info-content-panel/content info-content-panel) result)
     (clim:redisplay-frame-pane frame info-content-panel)))
+
+(defun entry-list-selection (pane value)
+  (update-content-panel (clim:pane-frame pane) value))
