@@ -9,7 +9,8 @@
     (clim:horizontally ()
       (clim:make-pane 'clim:label-pane :label "Keyword:")
       (clim:make-pane 'clim:text-field-pane :name 'search-field
-                                            :activate-callback 'search-updated))
+                                            :activate-callback 'search-updated
+                                            :value-changed-callback 'search-field-value-change))
     (2/10 (clim:scrolling ()
             (clim:make-pane 'clim:list-pane
                             :items nil
@@ -40,10 +41,15 @@
 
 (defun search-updated (pane)
   (let* ((entry-list (clim:find-pane-named (clim:pane-frame pane) 'entry-list))
-         (value (clim:gadget-value pane))
-         (matches (rearrange-matches-list (cl-info::inexact-topic-match value))))
-    (setf (climb::list-pane-items entry-list :invoke-callback nil)
-          matches)))
+         (value (clim:gadget-value pane)))
+    (when (plusp (length value))
+      (let ((matches (rearrange-matches-list (cl-info::inexact-topic-match value))))
+        (setf (climb::list-pane-items entry-list :invoke-callback nil)
+              matches)))))
+
+(defun search-field-value-change (pane value)
+  (declare (ignore value))
+  (search-updated pane))
 
 (defun update-content-panel (frame value)
   (let ((info-content-panel (clim:find-pane-named frame 'text-content))
