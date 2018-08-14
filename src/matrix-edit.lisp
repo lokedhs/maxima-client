@@ -25,7 +25,7 @@
   (let ((curr-row 0)
         (curr-col 0)
         (margin-width 5))
-    (with-interactive-form (stream rec)
+    (with-interactive-form (stream :record-name rec :buttons-p t)
         (clim:formatting-table (stream)
           (clim:formatting-row (stream)
             (clim:formatting-cell (stream)
@@ -33,14 +33,22 @@
             (loop
               for i from 0 below (sheet-rows sheet)
               do (clim:formatting-cell (stream :align-x :center :align-y :center)
-                   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold nil))
-                     (sheet-render-col-title sheet i stream)))))
+                   (clim:updating-output (stream :unique-id (list 'col-header i)
+                                                 :id-test #'equal
+                                                 :cache-value i
+                                                 :cache-test #'equal)
+                     (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold nil))
+                       (sheet-render-col-title sheet i stream))))))
           (loop
             for row from 0 below (sheet-rows sheet)
             do (clim:formatting-row (stream)
                  (clim:formatting-cell (stream :align-x :center :align-y :center)
-                   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold nil))
-                     (sheet-render-row-title sheet row stream)))
+                   (clim:updating-output (stream :unique-id (list 'row-header row)
+                                                 :id-test #'equal
+                                                 :cache-value row
+                                                 :cache-test #'equal)
+                     (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold nil))
+                       (sheet-render-row-title sheet row stream))))
                  (loop
                    for col from 0 below (sheet-cols sheet)
                    do (let ((selected (and (= curr-row row) (= curr-col col))))
