@@ -162,6 +162,7 @@
     (maxima::$minf (%render-negation stream (lambda (stream) (render-inf stream))))
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
+    (maxima::%gamma (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_GAMMA))
     (t (labels ((render ()
                   (let ((formatted (format-sym-name sym)))
                     (if (alexandria:starts-with-subseq "%" formatted)
