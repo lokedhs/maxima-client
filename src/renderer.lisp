@@ -77,6 +77,10 @@
          (*rop* 'maxima::mparen))
      ,@body))
 
+(defun expr-as-fn (expr)
+  (lambda (stream)
+    (render-maxima-expression stream expr)))
+
 (defmacro iterate-exprs ((sym exprs op &key first-sym) &body body)
   (alexandria:with-gensyms (run-body p v first)
     (alexandria:once-only (exprs op)
@@ -369,7 +373,7 @@
                  (clim:draw-text* stream string x y))))
       (values rec baseline (- height baseline) width))))
 
-(defun render-intsum-inner (stream f var from to symbol sym2 font-fn)
+(defun render-intsum-inner (stream f var from-fn to symbol sym2 font-fn)
   (let ((exp (clim:with-output-to-output-record (stream)
                (let ((*lop* 'maxima::%sum)
                      (*rop* 'maxima::mparen))
@@ -389,7 +393,7 @@
             (move-rec sigma 0 (- centre))
             (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
             ;;
-            (when from
+            (when from-fn
               (let ((bottom (clim:with-output-to-output-record (stream)
                               (with-font-size-change (stream 0.8)
                                 (with-aligned-rendering (stream)
@@ -397,7 +401,7 @@
                                     (when var
                                       (render-aligned () (render-maxima-expression stream var))
                                       (render-aligned () (render-formatted stream "=")))
-                                    (render-aligned () (render-maxima-expression stream from))))))))
+                                    (render-aligned () (funcall from-fn stream))))))))
                 (dimension-bind (bottom :width bottom-width)
                   (set-rec-position bottom
                                     (+ sigma-x (/ (- sigma-width bottom-width) 2))
@@ -430,12 +434,12 @@
                   (move-rec variable (+ x (/ (char-width stream) 2)) 0)
                   (clim:stream-add-output-record stream variable))))))))))
 
-(defun render-intsum (stream f var from to symbol sym2 font-fn)
+(defun render-intsum (stream f var from-fn to symbol sym2 font-fn)
   (if (> (maxima::lbp *rop*) (maxima::rbp 'maxima::mparen))
       (let ((rec (clim:with-output-to-output-record (stream)
-                   (render-intsum-inner stream f var from to symbol sym2 font-fn))))
+                   (render-intsum-inner stream f var from-fn to symbol sym2 font-fn))))
         (wrap-with-parens stream rec))
-      (render-intsum-inner stream f var from to symbol sym2 font-fn)))
+      (render-intsum-inner stream f var from-fn to symbol sym2 font-fn)))
 
 (defun find-integrate-font (size)
   (log:info "Finding integrate font: ~s" size)
@@ -446,13 +450,15 @@
            (list *font-integrate-size2* (* adjusted-size 0.4))))))
 
 (defun render-sum (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
+  (render-intsum stream f var (expr-as-fn from) to
+                 #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
 
 (defun render-integrate (stream f var from to)
-  (render-intsum stream f nil from to #\INTEGRAL var #'find-integrate-font))
+  (render-intsum stream f nil (expr-as-fn from) to #\INTEGRAL var #'find-integrate-font))
 
 (defun render-product (stream f var from to)
-  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
+  (render-intsum stream f var (expr-as-fn from) to
+                 #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
 
 (defun render-mlist-one-line (stream rec-list)
   "Render an mlist on a single line."
@@ -792,6 +798,17 @@ Each element should be an output record."
   (%render-sqrt stream (lambda (stream)
                          (render-maxima-expression stream expr))))
 
+(defun render-lsum (stream f var list)
+  (render-intsum stream f nil
+                 (lambda (stream)
+                   (with-aligned-rendering (stream)
+                     (render-aligned () (render-maxima-expression stream var))
+                     (aligned-spacing 0.2)
+                     (render-aligned-string "in")
+                     (aligned-spacing 0.2)
+                     (render-aligned () (render-maxima-expression stream list))))
+                 nil #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -822,6 +839,7 @@ Each element should be an output record."
                (maxima::|$`| (render-units stream (second fixed) (third fixed)))
                (maxima::mnot (render-mnot stream (second fixed)))
                (maxima::mfactorial (render-factorial stream (second fixed)))
+               (maxima::%lsum (render-lsum stream (second fixed) (third fixed) (fourth fixed)))
                ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
