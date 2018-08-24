@@ -343,7 +343,7 @@
                      :prefix-renderer (lambda (stream)
                                         (with-wrapped-optional-parens (stream paren-p)
                                           ;; An array reference can be a function call. Here we simply call
-                                          ;; the normal rendering function, but perhaps the name not be in
+                                          ;; the normal rendering function, but with the name not rendered in italics
                                           ;; italics. If so, a special function is needed to render this properly.
                                           ;; Also, the function will be wrapped in parens, which is different
                                           ;; from what normal Maxima does. We'll just accept this since the
