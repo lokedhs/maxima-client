@@ -463,7 +463,9 @@
       for rec in rec-list
       for first = t then nil
       unless first
-        do (render-aligned-string ", ")
+        do (progn
+             (render-aligned-string ",")
+             (aligned-spacing 0.4))
       do (render-aligned () (clim:stream-add-output-record stream rec)))
     (aligned-spacing 0.5)
     (render-aligned () (render-formatted stream "]"))))
