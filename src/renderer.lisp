@@ -737,19 +737,22 @@ Each element should be an output record."
     (draw *font-paren-size4* 240 0.3)))
 
 (defun render-paren-test (stream)
-  (loop
-    with y = 20
-    for i from 1 to 8
-    do (let ((rec (clim:with-output-to-output-record (stream)
-                    (with-wrapped-parens (stream :left-paren "[" :right-paren "]")
-                      (loop
-                        with h = (char-height stream)
-                        for n from 0 below i
-                        do (clim:draw-text* stream "a" 0 (* n h)))))))
-         (move-rec rec 0 y)
-         (clim:stream-add-output-record stream rec)
-         (dimension-bind (rec :height h)
-           (incf y h)))))
+  (flet ((render-iterate (x left-paren right-paren)
+           (loop
+             with y = 20
+             for i from 1 to 8
+             do (let ((rec (clim:with-output-to-output-record (stream)
+                             (with-wrapped-parens (stream :left-paren left-paren :right-paren right-paren)
+                               (loop
+                                 with h = (char-height stream)
+                                 for n from 0 below i
+                                 do (clim:draw-text* stream "a" 0 (* n h)))))))
+                  (move-rec rec x y)
+                  (clim:stream-add-output-record stream rec)
+                  (dimension-bind (rec :height h)
+                    (incf y h))))))
+    (render-iterate 0 "(" ")")
+    (render-iterate 40 "[" "]")))
 
 (defun render-sqrt-test (stream)
   (loop
