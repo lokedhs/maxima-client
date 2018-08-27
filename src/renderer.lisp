@@ -450,14 +450,14 @@
            (list *font-integrate-size2* (* adjusted-size 0.4))))))
 
 (defun render-sum (stream f var from to)
-  (render-intsum stream f var (expr-as-fn from) to
+  (render-intsum stream f var (if from (expr-as-fn from) nil) to
                  #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
 
 (defun render-integrate (stream f var from to)
-  (render-intsum stream f nil (expr-as-fn from) to #\INTEGRAL var #'find-integrate-font))
+  (render-intsum stream f nil (if from (expr-as-fn from) nil) to #\INTEGRAL var #'find-integrate-font))
 
 (defun render-product (stream f var from to)
-  (render-intsum stream f var (expr-as-fn from) to
+  (render-intsum stream f var (if from (expr-as-fn from) nil) to
                  #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
 
 (defun render-mlist-one-line (stream rec-list)
