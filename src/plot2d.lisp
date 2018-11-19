@@ -362,7 +362,7 @@ With ybounds:
             (min-y (if y-range (first y-range) min-y-dimension))
             (max-x (if x-range (second x-range) max-x-dimension))
             (min-x (if x-range (first x-range) min-x-dimension)))
-        (values max-y min-y max-x min-x)))))
+        (values (if (= max-y min-y) (1+ max-y) max-y) min-y max-x min-x)))))
 
 (defun display-standard-plot (stream obj)
   (let* ((w 500)

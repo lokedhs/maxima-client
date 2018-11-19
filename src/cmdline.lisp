@@ -425,6 +425,8 @@ terminated by ;.")
                                             :height 600)))
     (clim:run-frame-top-level frame)))
 
+(defvar *catch-errors* t)
+
 (defun handle-lisp-error (condition)
   (format t "Maxima encountered a Lisp error:~%    ~a" condition))
 
@@ -441,8 +443,9 @@ terminated by ;.")
                                              (*standard-output* maxima-stream)
                                              (*standard-input* maxima-stream))
                                          (handler-bind ((error (lambda (condition)
-                                                                 (handle-lisp-error condition)
-                                                                 (throw 'eval-expr-error :lisp-error))))
+                                                                 (when *catch-errors*
+                                                                   (handle-lisp-error condition)
+                                                                   (throw 'eval-expr-error :lisp-error)))))
                                            (eval-maxima-expression (maxima-native-expr/expr cmd))))))
                            (log:debug "Result: ~s" result)
                            (let ((content (maxima-stream-text maxima-stream)))
