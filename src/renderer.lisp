@@ -281,8 +281,9 @@
 (defun wrap-with-parens (stream output-record
                          &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
   (dimension-bind (output-record :x x :y y :width width :height height)
-    (destructuring-bind (paren-font paren-size)
+    (destructuring-bind (paren-font paren-size left-paren-x-offset left-paren-y-offset)
         (find-paren-font stream height)
+      (declare (ignore left-paren-y-offset))
       (multiple-value-bind (left-paren left-paren-ascent left-paren-descent)
           (with-font (stream paren-font paren-size)
             (render-and-measure-string stream left-paren))
@@ -297,10 +298,10 @@
               (move-rec left-paren x p-offset)
               (clim:stream-add-output-record stream left-paren)
               ;;
-              (move-rec output-record (+ left-paren-width left-spacing) 0)
+              (move-rec output-record (+ left-paren-width left-paren-x-offset left-spacing) 0)
               (clim:stream-add-output-record stream output-record)
               ;;
-              (move-rec right-paren (+ x left-paren-width width left-spacing right-spacing) p-offset)
+              (move-rec right-paren (+ x left-paren-width left-paren-x-offset width left-spacing right-spacing) p-offset)
               (clim:stream-add-output-record stream right-paren))))))))
 
 (defmacro with-wrapped-parens ((stream &key (left-paren "(") (right-paren ")")) &body body)
@@ -714,15 +715,15 @@ Each element should be an output record."
 (defun %find-paren-font (stream size)
   (let ((height (char-height stream)))
     (cond ((<= size (* height 2))
-           (list *font-roman* size))
+           (list *font-roman* (* size 0.8) (* (char-width stream) 0.2) 0))
           ((< size (* height 3))
-           (list *font-integrate-size1* (* size 0.7)))
+           (list *font-integrate-size1* (* size 0.7) (* (char-width stream) 0.2) 0))
           ((< size (* height 4))
-           (list *font-integrate-size2* (* size 0.45)))
+           (list *font-integrate-size2* (* size 0.45) (* (char-width stream) 0.3) 0))
           ((< size (* height 5.6))
-           (list *font-paren-size3* (* size 0.4)))
+           (list *font-paren-size3* (* size 0.4) (* (char-width stream) 0.4) 0))
           (t
-           (list *font-paren-size4* (* size 0.3))))))
+           (list *font-paren-size4* (* size 0.35) (* (char-width stream) 0.5) 0)))))
 
 (defun find-paren-font (stream size)
   (let ((result (%find-paren-font stream size)))
@@ -760,7 +761,7 @@ Each element should be an output record."
                   (dimension-bind (rec :height h)
                     (incf y h))))))
     (render-iterate 0 "(" ")")
-    (render-iterate 40 "[" "]")))
+    (render-iterate 80 "[" "]")))
 
 (defun render-sqrt-test (stream)
   (loop
@@ -783,8 +784,9 @@ Each element should be an output record."
                  (funcall fn stream)))))
     (dimension-bind (exp :y exp-y :width exp-width :height exp-height)
       (multiple-value-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent sqrt-sym-width)
-          (destructuring-bind (font size)
+          (destructuring-bind (font size x-offset y-offset)
               (find-paren-font stream exp-height)
+            (declare (ignore x-offset y-offset))
             (with-font (stream font size)
               (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 0)))
         (declare (ignore sqrt-sym-descent))
