@@ -50,7 +50,9 @@
            #:ok-button
            #:cancel-button
            #:load-image
-           #:find-interactor-pane))
+           #:find-interactor-pane
+           #:*font-directory*
+           #:*image-directory*))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

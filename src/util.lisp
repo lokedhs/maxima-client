@@ -4,6 +4,9 @@
                                    (setf (readtable-case readtable) :invert)
                                    readtable))
 
+(defvar *font-directory* nil)
+(defvar *image-directory* nil)
+
 (defmacro print-unreadable-safely ((&rest slots) object stream &body body)
   "A version of PRINT-UNREADABLE-OBJECT and WITH-SLOTS that is safe to use with unbound slots"
   (let ((object-copy (gensym "OBJECT"))
@@ -316,7 +319,8 @@
                                        ,@body))))))
 
 (defun load-image (name)
-  (let* ((img-dir (merge-pathnames #p"images/" (asdf:system-source-directory :maxima-client)))
+  (let* ((img-dir (or *image-directory*
+                      (merge-pathnames #p"images/" (asdf:system-source-directory :maxima-client))))
          (img-filename (merge-pathnames name img-dir)))
     (clim:make-pattern-from-bitmap-file img-filename)))
 

@@ -412,7 +412,8 @@ terminated by ;.")
   (format stream "~a " (maxima::main-prompt)))
 
 (defun maxima-client ()
-  (let ((fonts-location (merge-pathnames #p"fonts/tex/" (asdf:component-pathname (asdf:find-system :maxima-client)))))
+  (let ((fonts-location (or *font-directory*
+                            (merge-pathnames #p"fonts/tex/" (asdf:component-pathname (asdf:find-system :maxima-client))))))
     (mcclim-fontconfig:app-font-add-dir fonts-location))
   (with-maxima-package
     (maxima::initialize-runtime-globals))
