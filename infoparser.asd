@@ -7,6 +7,7 @@
                :cl-ppcre
                :collectors
                :string-case
+               :split-sequence
                :maxima-client)
   :components ((:module infoparser
                         :serial t

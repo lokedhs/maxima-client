@@ -94,6 +94,7 @@
     (case (car content)
       (:heading (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
       (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
+      (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
       (:code (clim:with-text-family (stream :fix) (display (cdr content))))
       (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
       (:key (render-key-command stream (cdr content)))
