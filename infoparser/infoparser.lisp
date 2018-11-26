@@ -72,6 +72,7 @@
 (defun parse-paragraph (s)
   (cons :paragraph
         (markup-from-regexp "@([a-z]+){([^}]+)}" s
+        (markup-from-regexp "@(code|var|mref|emph|strong){([^}]+)}" s
                             (lambda (reg-starts reg-ends)
                               (let ((cmd (subseq s (aref reg-starts 0) (aref reg-ends 0)))
                                     (content (subseq s (aref reg-starts 1) (aref reg-ends 1))))
@@ -90,7 +91,7 @@
                                         (t (error "Unknown cmd: ~s" cmd)))
                                       content)))
                             (lambda (s)
-                              (list (cl-ppcre:regex-replace-all "@dots{}" s "…"))))))
+                              (list (cl-ppcre:regex-replace-all "@dots{}" s "…")))))))
 
 (defun process-opencatbox (stream)
   (cons :catbox
