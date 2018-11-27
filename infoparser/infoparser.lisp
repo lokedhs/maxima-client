@@ -137,27 +137,22 @@
 
 (defun process-demo-code (stream)
   (let ((code (collectors:with-collector (coll)
-                (labels ((commit-cmd (s)
-                           (when (plusp (length s))
-                             (coll s))))
-                  (loop
-                    with curr = ""
-                    for s = (read-line stream)
-                    if (cl-ppcre:scan "^@c ===end===" s)
-                      do (progn
-                           (commit-cmd curr)
-                           (return))
-                    unless (zerop (length s))
-                      do (multiple-value-bind (match strings)
-                             (cl-ppcre:scan-to-strings "@c +(.*[^ ]) *$" s)
-                           (if match
-                               (progn
-                                 (commit-cmd curr)
-                                 (setq curr (aref strings 0)))
-                               ;; ELSE: Check if this is a continuation line
-                               (if (cl-ppcre:scan "^[^@]" s)
-                                   (setq curr (format nil "~a ~a" curr s))
-                                   (error "Demo code block does not have the expected format: ~s" s))))))
+                (loop
+                  with curr = ""
+                  for s = (read-line stream)
+                  until (cl-ppcre:scan "^@c ===end===" s)
+                  unless (zerop (length s))
+                    do (multiple-value-bind (match strings)
+                           (cl-ppcre:scan-to-strings "@c +(.*[^ ]) *$" s)
+                         (if match
+                             (setq curr (format nil "~a ~a" curr (aref strings 0)))
+                             ;; ELSE: Check if this is a continuation line
+                             (if (cl-ppcre:scan "^[^@]" s)
+                                 (setq curr (format nil "~a ~a" curr s))
+                                 (error "Demo code block does not have the expected format: ~s" s)))
+                         (when (cl-ppcre:scan "(?:;|\\$) *$" curr)
+                           (coll curr)
+                           (setq curr ""))))
                 (coll))))
     ;; After the example code, the following example group needs to be skipped
     (loop
@@ -235,6 +230,8 @@
         (info-collector)))))
 
 (defun evaluate-one-demo-src-line (src)
+  (when (cl-ppcre:scan "^ *:" src)
+    (return-from evaluate-one-demo-src-line nil))
   (let* ((expr (string-to-maxima-expr src))
          (c-tag (maxima::makelabel maxima::$inchar))
          (out (make-string-output-stream)))
