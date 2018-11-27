@@ -8,6 +8,7 @@
                :collectors
                :string-case
                :split-sequence
+               :log4cl
                :maxima-client)
   :components ((:module infoparser
                         :serial t

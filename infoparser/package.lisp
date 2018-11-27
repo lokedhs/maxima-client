@@ -1,4 +1,4 @@
 (defpackage :infoparser
-  (:use :cl)
-  (:export
-   #:parse-file))
+  (:use :cl :maxima-client.common)
+  (:export #:parse-file
+           #:resolve-example-code))
