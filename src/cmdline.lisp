@@ -564,7 +564,7 @@ terminated by ;.")
                          :errorp nil
                          :menu '(("Discrete" :command plot2d-with-range)
                                  ("Parametric" :command plot2d-with-range)
-                                 ("Plot examle" :command plot2d-demo)))
+                                 ("Plot example" :command plot2d-demo)))
 
 (clim:make-command-table 'maxima-lisp-command-table
                          :errorp nil

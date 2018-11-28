@@ -34,4 +34,6 @@
                                      (:file "plot2d")
                                      (:file "algebra-cmd")
                                      (:file "matrix-edit")
-                                     (:file "matrix-cmd")))))
+                                     (:file "matrix-cmd"))))
+  :perform (load-op :after (o c)
+                    (load (asdf:system-relative-pathname (asdf:find-system :maxima) "../lisp-utils/defsystem.lisp"))))

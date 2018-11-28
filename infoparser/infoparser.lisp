@@ -253,11 +253,30 @@
       (cdr eval-ret))))
 
 (defun evaluate-demo-src (src)
-  (eval-maxima-expression (string-to-maxima-expr "kill(all)"))
-  (loop
-    for v in src
-    for output = (evaluate-one-demo-src-line v)
-    collect (list v output)))
+  (uiop:with-temporary-file (:stream input)
+    (with-standard-io-syntax
+      (print src input))
+    (close input)
+    (uiop:with-temporary-file (:stream output)
+      (uiop:with-temporary-file (:stream error-out)
+        (handler-case
+            (progn
+              (uiop:run-program "./maxima-parser.bin"
+                                :input (pathname input)
+                                :output (pathname output)
+                                :error-output (pathname error-out))
+              (close output)
+              (with-open-file (s (pathname output))
+                (read s)))
+          (uiop:subprocess-error (condition)
+            (close error-out)
+            (format t "Error when calling external program: ~a~%Error output:~%~a"
+                    condition
+                    (uiop:read-file-string (pathname error-out)))
+            (list :error "Error when calling external program"))
+          (error (condition)
+            (format t "Error while evaluating Maxima expression: ~a" condition)
+            (list :error "Error evaluating expression")))))))
 
 (defun resolve-example-code (info-content)
   (with-maxima-package
@@ -275,3 +294,16 @@
       for file in (directory dir)
       for content = (parse-file file)
       collect (list :file file content))))
+
+(defun resolve-example-code-external ()
+  (with-maxima-package
+    (maxima::initialize-runtime-globals))
+  (setq *debugger-hook* nil)
+  (let ((src-data (with-standard-io-syntax
+                    (read))))
+    (let ((result (loop
+                    for v in src-data
+                    collect (evaluate-one-demo-src-line v))))
+      (with-standard-io-syntax
+        (let ((*print-readably* t))
+          (print result))))))
