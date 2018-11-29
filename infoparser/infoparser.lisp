@@ -133,7 +133,7 @@
            (next (nil-or-trim (nth 1 category-names)))
            (prev (nil-or-trim (nth 2 category-names)))
            (up (nil-or-trim (nth 3 category-names))))
-      (list :node name next prev up))))
+      (list name next prev up))))
 
 (defun process-demo-code (stream)
   (let ((code (collectors:with-collector (coll)
@@ -197,41 +197,61 @@
   (alexandria:once-only (string)
     (%process-single-line-command string clauses)))
 
-(defun parse-file (file)
-  (log:trace "Parsing file: ~s" file)
+(defun parse-stream (stream parsing-node-p)
   (collectors:with-collector (info-collector)
-    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))
+    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
+          (last-node nil))
       (labels ((collect-paragraph ()
                  (when (plusp (length current-paragraph))
                    (info-collector (parse-paragraph current-paragraph))
                    (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
-        (with-open-file (stream file :direction :input :external-format :utf-8)
-          (loop
-            for s = (read-line stream nil nil)
-            while s
-            do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
-                      (process-single-line-command s
-                        (("^@c ===beg===") (info-collector (process-demo-code stream)))
-                        (("^@menu *$") (info-collector (process-menu stream)))
-                        (("^@opencatbox *$") (info-collector (process-opencatbox stream)))
-                        (("^@node +(.*)$" args) (info-collector (parse-node (aref args 0))))
-                        (("@section +(.*[^ ]) *$" name) (info-collector (list :section (aref name 0))))
-                        (("^@c ") nil)
-                        (("^@ifhtml *$") (skip-block stream "@end ifhtml"))
-                        (("^@iftex *$") (skip-block stream "@end iftex"))))
-                     ((cl-ppcre:scan "^ *$" s)
-                      (collect-paragraph))
-                     (t
-                      ;; This is normal content, so we'll collect it into the output string
-                      (when (plusp (length current-paragraph))
-                        (vector-push-extend #\Space current-paragraph))
-                      (loop for ch across s do (vector-push-extend ch current-paragraph))))))
+        (loop
+          with backtrack-string = nil
+          for s = (if backtrack-string
+                      (prog1 backtrack-string (setq backtrack-string nil))
+                      (read-line stream nil nil))
+          while s
+          do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
+                    (process-single-line-command s
+                      (("^@c ===beg===") (info-collector (process-demo-code stream)))
+                      (("^@menu *$") (info-collector (process-menu stream)))
+                      (("^@opencatbox *$") (info-collector (process-opencatbox stream)))
+                      (("^@node +(.*)$" args) (progn
+                                                (collect-paragraph)
+                                                (cond (parsing-node-p
+                                                       (setq last-node s)
+                                                       (return nil))
+                                                      (t
+                                                       (multiple-value-bind (content last-node-content)
+                                                           (parse-stream stream t)
+                                                         (setq backtrack-string last-node-content)
+                                                         (info-collector (list* :node (parse-node (aref args 0)) content)))))))
+                      (("@section +(.*[^ ]) *$" name) (info-collector (list :section (aref name 0))))
+                      (("@subsection +(.*[^ ]) *$" name) (info-collector (list :subsection (aref name 0))))
+                      (("^@c ") nil)
+                      (("^@ifhtml *$") (skip-block stream "^@end ifhtml"))
+                      (("^@iftex *$") (skip-block stream "^@end iftex"))))
+                   ((cl-ppcre:scan "^ *$" s)
+                    (collect-paragraph))
+                   (t
+                    ;; This is normal content, so we'll collect it into the output string
+                    (when (plusp (length current-paragraph))
+                      (vector-push-extend #\Space current-paragraph))
+                    (loop for ch across s do (vector-push-extend ch current-paragraph)))))
         (collect-paragraph)
-        (info-collector)))))
+        (values (info-collector) last-node)))))
+
+(defun parse-file (file)
+  (log:trace "Parsing file: ~s" file)
+  (with-open-file (stream file :direction :input :external-format :utf-8)
+    (parse-stream stream nil)))
 
 (defun evaluate-one-demo-src-line (src)
   (when (cl-ppcre:scan "^ *:" src)
     (return-from evaluate-one-demo-src-line nil))
+  (when (or (not (maxima::checklabel maxima::$inchar))
+	    (not (maxima::checklabel maxima::$outchar)))
+    (incf maxima::$linenum))
   (let* ((expr (string-to-maxima-expr src))
          (c-tag (maxima::makelabel maxima::$inchar))
          (out (make-string-output-stream)))
@@ -279,23 +299,36 @@
             (list :error "Error evaluating expression")))))))
 
 (defun resolve-example-code (info-content)
-  (with-maxima-package
-    (maxima::initialize-runtime-globals))
-  (setq *debugger-hook* nil)
-  (loop
-    for v in info-content
-    collect v
-    if (eq (car v) :demo-src)
-      collect (cons :demo-code (evaluate-demo-src (cdr v)))))
+  (labels ((parse-branch (nodes)
+             (loop
+               for v in nodes
+               if (eq (car v) :demo-src)
+                 collect `(:demo-code (:demo-source . ,(cdr v)) (:demo-result . ,(evaluate-demo-src (cdr v))))
+               else
+                 collect (if (eq (car v) :node)
+                             (list* :node (cadr v) (parse-branch (cddr v)))
+                             v))))
+    (parse-branch info-content)))
 
-(defun parse-doc-directory (info-directory)
+(defun parse-doc-directory (info-directory destination-directory)
+  "Parse all texinfo files in the given directory and output
+corresponding lisp files to the output directory."
   (let ((dir (merge-pathnames "*.texi" info-directory)))
     (loop
       for file in (directory dir)
       for content = (parse-file file)
-      collect (list :file file content))))
+      for processed = (resolve-example-code content)
+      do (with-open-file (s (make-pathname :name (pathname-name file)
+                                           :type "lisp"
+                                           :defaults destination-directory)
+                            :direction :output
+                            :if-exists :supersede)
+           (with-standard-io-syntax
+             (let ((*print-readably* t))
+               (print processed s)))))))
 
 (defun resolve-example-code-external ()
+  "This function is called from the standalone maxima expression evaluator."
   (with-maxima-package
     (maxima::initialize-runtime-globals))
   (setq *debugger-hook* nil)
@@ -307,3 +340,9 @@
       (with-standard-io-syntax
         (let ((*print-readably* t))
           (print result))))))
+
+(defun generate-doc-directory (destination-directory)
+  "Generate lisp files for all the texinfo files in the maxima distribution."
+  (ensure-directories-exist destination-directory)
+  (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
+                       destination-directory))
