@@ -11,10 +11,6 @@
 
 (defun display-text-content (frame panel)
   (declare (ignore frame))
-  (log:info "typep = ~s/~s, type = ~s"
-            (typep panel 'info-content-panel)
-            (typep panel 'clim:mirrored-sheet-mixin)
-            (type-of panel))
   (let ((content (info-content-panel/content panel)))
     (when content
       (maxima-client.markup:display-markup panel (cddr content)))))
