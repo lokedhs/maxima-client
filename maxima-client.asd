@@ -25,6 +25,7 @@
                                      (:file "output")
                                      (:file "queries")
                                      (:file "info")
+                                     (:file "info-new")
                                      (:file "reflect")
                                      (:file "maxima-syntax")
                                      (:file "character-picker")

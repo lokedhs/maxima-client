@@ -341,8 +341,9 @@ corresponding lisp files to the output directory."
         (let ((*print-readably* t))
           (print result))))))
 
-(defun generate-doc-directory (destination-directory)
+(defun generate-doc-directory ()
   "Generate lisp files for all the texinfo files in the maxima distribution."
-  (ensure-directories-exist destination-directory)
-  (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
-                       destination-directory))
+  (let ((destination-directory (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/")))
+    (ensure-directories-exist destination-directory)
+    (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
+                         destination-directory)))

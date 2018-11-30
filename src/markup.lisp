@@ -86,21 +86,66 @@
                   (keyword (format stream "~a" (keyword->key-label key)))
                   (string (format stream "~a" key))))))))
 
+(defclass documentation-text-link ()
+  ((name :initarg :name
+         :reader documentation-text-link/name)))
+
+(clim:define-presentation-method clim:present (obj (type documentation-text-link) stream (view t) &key)
+  (clim:with-drawing-options (stream :ink clim:+blue+)
+    (format stream "~a" (documentation-text-link/name obj))))
+
+(defun make-documentation-text-link (name)
+  (make-instance 'documentation-text-link :name name))
+
+(defun render-catbox (stream categories)
+  (format stream "~&")
+  (clim:surrounding-output-with-border (stream :ink clim:+black+)
+    (loop
+      for name in categories
+      for first = t then nil
+      unless first
+        do (format stream " ")
+      do (maxima-client::present-to-stream (make-documentation-text-link name) stream))))
+
+(defun render-example (stream code results)
+  (format stream "~&~%")
+  (loop
+    for code-line in code
+    for res in results
+    for i from 1
+    do (progn
+         (format stream "~&(%i~a) ~a~%" i code-line)
+         (clim:formatting-table (stream)
+           (clim:formatting-row (stream)
+             (clim:formatting-cell (stream :align-y :center :min-width 75)
+               (format stream "(%o~a)" i))
+             (clim:formatting-cell (stream :align-y :center)
+               (maxima-client::present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
              (display-markup-list stream v)))
-   (when (null content)
-     (return-from display-possibly-tagged-list nil))
-    (case (car content)
-      (:heading (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
-      (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
-      (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
-      (:code (clim:with-text-family (stream :fix) (display (cdr content))))
-      (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
-      (:key (render-key-command stream (cdr content)))
-      ((:p :paragraph) (format stream "~&") (display (cdr content)))
-      (:newline (format stream "~%"))
-      (t (display-markup-list stream content)))))
+    (cond ((null content)
+           (return-from display-possibly-tagged-list nil))
+          ((keywordp (car content))
+           (ecase (car content)
+             (:heading (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
+             (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
+             (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
+             (:code (clim:with-text-family (stream :fix) (display (cdr content))))
+             (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
+             (:key (render-key-command stream (cdr content)))
+             ((:p :paragraph) (format stream "~&") (display (cdr content)))
+             (:newline (format stream "~%"))
+             (:section (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
+             (:subsection (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
+             (:anchor (maxima-client::present-to-stream (make-documentation-text-link (cadr content)) stream))
+             ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
+             ((:mrefdot :mref :mrefcomma :xref :fname) (display (cdr content)))
+             (:catbox (render-catbox stream (cdr content)))
+             (:demo-code (render-example stream (cdr (second content)) (cdr (third content))))))
+          ((listp content)
+           (display-markup-list stream content)))))
 
 (defun display-markup (stream content)
   (etypecase content

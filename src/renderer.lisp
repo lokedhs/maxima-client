@@ -544,12 +544,11 @@ Each element should be an output record."
     ;; probably just call RENDER-MAXIMA-EXPRESSION on it.
     (with-aligned-rendering (stream)
       (render-aligned ()
-        (render-param-list stream function-args
-                           :prefix-renderer (lambda (stream)
-                                              (unless (and (alexandria:sequence-of-length-p function-name 1)
-                                                           (symbolp (car function-name)))
-                                                (error "Unexpected content in function name: ~s" function-name))
-                                              (render-symbol stream (car function-name) :roman-font t))))
+        (if (member 'maxima::array (cdr function-name))
+            (render-array-reference stream (car function-name) function-args)
+            (render-param-list stream function-args
+                               :prefix-renderer (lambda (stream)
+                                                  (render-symbol stream (car function-name) :roman-font t)))))
       (aligned-spacing 0.5)
       (render-aligned-string symbol)
       (aligned-spacing 0.5)

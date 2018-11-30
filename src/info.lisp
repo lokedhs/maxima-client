@@ -1,8 +1,8 @@
 (in-package :maxima-client.doc)
 
-(defclass info-content-panel (clim:application-pane)
+(defclass info-content-panel-old (clim:application-pane)
   ((text-content :initform ""
-                 :accessor info-content-panel/content)))
+                 :accessor info-content-panel-old/content)))
 
 (defun make-info-panel ()
   (clim:vertically ()
@@ -18,12 +18,12 @@
                             :name-key (lambda (v) (first (first (second v))))
                             :value-changed-callback 'entry-list-selection)))
     (8/10 (clim:scrolling ()
-            (clim:make-pane 'info-content-panel :name 'info-content :display-function 'redraw-info-frame-content)))))
+            (clim:make-pane 'info-content-panel-old :name 'info-content-old :display-function 'redraw-info-frame-content)))))
 
-(defun redraw-info-frame-content (frame info-content-panel)
+(defun redraw-info-frame-content (frame info-content-panel-old)
   (declare (ignore frame))
-  (clim:with-text-style (info-content-panel (clim:make-text-style :fix :roman nil))
-    (format info-content-panel "~a" (info-content-panel/content info-content-panel))))
+  (clim:with-text-style (info-content-panel-old (clim:make-text-style :fix :roman nil))
+    (format info-content-panel-old "~a" (info-content-panel-old/content info-content-panel-old))))
 
 (defun rearrange-matches-list (matches)
   (loop
@@ -52,11 +52,11 @@
   (search-updated pane))
 
 (defun update-content-panel (frame value)
-  (let ((info-content-panel (clim:find-pane-named frame 'info-content))
+  (let ((info-content-panel-old (clim:find-pane-named frame 'info-content-old))
         (result (with-output-to-string (*standard-output*)
                   (cl-info::display-items (list value)))))
-    (setf (info-content-panel/content info-content-panel) result)
-    (clim:redisplay-frame-pane frame info-content-panel)))
+    (setf (info-content-panel-old/content info-content-panel-old) result)
+    (clim:redisplay-frame-pane frame info-content-panel-old)))
 
 (defun entry-list-selection (pane value)
   (update-content-panel (clim:pane-frame pane) value))
