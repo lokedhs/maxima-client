@@ -281,7 +281,7 @@
       (uiop:with-temporary-file (:stream error-out)
         (handler-case
             (progn
-              (uiop:run-program "./maxima-parser.bin"
+              (uiop:run-program '("./maxima-parser.bin" "--dynamic-space-size" "1024")
                                 :input (pathname input)
                                 :output (pathname output)
                                 :error-output (pathname error-out))

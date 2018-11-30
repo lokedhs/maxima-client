@@ -91,3 +91,6 @@
   (:export #:add-info-page
            #:info-pane
            #:make-info-panel))
+
+(defpackage :maxima-client.doc-new
+  (:use :cl :maxima-client.common))

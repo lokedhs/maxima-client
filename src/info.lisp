@@ -18,7 +18,7 @@
                             :name-key (lambda (v) (first (first (second v))))
                             :value-changed-callback 'entry-list-selection)))
     (8/10 (clim:scrolling ()
-            (clim:make-pane 'info-content-panel :name 'text-content :display-function 'redraw-info-frame-content)))))
+            (clim:make-pane 'info-content-panel :name 'info-content :display-function 'redraw-info-frame-content)))))
 
 (defun redraw-info-frame-content (frame info-content-panel)
   (declare (ignore frame))
@@ -52,7 +52,7 @@
   (search-updated pane))
 
 (defun update-content-panel (frame value)
-  (let ((info-content-panel (clim:find-pane-named frame 'text-content))
+  (let ((info-content-panel (clim:find-pane-named frame 'info-content))
         (result (with-output-to-string (*standard-output*)
                   (cl-info::display-items (list value)))))
     (setf (info-content-panel/content info-content-panel) result)

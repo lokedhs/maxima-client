@@ -98,7 +98,7 @@
       (:code (clim:with-text-family (stream :fix) (display (cdr content))))
       (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
       (:key (render-key-command stream (cdr content)))
-      (:p (format stream "~&") (display (cdr content)))
+      ((:p :paragraph) (format stream "~&") (display (cdr content)))
       (:newline (format stream "~%"))
       (t (display-markup-list stream content)))))
 
