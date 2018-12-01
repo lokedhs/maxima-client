@@ -177,6 +177,15 @@
                        `(load-time-value (cl-ppcre:create-scanner ,end-tag))
                        `(cl-ppcre:create-scanner ,end-tag)))))
 
+(defun parse-deffn (stream type name args)
+  (let ((parsed-arglist (with-input-from-string (s args)
+                          (parse-stream s nil))))
+    (unless (and (alexandria:sequence-of-length-p parsed-arglist 1)
+                 (eq (caar parsed-arglist) :paragraph))
+      (error "Unexpected arglist format: ~s" args))
+    (list* :deffn (list type name (cdar parsed-arglist))
+           (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun %process-single-line-command (string clauses)
     (alexandria:with-gensyms (match parts)
@@ -197,40 +206,42 @@
   (alexandria:once-only (string)
     (%process-single-line-command string clauses)))
 
-(defun parse-stream (stream parsing-node-p)
+(defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
-    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
-          (last-node nil))
+    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))
       (labels ((collect-paragraph ()
                  (when (plusp (length current-paragraph))
                    (info-collector (parse-paragraph current-paragraph))
                    (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
         (loop
-          with backtrack-string = nil
-          for s = (if backtrack-string
-                      (prog1 backtrack-string (setq backtrack-string nil))
-                      (read-line stream nil nil))
-          while s
+          for s = (read-line stream nil nil)
+          until (or (null s)
+                    (and end-tag
+                         (cl-ppcre:scan end-tag s)))
           do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
                     (process-single-line-command s
                       (("^@c ===beg===") (info-collector (process-demo-code stream)))
                       (("^@menu *$") (info-collector (process-menu stream)))
                       (("^@opencatbox *$") (info-collector (process-opencatbox stream)))
-                      (("^@node +(.*)$" args) (progn
-                                                (collect-paragraph)
-                                                (cond (parsing-node-p
-                                                       (setq last-node s)
-                                                       (return nil))
-                                                      (t
-                                                       (multiple-value-bind (content last-node-content)
-                                                           (parse-stream stream t)
-                                                         (setq backtrack-string last-node-content)
-                                                         (info-collector (list* :node (parse-node (aref args 0)) content)))))))
-                      (("@section +(.*[^ ]) *$" name) (info-collector (list :section (aref name 0))))
-                      (("@subsection +(.*[^ ]) *$" name) (info-collector (list :subsection (aref name 0))))
+
+                      (("^@node +(.*)$" args)
+                       (info-collector (cons :node (parse-node (aref args 0)))))
+
+                      (("@section +(.*[^ ]) *$" name)
+                       (collect-paragraph)
+                       (info-collector (list :section (aref name 0))))
+
+                      (("@subsection +(.*[^ ]) *$" name)
+                       (collect-paragraph)
+                       (info-collector (list :subsection (aref name 0))))
+
                       (("^@c ") nil)
                       (("^@ifhtml *$") (skip-block stream "^@end ifhtml"))
-                      (("^@iftex *$") (skip-block stream "^@end iftex"))))
+                      (("^@iftex *$") (skip-block stream "^@end iftex"))
+
+                      (("^@deffn +{([^}]+)} +([^ ]+) +(.*[^ ]) *$" args)
+                       (collect-paragraph)
+                       (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t
@@ -239,7 +250,7 @@
                       (vector-push-extend #\Space current-paragraph))
                     (loop for ch across s do (vector-push-extend ch current-paragraph)))))
         (collect-paragraph)
-        (values (info-collector) last-node)))))
+        (info-collector)))))
 
 (defun parse-file (file)
   (log:trace "Parsing file: ~s" file)
@@ -302,12 +313,12 @@
   (labels ((parse-branch (nodes)
              (loop
                for v in nodes
-               if (eq (car v) :demo-src)
-                 collect `(:demo-code (:demo-source . ,(cdr v)) (:demo-result . ,(evaluate-demo-src (cdr v))))
+               if (listp v)
+                 collect (if (eq (car v) :demo-src)
+                             `(:demo-code (:demo-source . ,(cdr v)) (:demo-result . ,(evaluate-demo-src (cdr v))))
+                             (parse-branch v))
                else
-                 collect (if (eq (car v) :node)
-                             (list* :node (cadr v) (parse-branch (cddr v)))
-                             v))))
+                 collect v)))
     (parse-branch info-content)))
 
 (defun parse-doc-directory (info-directory destination-directory)

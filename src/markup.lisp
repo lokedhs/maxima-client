@@ -114,13 +114,38 @@
     for res in results
     for i from 1
     do (progn
-         (format stream "~&(%i~a) ~a~%" i code-line)
+         (clim:with-text-face (stream :bold)
+           (format stream "~&(%i~a) " i))
+         (clim:with-text-family (stream :fix)
+           (format stream "~a~%" code-line))
          (clim:formatting-table (stream)
            (clim:formatting-row (stream)
              (clim:formatting-cell (stream :align-y :center :min-width 75)
                (format stream "(%o~a)" i))
              (clim:formatting-cell (stream :align-y :center)
                (maxima-client::present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+
+(defun render-deffn (stream descriptor content)
+  (destructuring-bind (type name args)
+      descriptor
+    (format stream "~&~%~a: " type)
+    (clim:with-text-face (stream :bold)
+      (format stream "~a" name))
+    (when args
+      (display-markup stream args))
+    (display-markup stream content)))
+
+(defun render-section (stream content)
+  (format stream "~&")
+  (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
+    (display-markup stream content)
+    (format stream "~&~%")))
+
+(defun render-subsection (stream content)
+  (format stream "~&")
+  (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
+    (display-markup stream content)
+    (format stream "~&~%")))
 
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
@@ -137,13 +162,17 @@
              (:key (render-key-command stream (cdr content)))
              ((:p :paragraph) (format stream "~&") (display (cdr content)))
              (:newline (format stream "~%"))
-             (:section (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
-             (:subsection (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
-             (:anchor (maxima-client::present-to-stream (make-documentation-text-link (cadr content)) stream))
+             (:section (render-section stream (cdr content)))
+             (:subsection (render-subsection stream (cdr content)))
+             (:fname (maxima-client::present-to-stream (make-documentation-text-link (cadr content)) stream))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
-             ((:mrefdot :mref :mrefcomma :xref :fname) (display (cdr content)))
+             ((:mrefdot :mref :mrefcomma :xref) (display (cdr content)))
              (:catbox (render-catbox stream (cdr content)))
-             (:demo-code (render-example stream (cdr (second content)) (cdr (third content))))))
+             (:demo-code (render-example stream (cdr (second content)) (cdr (third content))))
+             (:deffn (render-deffn stream (second content) (cddr content)))
+             (:anchor nil)
+             (:node nil)
+             (:menu nil)))
           ((listp content)
            (display-markup-list stream content)))))
 

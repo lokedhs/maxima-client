@@ -13,7 +13,7 @@
   (declare (ignore frame))
   (let ((content (info-content-panel/content panel)))
     (when content
-      (maxima-client.markup:display-markup panel (cddr content)))))
+      (maxima-client.markup:display-markup panel content))))
 
 (clim:define-application-frame documentation-frame ()
   ()
@@ -33,16 +33,6 @@
                     (read in))))
     content))
 
-(defun find-node (name content)
-  (labels ((node-name-from-node (node)
-             (let ((node-info (cadr node)))
-               (car node-info))))
-    (loop
-      for v in content
-      when (and (eq (car v) :node)
-                (equal (node-name-from-node v) name))
-        return v)))
-
 (defun display-documentation-frame ()
   (let ((frame (clim:make-application-frame 'documentation-frame
                                             :width 900
@@ -52,5 +42,4 @@
 (define-documentation-frame-command (arrays-command :name "add")
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel)
-          (find-node "Functions and Variables for Numbers" (load-doc-file "DataTypes")))))
+    (setf (info-content-panel/content info-content-panel) (load-doc-file "DataTypes"))))
