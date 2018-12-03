@@ -1,5 +1,18 @@
 (in-package :infoparser)
 
+(defun %skip-block (stream end-tag)
+  (loop
+    for s = (read-line stream)
+    until (cl-ppcre:scan end-tag s)
+    collect s))
+
+(defmacro skip-block (stream end-tag &environment env)
+  (alexandria:once-only (stream)
+    `(%skip-block ,stream
+                  ,(if (constantp end-tag env)
+                       `(load-time-value (cl-ppcre:create-scanner ,end-tag))
+                       `(cl-ppcre:create-scanner ,end-tag)))))
+
 (defun %markup-from-regexp (regexp string callback &optional plain-string-markup-fn)
   (flet ((markup-string (s)
            (if plain-string-markup-fn
@@ -135,6 +148,8 @@
            (up (nil-or-trim (nth 3 category-names))))
       (list name next prev up))))
 
+(alexandria:define-constant +newline-str+ (format nil "~c" #\Newline) :test #'equal)
+
 (defun process-demo-code (stream)
   (let ((code (collectors:with-collector (coll)
                 (loop
@@ -145,7 +160,7 @@
                     do (multiple-value-bind (match strings)
                            (cl-ppcre:scan-to-strings "@c +(.*[^ ]) *$" s)
                          (if match
-                             (setq curr (format nil "~a ~a" curr (aref strings 0)))
+                             (setq curr (format nil "~a~a~a" curr (if (zerop (length curr)) "" +newline-str+) (aref strings 0)))
                              ;; ELSE: Check if this is a continuation line
                              (if (cl-ppcre:scan "^[^@]" s)
                                  (setq curr (format nil "~a ~a" curr s))
@@ -160,22 +175,9 @@
       until (cl-ppcre:scan "^@example *$" s)
       unless (cl-ppcre:scan "^ *$" s)
         do (error "No example block following demo code"))
-    (loop
-      for s = (read-line stream)
-      until (cl-ppcre:scan "^@end example$" s))
-    (cons :demo-src code)))
-
-(defun %skip-block (stream end-tag)
-  (loop
-    for s = (read-line stream)
-    until (cl-ppcre:scan end-tag s)))
-
-(defmacro skip-block (stream end-tag &environment env)
-  (alexandria:once-only (stream)
-    `(%skip-block ,stream
-                  ,(if (constantp end-tag env)
-                       `(load-time-value (cl-ppcre:create-scanner ,end-tag))
-                       `(cl-ppcre:create-scanner ,end-tag)))))
+    (let ((example (skip-block stream "^@end example$")))
+      `(:demo-code (:demo-source . ,code)
+                   (:example-info . ,example)))))
 
 (defun parse-deffn (stream type name args)
   (let ((parsed-arglist (with-input-from-string (s args)
@@ -314,8 +316,12 @@
              (loop
                for v in nodes
                if (listp v)
-                 collect (if (eq (car v) :demo-src)
-                             `(:demo-code (:demo-source . ,(cdr v)) (:demo-result . ,(evaluate-demo-src (cdr v))))
+                 collect (if (eq (car v) :demo-code)
+                             (let ((src (cdr (assoc :demo-source (cdr v))))
+                                   (example-info (cdr (assoc :example-info (cdr v)))))
+                               `(:demo-code (:demo-source . ,src)
+                                            (:example-info . ,example-info)
+                                            (:demo-result . ,(evaluate-demo-src src))))
                              (parse-branch v))
                else
                  collect v)))
