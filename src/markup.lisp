@@ -109,6 +109,7 @@
 
 (defun render-example (stream code results)
   (format stream "~&~%")
+  (clim:stream-increment-cursor-position stream *current-indent* 0)
   (loop
     for code-line in code
     for res in results
@@ -133,7 +134,8 @@
       (format stream "~a" name))
     (when args
       (display-markup stream args))
-    (display-markup stream content)))
+    (with-indent 25
+      (display-markup stream content))))
 
 (defun render-section (stream content)
   (format stream "~&")
@@ -168,7 +170,7 @@
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
              ((:mrefdot :mref :mrefcomma :xref) (display (cdr content)))
              (:catbox (render-catbox stream (cdr content)))
-             (:demo-code (render-example stream (cdr (second content)) (cdr (third content))))
+             (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
              (:deffn (render-deffn stream (second content) (cddr content)))
              (:anchor nil)
              (:node nil)
