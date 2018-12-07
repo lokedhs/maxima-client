@@ -36,14 +36,9 @@
                                                                    (clim:pane-text-style stream))
                                    "M")
     (declare (ignore width ascent descent left right))
-    (log:info "a=~s d=~s" font-ascent font-descent)
     (+ font-ascent font-descent)))
 
 (defun draw-current-line (stream)
-  (log:info "drawing line. height=~s. Content: ~s" *word-wrap-height* (map 'list (lambda (rec)
-                                                                                   (dimension-bind (rec :y y)
-                                                                                     (- y)))
-                                                                           *word-wrap-line-content*))
   (when (plusp (length *word-wrap-line-content*))
     (let ((height (max *word-wrap-height*
                        (reduce #'max
@@ -108,7 +103,6 @@
         (right-margin *word-wrap-right-margin*))
     (multiple-value-bind (initial more-parts width)
         (split-string-at-right-margin stream parts (- right-margin start))
-      (log:info "drawing ~s at ~s" initial start)
       (let ((rec (clim:with-output-to-output-record (stream)
                    (clim:draw-text* stream initial start 0))))
         (vector-push-extend rec *word-wrap-line-content*))
