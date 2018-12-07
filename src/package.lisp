@@ -69,7 +69,8 @@
 (defpackage :maxima-client.markup
   (:use :cl :maxima-client.common)
   (:export #:display-markup
-           #:text-commands))
+           #:text-commands
+           #:with-word-wrap))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)

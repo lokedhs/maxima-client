@@ -23,7 +23,7 @@
 
 (clim:define-presentation-method clim:present (obj (type text-link) stream (view t) &key)
   (clim:with-drawing-options (stream :ink clim:+blue+)
-    (format stream "~a" (text-link/description obj))))
+    (clim:draw-text* stream (text-link/description obj) 0 0)))
 
 (clim:define-presentation-translator text-to-text-link (string text-link text-commands)
     (object)
@@ -46,7 +46,7 @@
   (log:trace "displaying markup list: ~s" content)
   (loop
     for v in content
-    do (display-markup stream v)))
+    do (display-markup-int stream v)))
 
 (defun keyword->key-label (key)
   (ecase key
@@ -73,18 +73,22 @@
   `(call-with-key-string ,stream (lambda (,stream) ,@body)))
 
 (defun render-key-command (stream key-seq)
-  (clim:with-text-style (stream (clim:make-text-style :fix :roman nil))
-    (loop
-      for group in key-seq
-      do (with-key-string (stream)
-           (loop
-             for key in group
-             for first = t then nil
-             unless first
-               do (format stream "-")
-             do (etypecase key
-                  (keyword (format stream "~a" (keyword->key-label key)))
-                  (string (format stream "~a" key))))))))
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (clim:with-text-style (stream (clim:make-text-style :fix :roman nil))
+                 (loop
+                   for group in key-seq
+                   do (with-key-string (stream)
+                        (let ((string (with-output-to-string (s)
+                                        (loop
+                                          for key in group
+                                          for first = t then nil
+                                          unless first
+                                            do (format s "-")
+                                          do (etypecase key
+                                               (keyword (format s "~a" (keyword->key-label key)))
+                                               (string (format s "~a" key)))))))
+                          (clim:draw-text* stream string 0 0))))))))
+    (word-wrap-draw-record stream rec)))
 
 (defclass documentation-text-link ()
   ((name :initarg :name
@@ -107,9 +111,14 @@
         do (format stream " ")
       do (maxima-client::present-to-stream (make-documentation-text-link name) stream))))
 
+(defmacro with-indent ((stream indent) &body body)
+  (alexandria:once-only (stream indent)
+    `(clim:with-room-for-graphics (,stream :first-quadrant nil)
+       (clim:with-translation (,stream ,indent 0)
+         ,@body))))
+
 (defun render-example (stream code results)
   (format stream "~&~%")
-  (clim:stream-increment-cursor-position stream *current-indent* 0)
   (loop
     for code-line in code
     for res in results
@@ -133,21 +142,27 @@
     (clim:with-text-face (stream :bold)
       (format stream "~a" name))
     (when args
-      (display-markup stream args))
-    (with-indent 25
-      (display-markup stream content))))
+      (display-markup-int stream args))
+    (format stream "~%")
+    (with-indent (stream 100)
+      (display-markup-int stream content))))
 
 (defun render-section (stream content)
   (format stream "~&")
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup stream content)
+    (display-markup-int stream content)
     (format stream "~&~%")))
 
 (defun render-subsection (stream content)
   (format stream "~&")
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup stream content)
+    (display-markup-int stream content)
     (format stream "~&~%")))
+
+(defun draw-presentation (stream obj)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (present-to-stream obj stream))))
+    (word-wrap-draw-record stream rec)))
 
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
@@ -160,10 +175,10 @@
              (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
              (:code (clim:with-text-family (stream :fix) (display (cdr content))))
-             (:link (maxima-client::present-to-stream (make-text-link-from-markup (cdr content)) stream))
+             (:link (draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
-             ((:p :paragraph) (format stream "~&") (display (cdr content)))
-             (:newline (format stream "~%"))
+             ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
+             (:newline (draw-newline stream))
              (:section (render-section stream (cdr content)))
              (:subsection (render-subsection stream (cdr content)))
              (:fname (maxima-client::present-to-stream (make-documentation-text-link (cadr content)) stream))
@@ -178,7 +193,11 @@
           ((listp content)
            (display-markup-list stream content)))))
 
-(defun display-markup (stream content)
+(defun display-markup-int (stream content)
   (etypecase content
-    (string (present-multiline-with-wordwrap stream content))
+    (string (word-wrap-draw-string stream content))
     (list (display-possibly-tagged-list stream content))))
+
+(defun display-markup (stream content)
+  (maxima-client.markup:with-word-wrap (stream)
+    (display-markup-int stream content)))

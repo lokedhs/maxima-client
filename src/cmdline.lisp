@@ -48,18 +48,21 @@ terminated by ;.")
 
 (defun display-cmdline-content (frame stream)
   (declare (ignore frame))
-  (maxima-client.markup:display-markup
-   stream
-   `((:heading "Maxima " ,(maxima::maxima-version1))
-     (:p (:newline) "Maxima project web site: " (:link "http://maxima.sourceforge.net/")
-         (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
-     (:p (:newline) (:key (:meta "p")) ", " (:key (:meta "n")) " iterates through the command history."
-         (:newline) (:key (:meta "s")) " inserts special symbols."
-         (:newline) (:key ("TAB")) " provides command completion for Maxima symbols."
-         (:newline) "The : character is used as a prefix to access CLIM commands.")
-     (:p (:newline) (:code ":Quit") " to quit the application")
-     (:p (:code ":Lisp") " evaluates Lisp forms")
-     (:newline) (:newline))))
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (maxima-client.markup:display-markup
+     stream
+     `((:heading "Maxima " ,(maxima::maxima-version1))
+       (:p "Maxima project web site: " (:link "http://maxima.sourceforge.net/")
+           (:newline) "CLIM interface code at " (:link "https://github.com/lokedhs/maxima-client"))
+       (:p (:key (:meta "p")) ", " (:key (:meta "n")) " iterates through the command history."
+           (:newline) (:key (:meta "s")) " inserts special symbols."
+           (:newline) (:key ("TAB")) " provides command completion for Maxima symbols."
+           (:newline) "The : character is used as a prefix to access CLIM commands.")
+       (:p (:code ":Quit") " to quit the application"
+           (:newline) (:code ":Lisp") " evaluates Lisp forms"))))
+  (multiple-value-bind (x y)
+      (clim:stream-cursor-position stream)
+    (setf (clim:stream-cursor-position stream) (values x (+ y (char-height stream))))))
 
 (defgeneric presentation-pointer-motion (presentation x y)
   (:method (presentation x y)
@@ -494,7 +497,7 @@ terminated by ;.")
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
 
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
-    ((name (or plain-text maxima-native-symbol) :prompt "Name"))
+    ((name '(or plain-text maxima-native-symbol) :prompt "Name"))
   (log:info "type: ~s" name)
   (let ((string (etypecase name
                   (string name)

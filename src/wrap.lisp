@@ -24,94 +24,113 @@
                 (push (subseq string start) result)
                 (return (reverse result))))))
 
-(defun present-text-with-wordwrap (stream text)
-  (let ((words (split-word text)))
-    (loop
-      with pane-width = (- (clim:rectangle-width (clim:pane-viewport-region stream)) 10)
-      for word in words
-      unless (equal word #.(princ-to-string #\Newline))
-        do (let ((x (clim:cursor-position (clim:stream-text-cursor stream))))
-             (when (> (+ x (clim:stream-string-width stream word)) pane-width)
-               (format stream "~%"))
-             (format stream "~a" word)))))
+(defvar *word-wrap-x* nil)
+(defvar *word-wrap-y* nil)
+(defvar *word-wrap-line-content* nil)
+(defvar *word-wrap-right-margin* nil)
+(defvar *word-wrap-height* nil)
 
-(defun present-multiline-with-wordwrap (stream text)
-  (loop
-    with start = nil
-    for i from 0 below (length text)
-    if (eql (aref text i) #\Newline)
-      do (progn
-           (when (and start (> i start))
-             (present-text-with-wordwrap stream (subseq text start i))
-             (setq start nil))
-           (format stream "~%"))
-    else
-      do (progn
-           (when (null start)
-             (setq start i)))
-    finally (when start
-              (present-text-with-wordwrap stream (subseq text start)))))
+(defun font-height (stream)
+  (multiple-value-bind (width ascent descent left right font-ascent font-descent)
+      (clim-clx::font-text-extents (clim-clx::text-style-to-x-font (clim:port (clim:sheet-medium stream))
+                                                                   (clim:pane-text-style stream))
+                                   "M")
+    (declare (ignore width ascent descent left right))
+    (log:info "a=~s d=~s" font-ascent font-descent)
+    (+ font-ascent font-descent)))
 
-(defclass word-wrap-stream (clim:standard-encapsulating-stream clim:basic-pane)
-  ((buf :type (array character (*))
-        :initform (make-array 1024 :element-type 'character :adjustable t :fill-pointer 0)
-        :accessor word-wrap-stream/buf)))
+(defun draw-current-line (stream)
+  (log:info "drawing line. height=~s. Content: ~s" *word-wrap-height* (map 'list (lambda (rec)
+                                                                                   (dimension-bind (rec :y y)
+                                                                                     (- y)))
+                                                                           *word-wrap-line-content*))
+  (when (plusp (length *word-wrap-line-content*))
+    (let ((height (max *word-wrap-height*
+                       (reduce #'max
+                               *word-wrap-line-content*
+                               :key (lambda (rec)
+                                      (dimension-bind (rec :y y)
+                                        (- y)))))))
+      (loop
+        for rec across *word-wrap-line-content*
+        do (multiple-value-bind (x y)
+               (clim:output-record-position rec)
+             (declare (ignore y))
+             (setf (clim:output-record-position rec) (values x *word-wrap-y*))
+             (clim:stream-add-output-record stream rec)))
+      (incf *word-wrap-y* height))))
 
-(defun %finalise-word-wrap-string (stream)
-  (let ((buf (word-wrap-stream/buf stream)))
-    (format *debug-io* "Wordwrapping: ~s~%" buf)
-    (present-multiline-with-wordwrap (clim:encapsulating-stream-stream stream) buf)
-    (setf (fill-pointer buf) 0)))
+(defun draw-current-line-and-reset (stream)
+  (draw-current-line stream)
+  (setq *word-wrap-line-content* (make-array 0 :adjustable t :fill-pointer t))
+  (setq *word-wrap-x* 0))
 
-(defun %word-wrap-push-char (stream char)
-  (vector-push-extend char (word-wrap-stream/buf stream)))
+(defun add-vspacing (stream n)
+  (draw-current-line-and-reset stream)
+  (incf *word-wrap-y* n))
 
-(defun %word-wrap-push-string (stream string start end)
-  (let ((s (or start 0))
-        (e (or end (length string))))
-    (unless (<= s e)
-      (error "Start (~a) is greater than end (~a)" start end))
-    (loop
-      for i from s below e
-      do (%word-wrap-push-char stream (aref string i)))))
+(defun draw-newline (stream)
+  (let ((x *word-wrap-x*))
+    (draw-current-line-and-reset stream)
+    (when (zerop x)
+      (add-vspacing stream (font-height stream)))))
 
-(defmethod trivial-gray-streams:stream-write-char ((stream word-wrap-stream) char)
-  (%word-wrap-push-char stream char))
-
-(defmethod trivial-gray-streams:stream-write-byte ((stream word-wrap-stream) char)
-  (error "Can't write binary data to word-wrap streams"))
-
-(defmethod trivial-gray-streams:stream-write-string ((stream word-wrap-stream) string &optional start end)
-  (%word-wrap-push-string stream string start end))
-
-(defmethod trivial-gray-streams:stream-write-sequence ((stream word-wrap-stream) string start end &key &allow-other-keys)
-  (declare (ignore start end))
-  (error "Can't write binary data to word-wrap streams"))
-
-(defmethod trivial-gray-streams:stream-finish-output ((stream word-wrap-stream))
-  (%finalise-word-wrap-string stream)
-  (call-next-method))
-
-(defmethod trivial-gray-streams:stream-terpri ((stream word-wrap-stream))
-  (%word-wrap-push-char stream #\Newline))
-
-(defmethod trivial-gray-streams:stream-line-column ((stream word-wrap-stream))
-  (%finalise-word-wrap-string stream)
-  (call-next-method))
-
-(defmethod trivial-gray-streams:stream-fresh-line ((stream word-wrap-stream))
-  (%finalise-word-wrap-string stream)
-  (call-next-method))
-
-(defmethod clim-internals::invoke-with-sheet-medium-bound (continuation medium (sheet word-wrap-stream))
-  (%finalise-word-wrap-string sheet)
-  (clim-internals::invoke-with-sheet-medium-bound continuation medium (clim:encapsulating-stream-stream sheet)))
-
-(defmacro with-word-wrap ((stream) &body body)
-  (let ((stream-sym (gensym))
-        (wrapped-stream-sym (gensym)))
-    `(let ((,stream-sym ,stream))
-       (let ((,wrapped-stream-sym (make-instance 'word-wrap-stream :stream ,stream-sym)))
-         (let ((,stream ,wrapped-stream-sym))
+(defmacro with-word-wrap ((stream &key right-margin height) &body body)
+  (alexandria:once-only (stream right-margin height)
+    `(let ((*word-wrap-x* 0)
+           (*word-wrap-y* 0)
+           (*word-wrap-right-margin* (or ,right-margin (clim:rectangle-width (clim:pane-viewport-region ,stream))))
+           (*word-wrap-height* (or ,height (font-height stream)))
+           (*word-wrap-line-content* (make-array 0 :adjustable t :fill-pointer t)))
+       (prog1
            (progn ,@body)
-           (%finalise-word-wrap-string ,wrapped-stream-sym))))))
+         (draw-current-line ,stream)))))
+
+(defun split-string-at-right-margin (stream parts right-margin)
+  (loop
+    with curr-string = ""
+    with part = parts
+    with width = 0
+    while (not (endp part))
+    while (let* ((next-string (format nil "~a~a" curr-string (car part)))
+                 (w (clim:text-size stream next-string)))
+            (cond ((<= w right-margin)
+                   (setq curr-string next-string)
+                   (setq part (cdr part))
+                   (setq width w)
+                   t)
+                  (t
+                   nil)))
+    finally (return (values curr-string part width))))
+
+(defun word-wrap-draw-one-line (stream parts)
+  (let ((start *word-wrap-x*)
+        (right-margin *word-wrap-right-margin*))
+    (multiple-value-bind (initial more-parts width)
+        (split-string-at-right-margin stream parts (- right-margin start))
+      (log:info "drawing ~s at ~s" initial start)
+      (let ((rec (clim:with-output-to-output-record (stream)
+                   (clim:draw-text* stream initial start 0))))
+        (vector-push-extend rec *word-wrap-line-content*))
+      (cond (more-parts
+             (draw-current-line-and-reset stream))
+            (t
+             (incf *word-wrap-x* width)))
+      more-parts)))
+
+(defun word-wrap-draw-record (stream rec)
+  (let ((start *word-wrap-x*)
+        (right-margin *word-wrap-right-margin*))
+    (dimension-bind (rec :width width)
+      (cond ((<= (+ start width) right-margin)
+             (move-rec rec start 0)
+             (incf *word-wrap-x* width))
+            (t
+             (draw-current-line-and-reset stream)))
+      (vector-push-extend rec *word-wrap-line-content*))))
+
+(defun word-wrap-draw-string (stream string)
+  (let ((parts (split-word string)))
+    (loop
+      while parts
+      do (setq parts (word-wrap-draw-one-line stream parts)))))
