@@ -102,49 +102,61 @@
   (make-instance 'documentation-text-link :name name))
 
 (defun render-catbox (stream categories)
-  (format stream "~&")
-  (clim:surrounding-output-with-border (stream :ink clim:+black+)
-    (loop
-      for name in categories
-      for first = t then nil
-      unless first
-        do (format stream " ")
-      do (maxima-client::present-to-stream (make-documentation-text-link name) stream))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 5)
+  (with-word-wrap-record (stream)
+    (clim:surrounding-output-with-border (stream :ink clim:+black+)
+      (loop
+        with pos = 0
+        for name in categories
+        do (let ((rec (clim:with-output-to-output-record (stream)
+                        (present-to-stream (make-documentation-text-link name) stream))))
+             (move-rec rec pos 0)
+             (dimension-bind (rec :width width)
+               (incf pos (+ width 15)))
+             (clim:stream-add-output-record stream rec)))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 10))
 
 (defmacro with-indent ((stream indent) &body body)
   (alexandria:once-only (stream indent)
-    `(clim:with-room-for-graphics (,stream :first-quadrant nil)
-       (clim:with-translation (,stream ,indent 0)
+    `(clim:with-translation (,stream ,indent 0)
+       (with-adjusted-margin (,indent)
          ,@body))))
 
 (defun render-example (stream code results)
-  (format stream "~&~%")
-  (loop
-    for code-line in code
-    for res in results
-    for i from 1
-    do (progn
-         (clim:with-text-face (stream :bold)
-           (format stream "~&(%i~a) " i))
-         (clim:with-text-family (stream :fix)
-           (format stream "~a~%" code-line))
-         (clim:formatting-table (stream)
-           (clim:formatting-row (stream)
-             (clim:formatting-cell (stream :align-y :center :min-width 75)
-               (format stream "(%o~a)" i))
-             (clim:formatting-cell (stream :align-y :center)
-               (maxima-client::present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+  (draw-current-line-and-reset stream)
+  (log:info "rendering example: ~s" code)
+  (with-word-wrap-record (stream)
+    (loop
+      for code-line in code
+      for res in results
+      for i from 1
+      do (progn
+           (clim:with-text-face (stream :bold)
+             (format stream "~&(%i~a) " i))
+           (clim:with-text-family (stream :fix)
+             (format stream "~a~%" code-line))
+           (clim:formatting-table (stream)
+             (clim:formatting-row (stream)
+               (clim:formatting-cell (stream :align-y :center :min-width 75)
+                 (format stream "(%o~a)" i))
+               (clim:formatting-cell (stream :align-y :center)
+                 (present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+  (draw-current-line-and-reset stream))
 
 (defun render-deffn (stream descriptor content)
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 18)
   (destructuring-bind (type name args)
       descriptor
-    (word-wrap-draw-string stream (format nil "~&~%~a: " type))
+    (word-wrap-draw-string stream (format nil "~a: " type))
     (clim:with-text-face (stream :bold)
       (word-wrap-draw-string stream name))
     (when args
       (display-markup-int stream args))
     (draw-current-line-and-reset stream)
-    (with-indent (stream 100)
+    (with-indent (stream 30)
       (display-markup-int stream content))))
 
 (defun render-section (stream content)

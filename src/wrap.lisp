@@ -30,6 +30,11 @@
 (defvar *word-wrap-right-margin* nil)
 (defvar *word-wrap-height* nil)
 
+(defmacro with-adjusted-margin ((delta) &body body)
+  (alexandria:once-only (delta)
+    `(let ((*word-wrap-right-margin* (- *word-wrap-right-margin* ,delta)))
+       ,@body)))
+
 (defun font-height (stream)
   (multiple-value-bind (width ascent descent left right font-ascent font-descent)
       (clim-clx::font-text-extents (clim-clx::text-style-to-x-font (clim:port (clim:sheet-medium stream))
@@ -44,8 +49,8 @@
                        (reduce #'max
                                *word-wrap-line-content*
                                :key (lambda (rec)
-                                      (dimension-bind (rec :y y)
-                                        (- y)))))))
+                                      (dimension-bind (rec :height height)
+                                        height))))))
       (loop
         for rec across *word-wrap-line-content*
         do (multiple-value-bind (x y)
@@ -115,9 +120,9 @@
 (defun word-wrap-draw-record (stream rec)
   (let ((start *word-wrap-x*)
         (right-margin *word-wrap-right-margin*))
+    (move-rec rec start 0)
     (dimension-bind (rec :width width)
       (cond ((<= (+ start width) right-margin)
-             (move-rec rec start 0)
              (incf *word-wrap-x* width))
             (t
              (draw-current-line-and-reset stream)))
@@ -128,3 +133,12 @@
     (loop
       while parts
       do (setq parts (word-wrap-draw-one-line stream parts)))))
+
+(defmacro with-word-wrap-record ((stream) &body body)
+  (alexandria:once-only (stream)
+    (alexandria:with-gensyms (rec)
+      `(let ((,rec (clim:with-output-to-output-record (,stream)
+                     ,@body)))
+         (dimension-bind (,rec :x x :y y :width w :height h)
+           (log:info "pos=(~s,~s) (~s,~s)" x y w h))
+         (word-wrap-draw-record ,stream ,rec)))))

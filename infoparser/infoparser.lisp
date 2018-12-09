@@ -293,8 +293,10 @@
     (uiop:with-temporary-file (:stream output)
       (uiop:with-temporary-file (:stream error-out)
         (handler-case
-            (progn
-              (uiop:run-program '("./maxima-parser.bin" "--dynamic-space-size" "1024")
+            (let* ((dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
+                   (exec-file (merge-pathnames "maxima-parser.bin" dir))
+                   (exec-name (namestring exec-file)))
+              (uiop:run-program (list exec-name "--dynamic-space-size" "1024")
                                 :input (pathname input)
                                 :output (pathname output)
                                 :error-output (pathname error-out))
