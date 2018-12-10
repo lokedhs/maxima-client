@@ -142,7 +142,8 @@
                (clim:formatting-cell (stream :align-y :center :min-width 75)
                  (format stream "(%o~a)" i))
                (clim:formatting-cell (stream :align-y :center)
-                 (present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+                 (clim:with-identity-transformation (stream)
+                   (present-to-stream (make-instance 'maxima-native-expr :expr res) stream))))))))
   (draw-current-line-and-reset stream))
 
 (defun render-deffn (stream descriptor content)

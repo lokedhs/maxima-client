@@ -46,17 +46,25 @@
 (defun draw-current-line (stream)
   (when (plusp (length *word-wrap-line-content*))
     (let ((height (max *word-wrap-height*
-                       (reduce #'max
-                               *word-wrap-line-content*
+                       (reduce #'max *word-wrap-line-content*
                                :key (lambda (rec)
                                       (dimension-bind (rec :height height)
-                                        height))))))
+                                        height)))))
+          (max-ascent (reduce #'max *word-wrap-line-content*
+                              :key (lambda (rec)
+                                     (dimension-bind (rec :y y)
+                                       (- y))))))
       (loop
         for rec across *word-wrap-line-content*
-        do (multiple-value-bind (x y)
-               (clim:output-record-position rec)
-             (declare (ignore y))
-             (setf (clim:output-record-position rec) (values x *word-wrap-y*))
+        do #+nil (multiple-value-bind (x y)
+                     (clim:output-record-position rec)
+                   (declare (ignore y))
+                   (setf (clim:output-record-position rec) (values x *word-wrap-y*))
+                   (clim:stream-add-output-record stream rec))
+           (dimension-bind (rec :x x :y y)
+             ;; We need to adjust the vertical coordinate so that text of different sizes are aligned to the same
+             ;; baseline. All text is drawn with the basline at y=0, and the ascent is a negative value.
+             (set-rec-position rec x (+ *word-wrap-y* (max 0 (+ max-ascent y))))
              (clim:stream-add-output-record stream rec)))
       (incf *word-wrap-y* height))))
 
