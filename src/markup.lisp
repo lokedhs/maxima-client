@@ -197,15 +197,15 @@
 
 (defun render-section (stream content)
   (draw-current-line-and-reset stream)
+  (add-vspacing stream (/ (font-height stream) 2))
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup-int stream content)
-    #+nil (add-vspacing stream (font-height stream))))
+    (display-markup-int stream content)))
 
 (defun render-subsection (stream content)
   (draw-current-line-and-reset stream)
+  (add-vspacing stream (/ (font-height stream) 2))
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup-int stream content)
-    #+nil (add-vspacing stream (font-height stream))))
+    (display-markup-int stream content)))
 
 (defun render-preformatted (stream content)
   (draw-current-line-and-reset stream)  
