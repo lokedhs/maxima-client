@@ -24,9 +24,9 @@
                                         :default-view +info-content-panel-view+))
           (interaction-pane :interactor))
   (:layouts (default (clim:vertically ()
-                       (1/2 (clim:scrolling ()
+                       (4/5 (clim:scrolling ()
                               info-content))
-                       (1/2 interaction-pane)))))
+                       (1/5 interaction-pane)))))
 
 (defun load-doc-file (name)
   (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
