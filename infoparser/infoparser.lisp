@@ -187,7 +187,7 @@
                    (("@c +(.*[^ ]) *$" strings)
                     (setq curr (format nil "~a~a~a" curr (if (zerop (length curr)) "" +newline-str+) (aref strings 0))))
                    (("^[^@]")
-                    (setq curr (format nil "~a ~a" curr s)))
+                    (setq curr (format nil "~a~c~a" curr #\Newline s)))
                    (t
                     (error "Demo code block does not have the expected format: ~s" s)))
                  (when (cl-ppcre:scan "(?:;|\\$) *$" curr)
@@ -314,7 +314,7 @@
             (let* ((dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
                    (exec-file (merge-pathnames "maxima-parser.bin" dir))
                    (exec-name (namestring exec-file)))
-              (uiop:run-program (list exec-name "--dynamic-space-size" "1024")
+              (uiop:run-program (list exec-name "--dynamic-space-size" "3000")
                                 :input (pathname input)
                                 :output (pathname output)
                                 :error-output (pathname error-out))
@@ -382,7 +382,12 @@ corresponding lisp files to the output directory."
       (let ((*standard-input* in))
         (let ((result (loop
                         for v in (first src-data)
-                        collect (evaluate-one-demo-src-line v))))
+                        collect (let ((res (evaluate-one-demo-src-line v)))
+                                  (if (cl-ppcre:scan "\\$ *$" v)
+                                      ;; If the command ended with a $, don't save the result
+                                      nil
+                                      ;; ELSE: Normal command, the result needs to be saved
+                                      res)))))
           (with-standard-io-syntax
             (let ((*print-readably* t))
               (print result))))))))
