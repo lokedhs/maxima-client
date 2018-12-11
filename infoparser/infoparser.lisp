@@ -232,11 +232,12 @@
                          (cl-ppcre:scan end-tag s)))
           do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
                     (process-single-line-command s
-                      (("^@c ===beg===") (info-collector (process-demo-code stream)))
-                      (("^@menu *$") (info-collector (process-menu stream)))
-                      (("^@opencatbox *$") (info-collector (process-opencatbox stream)))
+                      (("^@c ===beg===") (collect-paragraph) (info-collector (process-demo-code stream)))
+                      (("^@menu *$") (collect-paragraph) (info-collector (process-menu stream)))
+                      (("^@opencatbox *$") (collect-paragraph) (info-collector (process-opencatbox stream)))
 
                       (("^@node +(.*)$" args)
+                       (collect-paragraph)
                        (info-collector (cons :node (parse-node (aref args 0)))))
 
                       (("@section +(.*[^ ]) *$" name)
@@ -261,7 +262,7 @@
 
                       (("^@example *$")
                        (collect-paragraph)
-                       (info-collector (cons :pre (skip-block stream "@end example"))))))
+                       (info-collector (cons :pre (skip-block stream "^@end example"))))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t

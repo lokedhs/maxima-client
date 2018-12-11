@@ -74,8 +74,7 @@
 
 (defun max-x-y (frame)
   "Return the maximum X and Y coordinate values for a menu for
-`frame' (essentially, the screen resolution with a slight
-padding.)"
+FRAME (essentially, the screen resolution with a slight padding.)"
   ;; FIXME? There may be a better way.
   (let* ((port (clim:port (clim:frame-manager frame)))
          (graft (clim:find-graft :port port)))
@@ -84,7 +83,7 @@ padding.)"
 
 (defun menu-size (menu frame)
   "Return two values, the height and width of MENU (adjusted for
-maximum size according to `frame')."
+maximum size according to FRAME)."
   (multiple-value-bind (max-width max-height)
       (max-x-y frame)
     (clim:with-bounding-rectangle* (x1 y1 x2 y2) menu
