@@ -41,10 +41,15 @@
                                             :height 800)))
     (clim:run-frame-top-level frame)))
 
-(define-documentation-frame-command (add-doc-command :name "add")
+(define-documentation-frame-command (datatypes-command :name "datatypes")
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel) (load-doc-file "DataTypes"))))
+
+(define-documentation-frame-command (file-command :name "file")
+    ((file 'string :prompt "Filename"))
+  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+    (setf (info-content-panel/content info-content-panel) (load-doc-file file))))
 
 (define-documentation-frame-command (add-simple-doc-command :name "simple")
     ()
@@ -53,6 +58,7 @@
           '((:MENU "Numbers" "Strings" "Constants" "Lists" "Arrays" "Structures")
             (:NODE "Numbers" "Strings" "Data Types and Structures" "Data Types and Structures")
             (:SECTION "Numbers")
+            (:pre "This" "is some text" "third line")
             (:MENU "Introduction to Numbers" "Functions and Variables for Numbers")
             (:NODE "Introduction to Numbers" "Functions and Variables for Numbers" "Numbers" "Numbers")
             (:SUBSECTION "Introduction to Numbers")

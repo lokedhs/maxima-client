@@ -1,5 +1,27 @@
 (in-package :infoparser)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun %process-single-line-command (string clauses)
+    (alexandria:with-gensyms (match parts)
+      (let ((clause (car clauses)))
+        (if (eq (car clause) t)
+            `(progn ,@(cdr clause))
+            `(multiple-value-bind (,match ,parts)
+                 (cl-ppcre:scan-to-strings ,(caar clause) ,string)
+               (declare (ignorable ,parts))
+               (if ,match
+                   ,(if (cadar clause)
+                        `(let ((,(cadar clause) ,parts))
+                           ,@(cdr clause))
+                        `(progn ,@(cdr clause)))
+                   ,@(if (cdr clauses)
+                         (list (%process-single-line-command string (cdr clauses)))
+                         nil))))))))
+
+(defmacro process-single-line-command (string &body clauses)
+  (alexandria:once-only (string)
+    (%process-single-line-command string clauses)))
+
 (defun %skip-block (stream end-tag)
   (loop
     for s = (read-line stream)
@@ -151,24 +173,27 @@
 (alexandria:define-constant +newline-str+ (format nil "~c" #\Newline) :test #'equal)
 
 (defun process-demo-code (stream)
-  (let ((code (collectors:with-collector (coll)
-                (loop
-                  with curr = ""
-                  for s = (read-line stream)
-                  until (cl-ppcre:scan "^@c ===end===" s)
-                  unless (zerop (length s))
-                    do (multiple-value-bind (match strings)
-                           (cl-ppcre:scan-to-strings "@c +(.*[^ ]) *$" s)
-                         (if match
-                             (setq curr (format nil "~a~a~a" curr (if (zerop (length curr)) "" +newline-str+) (aref strings 0)))
-                             ;; ELSE: Check if this is a continuation line
-                             (if (cl-ppcre:scan "^[^@]" s)
-                                 (setq curr (format nil "~a ~a" curr s))
-                                 (error "Demo code block does not have the expected format: ~s" s)))
-                         (when (cl-ppcre:scan "(?:;|\\$) *$" curr)
-                           (coll curr)
-                           (setq curr ""))))
-                (coll))))
+  (multiple-value-bind (code input)
+      (collectors:with-collectors (coll input-coll)
+        (loop
+          with curr = ""
+          for s = (read-line stream)
+          until (cl-ppcre:scan "^@c ===end===" s)
+          unless (zerop (length s))
+            do (progn
+                 (process-single-line-command s
+                   (("@c +input:(.*[^ ]) *$" strings)
+                    (input-coll (aref strings 0)))
+                   (("@c +(.*[^ ]) *$" strings)
+                    (setq curr (format nil "~a~a~a" curr (if (zerop (length curr)) "" +newline-str+) (aref strings 0))))
+                   (("^[^@]")
+                    (setq curr (format nil "~a ~a" curr s)))
+                   (t
+                    (error "Demo code block does not have the expected format: ~s" s)))
+                 (when (cl-ppcre:scan "(?:;|\\$) *$" curr)
+                   (coll curr)
+                   (setq curr ""))))
+        (values (coll) (input-coll)))
     ;; After the example code, the following example group needs to be skipped
     (loop
       for s = (read-line stream)
@@ -177,6 +202,7 @@
         do (error "No example block following demo code"))
     (let ((example (skip-block stream "^@end example$")))
       `(:demo-code (:demo-source . ,code)
+                   ,@(if input `((:input . ,input)) nil)
                    (:example-info . ,example)))))
 
 (defun parse-deffn (stream type name args)
@@ -188,25 +214,9 @@
     (list* :deffn (list type name (cdar parsed-arglist))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun %process-single-line-command (string clauses)
-    (alexandria:with-gensyms (match parts)
-      (let ((clause (car clauses)))
-        `(multiple-value-bind (,match ,parts)
-             (cl-ppcre:scan-to-strings ,(caar clause) ,string)
-           (declare (ignorable ,parts))
-           (if ,match
-               ,(if (cadar clause)
-                    `(let ((,(cadar clause) ,parts))
-                       ,@(cdr clause))
-                    `(progn ,@(cdr clause)))
-               ,@(if (cdr clauses)
-                     (list (%process-single-line-command string (cdr clauses)))
-                     nil)))))))
-
-(defmacro process-single-line-command (string &body clauses)
-  (alexandria:once-only (string)
-    (%process-single-line-command string clauses)))
+(defun parse-defvr (stream type name)
+  (list* :defvr (list type name)
+         (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
 
 (defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
@@ -243,7 +253,15 @@
 
                       (("^@deffn +{([^}]+)} +([^ ]+) +(.*[^ ]) *$" args)
                        (collect-paragraph)
-                       (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))))
+                       (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))
+
+                      (("^@defvr +{([^}]+)} +(.*[^ ]) *$" args)
+                       (collect-paragraph)
+                       (info-collector (parse-defvr stream (aref args 0) (aref args 1))))
+
+                      (("^@example *$")
+                       (collect-paragraph)
+                       (info-collector (cons :pre (skip-block stream "@end example"))))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t
@@ -285,10 +303,10 @@
         (error "Error when evaluating command: ~s: ~s" src eval-ret))
       (cdr eval-ret))))
 
-(defun evaluate-demo-src (src)
+(defun evaluate-demo-src (src standard-input-content)
   (uiop:with-temporary-file (:stream input)
     (with-standard-io-syntax
-      (print src input))
+      (print (list src standard-input-content) input))
     (close input)
     (uiop:with-temporary-file (:stream output)
       (uiop:with-temporary-file (:stream error-out)
@@ -320,10 +338,11 @@
                if (listp v)
                  collect (if (eq (car v) :demo-code)
                              (let ((src (cdr (assoc :demo-source (cdr v))))
+                                   (input (cdr (assoc :input (cdr v))))
                                    (example-info (cdr (assoc :example-info (cdr v)))))
                                `(:demo-code (:demo-source . ,src)
                                             (:example-info . ,example-info)
-                                            (:demo-result . ,(evaluate-demo-src src))))
+                                            (:demo-result . ,(evaluate-demo-src src input))))
                              (parse-branch v))
                else
                  collect v)))
@@ -346,6 +365,12 @@ corresponding lisp files to the output directory."
              (let ((*print-readably* t))
                (print processed s)))))))
 
+(defun make-multiline-string (lines)
+  (with-output-to-string (s)
+    (loop
+      for line in lines
+      do (format s "~a~%" line))))
+
 (defun resolve-example-code-external ()
   "This function is called from the standalone maxima expression evaluator."
   (with-maxima-package
@@ -353,12 +378,14 @@ corresponding lisp files to the output directory."
   (setq *debugger-hook* nil)
   (let ((src-data (with-standard-io-syntax
                     (read))))
-    (let ((result (loop
-                    for v in src-data
-                    collect (evaluate-one-demo-src-line v))))
-      (with-standard-io-syntax
-        (let ((*print-readably* t))
-          (print result))))))
+    (with-input-from-string (in (make-multiline-string (second src-data)))
+      (let ((*standard-input* in))
+        (let ((result (loop
+                        for v in (first src-data)
+                        collect (evaluate-one-demo-src-line v))))
+          (with-standard-io-syntax
+            (let ((*print-readably* t))
+              (print result))))))))
 
 (defun generate-doc-directory ()
   "Generate lisp files for all the texinfo files in the maxima distribution."
