@@ -873,6 +873,7 @@ Each element should be an output record."
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
     `(let ((*font-size* maxima::$font_size))
+       (log:info "Drawing with size: ~s" *font-size*)
        (with-roman-text-style (stream)
          (let ((,output-record (clim:with-output-to-output-record (,stream)
                                  (with-paren-op

@@ -72,6 +72,30 @@
   (check-type stream symbol)
   `(call-with-key-string ,stream (lambda (,stream) ,@body)))
 
+(defun call-with-spanned-box (stream fn)
+  (let ((margin 50)
+        (padding 5))
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (with-adjusted-margin ((+ padding margin))
+                   (funcall fn stream)))))
+      (move-rec rec (+ padding margin) (+ padding margin))
+      (dimension-bind (rec :height height)
+        (let ((x1 margin)
+              (y1 margin)
+              (x2 (- *word-wrap-right-margin* margin))
+              (y2 (+ (* padding 2) margin height)))
+          (clim:draw-rectangle* stream x1 y1 x2 y2
+                                :ink (clim:make-rgb-color 0.8 1 1)
+                                :filled t)
+          (clim:draw-rectangle* stream x1 y1 x2 y2
+                                :ink clim:+black+
+                                :filled nil)
+          (clim:stream-add-output-record stream rec))))))
+
+(defmacro with-spanned-box ((stream) &body body)
+  (check-type stream symbol)
+  `(call-with-spanned-box ,stream (lambda (,stream) ,@body)))
+
 (defun render-key-command (stream key-seq)
   (let ((rec (clim:with-output-to-output-record (stream)
                (clim:with-text-style (stream (clim:make-text-style :fix :roman nil))
@@ -96,68 +120,105 @@
 
 (clim:define-presentation-method clim:present (obj (type documentation-text-link) stream (view t) &key)
   (clim:with-drawing-options (stream :ink clim:+blue+)
-    (format stream "~a" (documentation-text-link/name obj))))
+    (clim:draw-text* stream (documentation-text-link/name obj) 0 0)))
 
 (defun make-documentation-text-link (name)
   (make-instance 'documentation-text-link :name name))
 
 (defun render-catbox (stream categories)
-  (format stream "~&")
-  (clim:surrounding-output-with-border (stream :ink clim:+black+)
-    (loop
-      for name in categories
-      for first = t then nil
-      unless first
-        do (format stream " ")
-      do (maxima-client::present-to-stream (make-documentation-text-link name) stream))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 5)
+  (with-word-wrap-record (stream)
+    (clim:surrounding-output-with-border (stream :ink clim:+black+)
+      (loop
+        with pos = 0
+        for name in categories
+        do (let ((rec (clim:with-output-to-output-record (stream)
+                        (present-to-stream (make-documentation-text-link name) stream))))
+             (move-rec rec pos 0)
+             (dimension-bind (rec :width width)
+               (incf pos (+ width 15)))
+             (clim:stream-add-output-record stream rec)))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 10))
 
 (defmacro with-indent ((stream indent) &body body)
   (alexandria:once-only (stream indent)
-    `(clim:with-room-for-graphics (,stream :first-quadrant nil)
-       (clim:with-translation (,stream ,indent 0)
+    `(clim:with-translation (,stream ,indent 0)
+       (with-adjusted-margin (,indent)
          ,@body))))
 
 (defun render-example (stream code results)
-  (format stream "~&~%")
-  (loop
-    for code-line in code
-    for res in results
-    for i from 1
-    do (progn
-         (clim:with-text-face (stream :bold)
-           (format stream "~&(%i~a) " i))
-         (clim:with-text-family (stream :fix)
-           (format stream "~a~%" code-line))
-         (clim:formatting-table (stream)
-           (clim:formatting-row (stream)
-             (clim:formatting-cell (stream :align-y :center :min-width 75)
-               (format stream "(%o~a)" i))
-             (clim:formatting-cell (stream :align-y :center)
-               (maxima-client::present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream))
+  (with-word-wrap-record (stream)
+    (clim:with-identity-transformation (stream)
+      (with-spanned-box (stream)
+        (loop
+          for code-line in code
+          for res in results
+          for i from 1
+          do (progn
+               (clim:with-text-face (stream :bold)
+                 (format stream "~&(%i~a) " i))
+               (clim:with-text-family (stream :fix)
+                 (format stream "~a~%" code-line))
+               (when res
+                 (clim:formatting-table (stream)
+                   (clim:formatting-row (stream)
+                     (clim:formatting-cell (stream :align-y :center :min-width 75)
+                       (format stream "(%o~a)" i))
+                     (clim:formatting-cell (stream :align-y :center)
+                       (clim:with-identity-transformation (stream)
+                         (present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream)))
+
+(defun render-definition (stream type name args content)
+  (draw-current-line-and-reset stream)
+  (word-wrap-draw-string stream (format nil "~a: " type))
+  (clim:with-text-face (stream :bold)
+    (word-wrap-draw-string stream name))
+  (when args
+    (display-markup-int stream args))
+  (draw-current-line-and-reset stream)
+  (with-indent (stream 30)
+    (display-markup-int stream content)))
 
 (defun render-deffn (stream descriptor content)
   (destructuring-bind (type name args)
       descriptor
-    (format stream "~&~%~a: " type)
-    (clim:with-text-face (stream :bold)
-      (format stream "~a" name))
-    (when args
-      (display-markup-int stream args))
-    (format stream "~%")
-    (with-indent (stream 100)
-      (display-markup-int stream content))))
+    (render-definition stream type name args content)))
+
+(defun render-defvr (stream descriptor content)
+  (destructuring-bind (type name)
+      descriptor
+    (render-definition stream type name nil content)))
 
 (defun render-section (stream content)
-  (format stream "~&")
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (/ (font-height stream) 2))
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup-int stream content)
-    (format stream "~&~%")))
+    (display-markup-int stream content)))
 
 (defun render-subsection (stream content)
-  (format stream "~&")
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (/ (font-height stream) 2))
   (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large))
-    (display-markup-int stream content)
-    (format stream "~&~%")))
+    (display-markup-int stream content)))
+
+(defun render-preformatted (stream content)
+  (draw-current-line-and-reset stream)  
+  (add-vspacing stream (font-height stream))
+  (with-word-wrap-record (stream)
+    (clim:with-identity-transformation (stream)
+      (with-spanned-box (stream)
+        (clim:with-text-family (stream :fix)
+          (loop
+            for line in content
+            do (format stream "~a~%" line))))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream)))
 
 (defun draw-presentation (stream obj)
   (let ((rec (clim:with-output-to-output-record (stream)
@@ -171,25 +232,28 @@
            (return-from display-possibly-tagged-list nil))
           ((keywordp (car content))
            (ecase (car content)
-             (:heading (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
+             (:heading (draw-current-line-and-reset stream) (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
              (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
-             (:code (clim:with-text-family (stream :fix) (display (cdr content))))
+             ((:code :math) (clim:with-text-family (stream :fix) (display (cdr content))))
+             (:pre (render-preformatted stream (cdr content)))
              (:link (draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
              ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
              (:newline (draw-newline stream))
              (:section (render-section stream (cdr content)))
              (:subsection (render-subsection stream (cdr content)))
-             (:fname (maxima-client::present-to-stream (make-documentation-text-link (cadr content)) stream))
+             (:fname (draw-presentation stream (make-documentation-text-link (cadr content))))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
              ((:mrefdot :mref :mrefcomma :xref) (display (cdr content)))
              (:catbox (render-catbox stream (cdr content)))
              (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
              (:deffn (render-deffn stream (second content) (cddr content)))
+             (:defvr (render-defvr stream (second content) (cddr content)))
              (:anchor nil)
              (:node nil)
-             (:menu nil)))
+             (:menu nil)
+             (:footnote nil)))
           ((listp content)
            (display-markup-list stream content)))))
 
