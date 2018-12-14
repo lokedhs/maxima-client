@@ -71,7 +71,7 @@
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel) (load-doc-file file))))
 
-(define-documentation-frame-command (add-simple-doc-command :name "simple")
+(define-documentation-frame-command (add-test-doc-command :name "testdoc")
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel)

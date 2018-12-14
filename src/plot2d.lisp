@@ -430,7 +430,8 @@ With ybounds:
                 (clim:draw-text* stream y-label (- pos (/ width 2)) (/ h 2)
                                  :transformation (clim:make-rotation-transformation* (- (/ pi 2))
                                                                                      pos
-                                                                                     (/ h 2)))))))
+                                                                                     (/ h 2))
+                                 :transform-glyphs t)))))
         ;; Draw the datasets
         (loop
           for i from 0

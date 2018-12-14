@@ -36,12 +36,9 @@
        ,@body)))
 
 (defun font-height (stream)
-  (multiple-value-bind (width ascent descent left right font-ascent font-descent)
-      (clim-clx::font-text-extents (clim-clx::text-style-to-x-font (clim:port (clim:sheet-medium stream))
-                                                                   (clim:pane-text-style stream))
-                                   "M")
-    (declare (ignore width ascent descent left right))
-    (+ font-ascent font-descent)))
+  (let ((style (clim:pane-text-style stream)))
+    (+ (climb:text-style-ascent style stream)
+       (climb:text-style-descent style stream))))
 
 (defun draw-current-line (stream)
   (when (plusp (length *word-wrap-line-content*))
