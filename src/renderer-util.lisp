@@ -43,9 +43,25 @@
   (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
 
+(defun char-height (stream)
+  (multiple-value-bind (width height)
+      (clim:text-size stream "M")
+    (declare (ignore width))
+    height))
+
+(defun char-width (stream)
+  (multiple-value-bind (width height)
+      (clim:text-size stream "M")
+    (declare (ignore height))
+    width))
+
+(defun find-replacement-text-styles (stream string &key text-style)
+  (clim:with-sheet-medium (medium stream)
+    (clim-freetype::find-replacement-fonts (clim:port medium) (or text-style (clim:medium-text-style stream)) string)))
+
 (defun render-formatted-with-replacement (stream fmt &rest args)
   (with-aligned-rendering (stream)
-    (let ((blocks (mcclim-font:find-replacement-text-styles stream (apply #'format nil fmt args)))
+    (let ((blocks (find-replacement-text-styles stream (apply #'format nil fmt args)))
           (font-size (clim:text-style-size (clim:medium-text-style stream))))
       (log:trace "blocks: ~s" blocks)
       (loop

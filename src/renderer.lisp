@@ -106,18 +106,6 @@
                       else
                         do (,run-body (car ,v) nil))))))))))
 
-(defun char-height (stream)
-  (multiple-value-bind (width height)
-      (clim:text-size stream "M")
-    (declare (ignore width))
-    height))
-
-(defun char-width (stream)
-  (multiple-value-bind (width height)
-      (clim:text-size stream "M")
-    (declare (ignore height))
-    width))
-
 (defun char-descent (stream char)
   (multiple-value-bind (width height x y baseline)
       (clim:text-size stream (format nil "~c" char))
