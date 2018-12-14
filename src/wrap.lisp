@@ -65,7 +65,11 @@
              ;; We need to adjust the vertical coordinate so that text of different sizes are aligned to the same
              ;; baseline. All text is drawn with the basline at y=0, and the ascent is a negative value.
              (set-rec-position rec x (+ *word-wrap-y* (max 0 (+ max-ascent y))))
-             (clim:stream-add-output-record stream rec)))
+             (clim:stream-add-output-record stream rec)
+             (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
+               #+nil (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+)
+               #+nil (clim:draw-line* stream x1 *word-wrap-y* x2 *word-wrap-y* :ink clim:+red+)
+               (clim:draw-line* stream x1 (+ *word-wrap-y* y) x2 (+ *word-wrap-y* y) :ink clim:+green+))))
       (incf *word-wrap-y* height))))
 
 (defun draw-current-line-and-reset (stream)
