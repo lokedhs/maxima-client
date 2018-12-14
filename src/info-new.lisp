@@ -3,6 +3,9 @@
 (defclass info-content-panel-view (maxima-client::maxima-renderer-view)
   ())
 
+(defvar *doc-frame-lock* (bordeaux-threads:make-lock "doc-frame-lock"))
+(defvar *doc-frame* nil)
+
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
 (defclass info-content-panel (clim:application-pane)
@@ -33,11 +36,23 @@
                     (read in))))
     content))
 
+
+
 (defun display-documentation-frame ()
   (let ((frame (clim:make-application-frame 'documentation-frame
                                             :width 900
                                             :height 800)))
     (clim:run-frame-top-level frame)))
+
+(defun open-documentation-frame ()
+  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
+    (unless *doc-frame*
+      (let ((frame (clim:make-application-frame 'documentation-frame
+                                                :width 900
+                                                :height 800)))
+        (setq *doc-frame* frame)
+        (bordeaux-threads:make-thread (lambda ()
+                                        (clim:run-frame-top-level frame)))))))
 
 (define-documentation-frame-command (arrays-command :name "add")
     ()

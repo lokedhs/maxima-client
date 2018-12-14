@@ -94,4 +94,6 @@
            #:make-info-panel))
 
 (defpackage :maxima-client.doc-new
-  (:use :cl :maxima-client.common))
+  (:use :cl :maxima-client.common)
+  (:export
+   #:open-documentation-frame))

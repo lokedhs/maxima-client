@@ -31,19 +31,20 @@ terminated by ;.")
                                                     :default-view +listener-view+
                                                     :display-function 'display-cmdline-content
                                                     :incremental-redisplay t))
-          (notes (clim:make-pane 'maxima-client.notes:notes-pane))
-          (info-panel (maxima-client.doc:make-info-panel))
+          #+nil (notes (clim:make-pane 'maxima-client.notes:notes-pane))
+          #+nil (info-panel (maxima-client.doc:make-info-panel))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
+                       #+nil (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
                                                                :panels `((,notes :title "Notes"
                                                                                  :image ,(load-image "outline-notes-32.png")
                                                                                  :select-fn ,#'maxima-client.notes:focus-notes-pane)
                                                                          (,info-panel :title "Info"
                                                                                       :image ,(load-image "outline-info-32.png"))))
+                       text-content
                        doc))))
 
 (defun display-cmdline-content (frame stream)
@@ -519,6 +520,10 @@ terminated by ;.")
   (setq maxima::$submit_on_return nil)
   (format t "~%Statements must be terminated by a semicolon.~%~%"))
 
+(clim:define-command (show-documentation-frame-command :name "Show Documentation Frame" :menu t :command-table maxima-commands)
+    ()
+  (maxima-client.doc-new:open-documentation-frame))
+
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands
                         :echo nil :documentation "Copy expression as Maxima command")
@@ -537,10 +542,12 @@ terminated by ;.")
     (obj)
   (list obj))
 
+#+nil
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-native-expr/src expr)))
 
+#+nil
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-expr-to-latex (maxima-native-expr/expr expr))))
@@ -557,7 +564,8 @@ terminated by ;.")
                                  ("Matrix" :menu maxima-matrix-command-table)
                                  ("Plot" :menu maxima-plot-command-table)
                                  ("Lisp" :menu maxima-lisp-command-table)
-                                 ("Display" :menu maxima-interaction-command-table)))
+                                 ("Display" :menu maxima-interaction-command-table)
+                                 ("Help" :menu maxima-help-command-table)))
 
 (clim:make-command-table 'maxima-file-command-table
                          :errorp nil
@@ -589,3 +597,7 @@ terminated by ;.")
                          :errorp nil
                          :menu '(("Font size" :menu font-size-command-table)
                                  ("Submit style" :menu submit-options-command-table)))
+
+(clim:make-command-table 'maxima-help-command-table
+                         :errorp nil
+                         :menu '(("Documentation" :command 'show-documentation-frame-command)))
