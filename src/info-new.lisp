@@ -56,6 +56,11 @@
         (bordeaux-threads:make-thread (lambda ()
                                         (clim:run-frame-top-level frame)))))))
 
+(defmethod clim:frame-exit ((frame documentation-frame))
+  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
+    (setq *doc-frame* nil))
+  (call-next-method))
+
 (define-documentation-frame-command (datatypes-command :name "datatypes")
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))

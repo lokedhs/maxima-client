@@ -600,4 +600,4 @@ terminated by ;.")
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil
-                         :menu '(("Documentation" :command 'show-documentation-frame-command)))
+                         :menu '(("Documentation" :command (show-documentation-frame-command))))

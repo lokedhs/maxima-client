@@ -18,6 +18,9 @@
                          (list (%process-single-line-command string (cdr clauses)))
                          nil))))))))
 
+(defun resolve-destination-dir ()
+  (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
+
 (defmacro process-single-line-command (string &body clauses)
   (alexandria:once-only (string)
     (%process-single-line-command string clauses)))
@@ -372,6 +375,40 @@ corresponding lisp files to the output directory."
       for line in lines
       do (format s "~a~%" line))))
 
+(defun extract-functions (content hash file)
+  (loop
+    for v in content
+    if (and (listp v)
+            (or (eq (car v) :deffn)
+                (eq (car v) :defvr)))
+      do (let* ((args (second v))
+                (type (first args))
+                (fn (second args))
+                (prev (gethash fn hash)))
+           (setf (gethash fn hash) (cons (list (car v) file type)
+                                         prev)))))
+
+(defun generate-index ()
+  (let ((destination-dir (resolve-destination-dir))
+        (index-filename "index")
+        (functions (make-hash-table :test 'equal)))
+    (loop
+      for file in (directory (merge-pathnames #p"*.lisp" destination-dir))
+      for name = (pathname-name file)
+      unless (equal name index-filename)
+        do (let  ((content (with-open-file (s file) (with-standard-io-syntax (read s)))))
+             (extract-functions content functions name)))
+    (let* ((content-list (loop
+                           for key being each hash-key in functions using (hash-value value)
+                           collect (cons key value)))
+           (sorted (sort content-list #'string< :key #'car)))
+      (with-open-file (s (merge-pathnames (format nil "~a.lisp" index-filename) destination-dir)
+                         :direction :output :if-exists :supersede)
+        (with-standard-io-syntax
+          (let ((*print-readably* t))
+            (print sorted s))))
+      nil)))
+
 (defun resolve-example-code-external ()
   "This function is called from the standalone maxima expression evaluator."
   (with-maxima-package
@@ -386,16 +423,16 @@ corresponding lisp files to the output directory."
                         collect (let ((res (evaluate-one-demo-src-line v)))
                                   (if (cl-ppcre:scan "\\$ *$" v)
                                       ;; If the command ended with a $, don't save the result
-                                      nil
+                                      (cons :no-result nil)
                                       ;; ELSE: Normal command, the result needs to be saved
-                                      res)))))
+                                      (cons :result res))))))
           (with-standard-io-syntax
             (let ((*print-readably* t))
               (print result))))))))
 
 (defun generate-doc-directory ()
   "Generate lisp files for all the texinfo files in the maxima distribution."
-  (let ((destination-directory (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/")))
+  (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
                          destination-directory)))
