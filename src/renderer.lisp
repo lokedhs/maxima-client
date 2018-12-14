@@ -113,7 +113,7 @@
     (- height baseline)))
 
 (defun %render-quotient (stream top-expr bottom-expr)
-  (let ((fraction-spacing 2)
+  (let ((fraction-spacing (/ (char-height stream) 4))
         (top (clim:with-output-to-output-record (stream)
                (with-paren-op
                  (funcall top-expr stream))))
@@ -123,17 +123,16 @@
     (dimension-bind (top :width top-width :height top-height)
       (dimension-bind (bottom :width bottom-width)
         (let* ((max-width (max top-width bottom-width))
-               (y (+ top-height fraction-spacing))
-               (centre (+ y (/ (char-height stream) 2))))
+               (centre (- (/ (char-height stream) 4))))
           (set-rec-position top
                             (/ (- max-width top-width) 2)
-                            (- centre))
+                            (- centre top-height fraction-spacing))
           (clim:stream-add-output-record stream top)
           (set-rec-position bottom
                             (/ (- max-width bottom-width) 2)
-                            (- (+ top-height (+ (* fraction-spacing 2) 1)) centre))
+                            (+ centre fraction-spacing))
           (clim:stream-add-output-record stream bottom)
-          (clim:draw-line* stream 0 (- y centre) max-width (- y centre)))))))
+          (clim:draw-line* stream 0 centre max-width centre))))))
 
 (defun render-quotient (stream top-expr bottom-expr)
   (%render-quotient stream
@@ -268,29 +267,30 @@
 
 (defun wrap-with-parens (stream output-record
                          &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
-  (dimension-bind (output-record :x x :y y :width width :height height)
-    (destructuring-bind (paren-font paren-size left-paren-x-offset left-paren-y-offset)
-        (find-paren-font stream height)
-      (declare (ignore left-paren-y-offset))
-      (multiple-value-bind (left-paren left-paren-ascent left-paren-descent)
-          (with-font (stream paren-font paren-size)
-            (render-and-measure-string stream left-paren))
-        (let ((right-paren (clim:with-output-to-output-record (stream)
-                             (with-font (stream paren-font paren-size)
-                               (clim:draw-text* stream right-paren 0 0)))))
-          (dimension-bind (left-paren :width left-paren-width)
-            (let* ((centre (+ (/ height 2) y))
-                   (p-centre (- left-paren-descent
-                                (/ (+ left-paren-ascent left-paren-descent) 2)))
-                   (p-offset (- centre p-centre)))
-              (move-rec left-paren x p-offset)
-              (clim:stream-add-output-record stream left-paren)
-              ;;
-              (move-rec output-record (+ left-paren-width left-paren-x-offset left-spacing) 0)
-              (clim:stream-add-output-record stream output-record)
-              ;;
-              (move-rec right-paren (+ x left-paren-width left-paren-x-offset width left-spacing right-spacing) p-offset)
-              (clim:stream-add-output-record stream right-paren))))))))
+  (let ((ch (char-height stream)))
+    (dimension-bind (output-record :x x :y y :width width :height height)
+      (destructuring-bind (paren-font paren-size left-paren-x-offset left-paren-y-offset)
+          (find-paren-font stream (max (+ height (/ ch 4)) ch))
+        (declare (ignore left-paren-y-offset))
+        (multiple-value-bind (left-paren left-paren-ascent left-paren-descent)
+            (with-font (stream paren-font paren-size)
+              (render-and-measure-string stream left-paren))
+          (let ((right-paren (clim:with-output-to-output-record (stream)
+                               (with-font (stream paren-font paren-size)
+                                 (clim:draw-text* stream right-paren 0 0)))))
+            (dimension-bind (left-paren :width left-paren-width)
+              (let* ((centre (+ (/ height 2) y))
+                     (p-centre (- left-paren-descent
+                                  (/ (+ left-paren-ascent left-paren-descent) 2)))
+                     (p-offset (- centre p-centre)))
+                (move-rec left-paren x p-offset)
+                (clim:stream-add-output-record stream left-paren)
+                ;;
+                (move-rec output-record (+ left-paren-width left-paren-x-offset left-spacing) 0)
+                (clim:stream-add-output-record stream output-record)
+                ;;
+                (move-rec right-paren (+ x left-paren-width left-paren-x-offset width left-spacing right-spacing) p-offset)
+                (clim:stream-add-output-record stream right-paren)))))))))
 
 (defmacro with-wrapped-parens ((stream &key (left-paren "(") (right-paren ")")) &body body)
   (alexandria:once-only (stream left-paren right-paren)
@@ -702,15 +702,15 @@ Each element should be an output record."
 (defun %find-paren-font (stream size)
   (let ((height (char-height stream)))
     (cond ((<= size (* height 2))
-           (list *font-roman* (* size 0.8) (* (char-width stream) 0.2) 0))
+           (list *font-roman* (* size 1) (* (char-width stream) 0.2) 0))
           ((< size (* height 3))
-           (list *font-integrate-size1* (* size 0.7) (* (char-width stream) 0.2) 0))
+           (list *font-integrate-size1* (* size 0.8) (* (char-width stream) 0.2) 0))
           ((< size (* height 4))
-           (list *font-integrate-size2* (* size 0.45) (* (char-width stream) 0.3) 0))
+           (list *font-integrate-size2* (* size 0.54) (* (char-width stream) 0.3) 0))
           ((< size (* height 5.6))
-           (list *font-paren-size3* (* size 0.4) (* (char-width stream) 0.4) 0))
+           (list *font-paren-size3* (* size 0.40) (* (char-width stream) 0.4) 0))
           (t
-           (list *font-paren-size4* (* size 0.35) (* (char-width stream) 0.5) 0)))))
+           (list *font-paren-size4* (* size 0.33) (* (char-width stream) 0.5) 0)))))
 
 (defun find-paren-font (stream size)
   (let ((result (%find-paren-font stream size)))
@@ -766,27 +766,33 @@ Each element should be an output record."
            (incf y h)))))
 
 (defun %render-sqrt (stream fn)
-  (let ((exp (clim:with-output-to-output-record (stream)
-               (with-paren-op
-                 (funcall fn stream)))))
-    (dimension-bind (exp :y exp-y :width exp-width :height exp-height)
-      (multiple-value-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent sqrt-sym-width)
-          (destructuring-bind (font size x-offset y-offset)
-              (find-paren-font stream exp-height)
-            (declare (ignore x-offset y-offset))
-            (with-font (stream font size)
-              (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 0)))
-        (declare (ignore sqrt-sym-descent))
-        ;; Move the sqrt symbol to align the top of the symbol with the top of the expr
-        (move-rec sqrt-sym 0 (+ sqrt-sym-ascent exp-y) #+nil (- exp-y sqrt-sym-ascent))
-        (clim:stream-add-output-record stream sqrt-sym)
-        ;; Move the expr to the right of the sqrt symbol
-        (dimension-bind (sqrt-sym :right sqrt-sym-right)
-          (move-rec exp sqrt-sym-right 0)
-          (clim:stream-add-output-record stream exp)
-          ;; Draw line above the expr
-          (let ((y exp-y))
-            (clim:draw-line* stream sqrt-sym-width y (+ sqrt-sym-right exp-width (/ (char-width stream) 4)) y)))))))
+  (let ((spacing (/ (char-height stream) 4)))
+    (let ((exp (clim:with-output-to-output-record (stream)
+                 (with-paren-op
+                   (funcall fn stream)))))
+      (dimension-bind (exp :y exp-y :width exp-width :height exp-height)
+        (let ((top-line-y (- exp-y spacing)))
+
+          (let ((sqrt-sym (clim:with-output-to-output-record (stream)
+                            (destructuring-bind (font size x-offset y-offset)
+                                (find-paren-font stream (+ exp-height spacing))
+                              (declare (ignore x-offset y-offset))
+                              (with-font (stream font size)
+                                (log:info "Height=~s  Size=~s  Font=~s" exp-height size font)
+                                (clim:draw-text* stream (format nil "~c" #\SQUARE_ROOT) 0 0))))))
+            (dimension-bind (sqrt-sym :y sqrt-sym-y)
+              ;; Move the sqrt symbol to align the top of the symbol with the top of the expr
+              (move-rec sqrt-sym 0 (- top-line-y sqrt-sym-y) #+nil (- exp-y sqrt-sym-ascent))
+              (clim:stream-add-output-record stream sqrt-sym)
+              ;; Move the expr to the right of the sqrt symbol
+              (dimension-bind (sqrt-sym :right sqrt-sym-right)
+                (move-rec exp sqrt-sym-right 0)
+                (clim:stream-add-output-record stream exp)
+                ;; Draw line above the expr
+                (clim:draw-line* stream sqrt-sym-right
+                                 top-line-y
+                                 (+ sqrt-sym-right exp-width (/ (char-width stream) 4))
+                                 top-line-y)))))))))
 
 (defun render-sqrt (stream expr)
   (%render-sqrt stream (lambda (stream)
@@ -861,7 +867,6 @@ Each element should be an output record."
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
     `(let ((*font-size* maxima::$font_size))
-       (log:info "Drawing with size: ~s" *font-size*)
        (with-roman-text-style (stream)
          (let ((,output-record (clim:with-output-to-output-record (,stream)
                                  (with-paren-op
