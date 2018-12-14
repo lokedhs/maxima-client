@@ -151,26 +151,28 @@
 (defun render-example (stream code results)
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream))
-  (with-word-wrap-record (stream)
-    (clim:with-identity-transformation (stream)
-      (with-spanned-box (stream)
-        (loop
-          for code-line in code
-          for res in results
-          for i from 1
-          do (progn
-               (clim:with-text-face (stream :bold)
-                 (format stream "~&(%i~a) " i))
-               (clim:with-text-family (stream :fix)
-                 (format stream "~a~%" code-line))
-               (when res
-                 (clim:formatting-table (stream)
-                   (clim:formatting-row (stream)
-                     (clim:formatting-cell (stream :align-y :center :min-width 75)
-                       (format stream "(%o~a)" i))
-                     (clim:formatting-cell (stream :align-y :center)
-                       (clim:with-identity-transformation (stream)
-                         (present-to-stream (make-instance 'maxima-native-expr :expr res) stream)))))))))))
+  (if (eq (car results) :error)
+      (log:info "Not rendering error output: ~s" results)
+      (with-word-wrap-record (stream)
+        (clim:with-identity-transformation (stream)
+          (with-spanned-box (stream)
+            (loop
+              for code-line in code
+              for res in results
+              for i from 1
+              do (progn
+                   (clim:with-text-face (stream :bold)
+                     (format stream "~&(%i~a) " i))
+                   (clim:with-text-family (stream :fix)
+                     (format stream "~a~%" code-line))
+                   (when (eq (car res) :result)
+                     (clim:formatting-table (stream)
+                       (clim:formatting-row (stream)
+                         (clim:formatting-cell (stream :align-y :center :min-width 75)
+                           (format stream "(%o~a)" i))
+                         (clim:formatting-cell (stream :align-y :center)
+                           (clim:with-identity-transformation (stream)
+                             (present-to-stream (make-instance 'maxima-native-expr :expr (cdr res)) stream))))))))))))
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
