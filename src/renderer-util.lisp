@@ -55,6 +55,32 @@
     (declare (ignore height))
     width))
 
+(defclass single-dimension-text-rec (climi::basic-output-record)
+  ((rec :initform nil
+        :accessor single-dimension-text-rec/output-record)))
+
+(defmethod clim:add-output-record (child (parent single-dimension-text-rec))
+  (when (single-dimension-text-rec/output-record parent)
+    (error "single-dimension-text-rec can only have a single child"))
+  (setf (single-dimension-text-rec/output-record parent) child))
+
+(defmethod clim:replay-output-record ((record single-dimension-text-rec) stream &optional region x-offset y-offset)
+  (let ((inner (single-dimension-text-rec/output-record record)))
+    (unless inner
+      (error "single-dimension-text-rec does not contain a child record"))
+    (clim:replay-output-record inner stream region x-offset y-offset)))
+
+(defun render-symbol-str (stream string)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (clim:draw-text* stream string 0 0))))
+    (multiple-value-bind (x1 y1 x2 y2)
+        (clim:bounding-rectangle* rec)
+      (let* ((font-ascent (- (climb:text-style-ascent (clim:pane-text-style stream) stream))))
+        (log:info "ascent = ~s" font-ascent)
+        (when (< font-ascent y1)
+          (setf (clim:rectangle-edges* rec) (values x1 font-ascent x2 y2))))
+      (clim:stream-add-output-record stream rec))))
+
 (defun find-replacement-text-styles (stream string &key text-style)
   (clim:with-sheet-medium (medium stream)
     (clim-freetype::find-replacement-fonts (clim:port medium) (or text-style (clim:medium-text-style stream)) string)))
@@ -68,6 +94,6 @@
         for (string family style) in blocks
         if family
           do (clim:with-text-style (stream (clim:make-text-style family style font-size))
-               (render-aligned-string "~a" string))
+               (render-aligned () (render-symbol-str stream string)))
         else
-          do (render-aligned-string "~a" string)))))
+          do (render-aligned () (render-symbol-str stream string))))))

@@ -159,7 +159,7 @@
                     (if (alexandria:starts-with-subseq "%" formatted)
                         (with-aligned-rendering (stream)
                           (with-font-size-change (stream (- (* (char-height stream) 0.6)))
-                            (render-aligned-string "%"))
+                            (render-aligned () (render-symbol-str stream "%")))
                           (render-aligned () (render-formatted-with-replacement stream "~a" (subseq formatted 1))))
                         (render-formatted-with-replacement stream "~a" formatted)))))
          (if roman-font
