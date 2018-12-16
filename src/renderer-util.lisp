@@ -55,8 +55,11 @@
     (declare (ignore height))
     width))
 
-(defclass single-dimension-text-rec (climi::basic-output-record)
-  ((rec :initform nil
+(defclass single-dimension-text-rec (clim:standard-rectangle clim:output-record)
+  ((parent :initarg :parent
+           :initform nil
+           :accessor clim:output-record-parent)
+   (rec :initform nil
         :accessor single-dimension-text-rec/output-record)))
 
 (defmethod clim:add-output-record (child (parent single-dimension-text-rec))
@@ -69,6 +72,14 @@
     (unless inner
       (error "single-dimension-text-rec does not contain a child record"))
     (clim:replay-output-record inner stream region x-offset y-offset)))
+
+(defmethod clim:bounding-rectangle* ((rec single-dimension-text-rec))
+  (clim:rectangle-edges* rec))
+
+(defmethod clim:output-record-position ((rec single-dimension-text-rec))
+  (multiple-value-bind (x y)
+      (clim:bounding-rectangle* rec)
+    (values x y)))
 
 (defun render-symbol-str (stream string)
   (let ((rec (clim:with-output-to-output-record (stream)

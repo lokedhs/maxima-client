@@ -809,6 +809,11 @@ Each element should be an output record."
                      (render-aligned () (render-maxima-expression stream list))))
                  nil #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
 
+(defun render-bigfloat (stream value)
+  (render-formatted stream "~a" (map 'string (lambda (v)
+                                               (maxima::get-first-char v))
+                                     (maxima::fpformat value))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -842,6 +847,7 @@ Each element should be an output record."
                (maxima::%lsum (render-lsum stream (second fixed) (third fixed) (fourth fixed)))
                ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
+               (maxima::bigfloat (render-bigfloat stream fixed))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
