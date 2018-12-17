@@ -36,7 +36,7 @@
           (unless v
             (error "Unable to parse result from ACCEPT"))
           (clim:with-room-for-graphics (stream :first-quadrant nil)
-            (let* ((style (clim:pane-text-style stream))
+            (let* ((style (clim:medium-text-style stream))
                    (rec (make-rendered-output-record (stream)
                           (clim:with-drawing-options (stream :ink (clim:make-rgb-color 0 0.45 0))
                             (with-aligned-rendering (stream)

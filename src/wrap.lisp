@@ -36,7 +36,7 @@
        ,@body)))
 
 (defun font-height (stream)
-  (let ((style (clim:pane-text-style stream)))
+  (let ((style (clim:medium-text-style stream)))
     (+ (climb:text-style-ascent style stream)
        (climb:text-style-descent style stream))))
 

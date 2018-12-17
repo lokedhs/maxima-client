@@ -81,16 +81,29 @@
       (clim:bounding-rectangle* rec)
     (values x y)))
 
+(defun text-style-font-ascent (stream)
+  (climb:text-style-ascent (clim:medium-text-style stream) stream))
+
+(defun text-style-font-descent (stream)
+  (climb:text-style-descent (clim:medium-text-style stream) stream))
+
+(defun text-style-font-height (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (+ (climb:text-style-ascent style stream)
+       (climb:text-style-descent style stream))))
+
 (defun render-symbol-str (stream string)
   (let ((rec (clim:with-output-to-output-record (stream)
                (clim:draw-text* stream string 0 0))))
+    #+nil
     (multiple-value-bind (x1 y1 x2 y2)
         (clim:bounding-rectangle* rec)
-      (let* ((font-ascent (- (climb:text-style-ascent (clim:pane-text-style stream) stream))))
+      (let* ((font-ascent (text-style-font-ascent)))
         (log:info "ascent = ~s" font-ascent)
         (when (< font-ascent y1)
           (setf (clim:rectangle-edges* rec) (values x1 font-ascent x2 y2))))
-      (clim:stream-add-output-record stream rec))))
+      (clim:stream-add-output-record stream rec))
+    (clim:stream-add-output-record stream rec)))
 
 (defun find-replacement-text-styles (stream string &key text-style)
   (clim:with-sheet-medium (medium stream)

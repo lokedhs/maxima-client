@@ -113,7 +113,8 @@
     (- height baseline)))
 
 (defun %render-quotient (stream top-expr bottom-expr)
-  (let ((fraction-spacing (/ (char-height stream) 4))
+  (let ((top-fraction-spacing (/ (char-height stream) 4))
+        (bottom-fraction-spacing (/ (char-height stream) 8))
         (top (clim:with-output-to-output-record (stream)
                (with-paren-op
                  (funcall top-expr stream))))
@@ -121,16 +122,18 @@
                   (with-paren-op
                     (funcall bottom-expr stream)))))
     (dimension-bind (top :width top-width :height top-height)
-      (dimension-bind (bottom :width bottom-width)
+      (dimension-bind (bottom :width bottom-width :y bottom-y)
         (let* ((max-width (max top-width bottom-width))
                (centre (- (/ (char-height stream) 4))))
           (set-rec-position top
                             (/ (- max-width top-width) 2)
-                            (- centre top-height fraction-spacing))
+                            (- centre top-height top-fraction-spacing))
           (clim:stream-add-output-record stream top)
           (set-rec-position bottom
                             (/ (- max-width bottom-width) 2)
-                            (+ centre fraction-spacing))
+                            (+ centre
+                               bottom-fraction-spacing
+                               (max (+ (text-style-font-ascent stream) bottom-y) 0)))
           (clim:stream-add-output-record stream bottom)
           (clim:draw-line* stream 0 centre max-width centre))))))
 
