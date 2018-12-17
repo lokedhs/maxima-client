@@ -781,7 +781,6 @@ Each element should be an output record."
                                 (find-paren-font stream (+ exp-height spacing))
                               (declare (ignore x-offset y-offset))
                               (with-font (stream font size)
-                                (log:info "Height=~s  Size=~s  Font=~s" exp-height size font)
                                 (clim:draw-text* stream (format nil "~c" #\SQUARE_ROOT) 0 0))))))
             (dimension-bind (sqrt-sym :y sqrt-sym-y)
               ;; Move the sqrt symbol to align the top of the symbol with the top of the expr
