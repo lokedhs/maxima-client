@@ -15,7 +15,6 @@
 (defun display-text-content (frame panel)
   (declare (ignore frame))
   (let ((content (info-content-panel/content panel)))
-    (log:info "displaying content: ~s" (length content))
     (when content
       (clim:with-room-for-graphics (panel :first-quadrant nil)
         (maxima-client.markup:display-markup panel content)))))

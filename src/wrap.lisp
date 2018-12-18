@@ -28,12 +28,19 @@
 (defvar *word-wrap-y* nil)
 (defvar *word-wrap-line-content* nil)
 (defvar *word-wrap-right-margin* nil)
-(defvar *word-wrap-height* nil)
 
 (defmacro with-adjusted-margin ((delta) &body body)
   (alexandria:once-only (delta)
     `(let ((*word-wrap-right-margin* (- *word-wrap-right-margin* ,delta)))
        ,@body)))
+
+(defun font-ascent (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-ascent style stream)))
+
+(defun font-descent (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-descent style stream)))
 
 (defun font-height (stream)
   (let ((style (clim:medium-text-style stream)))
@@ -42,15 +49,16 @@
 
 (defun draw-current-line (stream)
   (when (plusp (length *word-wrap-line-content*))
-    (let ((height (max *word-wrap-height*
-                       (reduce #'max *word-wrap-line-content*
-                               :key (lambda (rec)
-                                      (dimension-bind (rec :height height)
-                                        height)))))
-          (max-ascent (reduce #'max *word-wrap-line-content*
-                              :key (lambda (rec)
-                                     (dimension-bind (rec :y y)
-                                       (- y))))))
+    (let ((max-height (max (font-height stream)
+                           (reduce #'max *word-wrap-line-content*
+                                   :key (lambda (rec)
+                                          (dimension-bind (rec :height height)
+                                            height)))))
+          (max-ascent (max (climb:text-style-ascent (clim:medium-text-style stream) stream)
+                           (reduce #'max *word-wrap-line-content*
+                                   :key (lambda (rec)
+                                          (dimension-bind (rec :y y)
+                                            (- y)))))))
       (loop
         for rec across *word-wrap-line-content*
         do #+nil (multiple-value-bind (x y)
@@ -61,13 +69,9 @@
            (dimension-bind (rec :x x :y y)
              ;; We need to adjust the vertical coordinate so that text of different sizes are aligned to the same
              ;; baseline. All text is drawn with the basline at y=0, and the ascent is a negative value.
-             (set-rec-position rec x (+ *word-wrap-y* (max 0 (+ max-ascent y))))
-             (clim:stream-add-output-record stream rec)
-             (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
-               #+nil (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+)
-               #+nil (clim:draw-line* stream x1 *word-wrap-y* x2 *word-wrap-y* :ink clim:+red+)
-               (clim:draw-line* stream x1 (+ *word-wrap-y* y) x2 (+ *word-wrap-y* y) :ink clim:+green+))))
-      (incf *word-wrap-y* height))))
+             (set-rec-position rec x (+ *word-wrap-y* max-ascent y))
+             (clim:stream-add-output-record stream rec)))
+      (incf *word-wrap-y* max-height))))
 
 (defun draw-current-line-and-reset (stream)
   (draw-current-line stream)
