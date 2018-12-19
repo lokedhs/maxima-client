@@ -816,6 +816,9 @@ Each element should be an output record."
                                                (maxima::get-first-char v))
                                      (maxima::fpformat value))))
 
+(defun render-lisp-array (stream value)
+  (render-formatted stream "{Lisp Array: ~s}" value))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -870,7 +873,8 @@ Each element should be an output record."
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
                   (with-wrapped-parens (stream)
                     (render-with-presentation fixed))
-                  (render-with-presentation fixed)))))))
+                  (render-with-presentation fixed)))
+        (array (render-lisp-array stream fixed))))))
 
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
