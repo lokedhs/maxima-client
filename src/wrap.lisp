@@ -48,12 +48,15 @@
        (climb:text-style-descent style stream))))
 
 (defun draw-current-line (stream)
+  (when (= 1 (length *word-wrap-line-content*))
+    (dimension-bind ((aref *word-wrap-line-content* 0) :width w :height h :x x :y y :bottom b)
+      (log:info "dim:(~s,~s) pos:(~s,~s) b:~s" w h x y b)))
   (when (plusp (length *word-wrap-line-content*))
-    (let ((max-height (max (font-height stream)
-                           (reduce #'max *word-wrap-line-content*
-                                   :key (lambda (rec)
-                                          (dimension-bind (rec :height height)
-                                            height)))))
+    (let ((max-descent (max (font-descent stream)
+                            (reduce #'max *word-wrap-line-content*
+                                    :key (lambda (rec)
+                                           (dimension-bind (rec :bottom bottom)
+                                             bottom)))))
           (max-ascent (max (climb:text-style-ascent (clim:medium-text-style stream) stream)
                            (reduce #'max *word-wrap-line-content*
                                    :key (lambda (rec)
@@ -71,7 +74,7 @@
              ;; baseline. All text is drawn with the basline at y=0, and the ascent is a negative value.
              (set-rec-position rec x (+ *word-wrap-y* max-ascent y))
              (clim:stream-add-output-record stream rec)))
-      (incf *word-wrap-y* max-height))))
+      (incf *word-wrap-y* (+ max-ascent max-descent)))))
 
 (defun draw-current-line-and-reset (stream)
   (draw-current-line stream)
@@ -88,12 +91,11 @@
     (when (zerop x)
       (add-vspacing stream (font-height stream)))))
 
-(defmacro with-word-wrap ((stream &key right-margin height) &body body)
-  (alexandria:once-only (stream right-margin height)
+(defmacro with-word-wrap ((stream &key right-margin) &body body)
+  (alexandria:once-only (stream right-margin)
     `(let ((*word-wrap-x* 0)
            (*word-wrap-y* 0)
            (*word-wrap-right-margin* (or ,right-margin (clim:rectangle-width (clim:pane-viewport-region ,stream))))
-           (*word-wrap-height* (or ,height (font-height stream)))
            (*word-wrap-line-content* (make-array 0 :adjustable t :fill-pointer t)))
        (prog1
            (progn ,@body)
@@ -149,9 +151,9 @@
 
 (defmacro with-word-wrap-record ((stream) &body body)
   (alexandria:once-only (stream)
-    (alexandria:with-gensyms (rec)
+    (alexandria:with-gensyms (rec bottom)
       `(let ((,rec (clim:with-output-to-output-record (,stream)
                      ,@body)))
-         (dimension-bind (,rec :x x :y y :width w :height h)
-           (log:info "pos=(~s,~s) (~s,~s)" x y w h))
+         (dimension-bind (,rec :bottom ,bottom)
+           (move-rec ,rec 0 (- ,bottom)))
          (word-wrap-draw-record ,stream ,rec)))))
