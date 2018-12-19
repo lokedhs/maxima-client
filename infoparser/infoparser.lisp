@@ -221,15 +221,45 @@
   (list* :defvr (list type name)
          (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
 
+(defun parse-itemize (stream)
+  ;; Any content before the first @item will be dropped
+  ;; We should probably check for anchors here
+  (let ((all-content (skip-block stream "^@end itemize")))
+    (collectors:with-collector (items-collector)
+      (let ((current-item nil))
+        (labels ((parse-item ()
+                   (when current-item
+                     (let ((string (make-multiline-string (reverse current-item))))
+                       (with-input-from-string (s string)
+                         (items-collector (parse-stream s nil))))
+                     (setq current-item nil))))
+          (loop
+            with before-first-item = t
+            for line in all-content
+            do (multiple-value-bind (match strings)
+                   (cl-ppcre:scan-to-strings "^@item +(.*)$" line)
+                 (if match
+                     (cond (before-first-item
+                            (setq before-first-item nil))
+                           (t
+                            (parse-item)
+                            (setq current-item (list (aref strings 0)))))
+                     ;; ELSE: Plain line
+                     (push line current-item)))
+            finally (parse-item))))
+      (cons :itemize (items-collector)))))
+
 (defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
-    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))
+    (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
+          (terminating-string nil))
       (labels ((collect-paragraph ()
                  (when (plusp (length current-paragraph))
                    (info-collector (parse-paragraph current-paragraph))
                    (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
         (loop
           for s = (read-line stream nil nil)
+          do (setq terminating-string s)
           until (or (null s)
                     (and end-tag
                          (cl-ppcre:scan end-tag s)))
@@ -265,7 +295,11 @@
 
                       (("^@example *$")
                        (collect-paragraph)
-                       (info-collector (cons :pre (skip-block stream "^@end example"))))))
+                       (info-collector (cons :pre (skip-block stream "^@end example"))))
+
+                      (("^@itemize *$")
+                       (collect-paragraph)
+                       (info-collector (parse-itemize stream)))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t
@@ -274,7 +308,7 @@
                       (vector-push-extend #\Space current-paragraph))
                     (loop for ch across s do (vector-push-extend ch current-paragraph)))))
         (collect-paragraph)
-        (info-collector)))))
+        (values (info-collector) terminating-string)))))
 
 (defun parse-file (file)
   (log:trace "Parsing file: ~s" file)

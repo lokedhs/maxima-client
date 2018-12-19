@@ -67,9 +67,14 @@
         (let ((start (member-if (lambda (v)
                                   (and (listp v)
                                        (eq (car v) :node)
-                                       (equal (car (second v)) name)))
+                                       (equal (second v) name)))
                                 file-content)))
-          start)))))
+          ;; Copy everything up until the next node
+          (loop
+            for v in (cdr start)
+            until (and (listp v)
+                       (eq (car v) :node))
+            collect v))))))
 
 (defun display-documentation-frame ()
   (let ((frame (clim:make-application-frame 'documentation-frame
@@ -137,6 +142,12 @@
              (:paragraph "After example code")
              (:CATBOX "Numerical evaluation" "Predicate functions"))
             (:p "test")))))
+
+(define-documentation-frame-command (add-code-command :name "code")
+    ()
+  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+    (setf (info-content-panel/content info-content-panel)
+          '((:pre "some" "test" "line")))))
 
 (define-documentation-frame-command (node-command :name "Node")
     ((name 'string :prompt "Node"))
