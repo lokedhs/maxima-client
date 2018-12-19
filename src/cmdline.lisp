@@ -508,6 +508,7 @@ terminated by ;.")
 (clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
     ((size integer :prompt "points"))
   (setq maxima::$font_size size)
+  (log:info "size = ~s" (clim:pane-text-style *standard-output*))
   (format t "~%Maths font size changed to ~a~%~%" size))
 
 (clim:define-command (enable-submit-on-return-command :name "Enable submit on return" :menu t :command-table maxima-commands)
