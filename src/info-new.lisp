@@ -1,23 +1,22 @@
 (in-package :maxima-client.doc-new)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (clim:define-presentation-type node ()
+    :description "Node in the documentation"))
+
 (defclass info-content-panel-view (maxima-client::maxima-renderer-view)
   ())
 
 (defvar *doc-frame-lock* (bordeaux-threads:make-lock "doc-frame-lock"))
 (defvar *doc-frame* nil)
+(defvar *index-symbols* nil)
+(defvar *index-nodes* nil)
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
 (defclass info-content-panel (clim:application-pane)
   ((content :initform nil
             :accessor info-content-panel/content)))
-
-(defun display-text-content (frame panel)
-  (declare (ignore frame))
-  (let ((content (info-content-panel/content panel)))
-    (when content
-      (clim:with-room-for-graphics (panel :first-quadrant nil)
-        (maxima-client.markup:display-markup panel content)))))
 
 (clim:define-application-frame documentation-frame ()
   ()
@@ -30,6 +29,13 @@
                               info-content))
                        (1/5 interaction-pane)))))
 
+(defun display-text-content (frame panel)
+  (declare (ignore frame))
+  (let ((content (info-content-panel/content panel)))
+    (when content
+      (clim:with-room-for-graphics (panel :first-quadrant nil)
+        (maxima-client.markup:display-markup panel content)))))
+
 (defun load-doc-file (name)
   (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
          (file (merge-pathnames (concatenate 'string name ".lisp") info-root-path))
@@ -37,7 +43,33 @@
                     (read in))))
     content))
 
+(defun load-index ()
+  (when (or (null *index-symbols*)
+            (null *index-nodes*))
+    (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
+           (file (merge-pathnames #p"index.lisp" info-root-path))
+           (content (with-open-file (in file :external-format :utf-8)
+                      (read in))))
+      (setq *index-symbols* (cdr (assoc :symbols content)))
+      (setq *index-nodes* (cdr (assoc :nodes content))))))
 
+(defun load-node (name)
+  (load-index)
+  (let ((entry (find name *index-nodes* :test #'equal :key (lambda (v)
+                                                             ;; Each entry consists of a node descriptor
+                                                             ;; Each node descriptor consists of 4 elements
+                                                             ;; The first element of each node descriptor is its name
+                                                             (first (first v))))))
+    (when entry
+      (let* ((file (second entry))
+             (file-content (load-doc-file file)))
+        ;; Find the content from the given node, until the next node
+        (let ((start (member-if (lambda (v)
+                                  (and (listp v)
+                                       (eq (car v) :node)
+                                       (equal (car (second v)) name)))
+                                file-content)))
+          start)))))
 
 (defun display-documentation-frame ()
   (let ((frame (clim:make-application-frame 'documentation-frame
@@ -105,3 +137,8 @@
              (:paragraph "After example code")
              (:CATBOX "Numerical evaluation" "Predicate functions"))
             (:p "test")))))
+
+(define-documentation-frame-command (node-command :name "Node")
+    ((name 'string :prompt "Node"))
+  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+    (setf (info-content-panel/content info-content-panel) (load-node name))))
