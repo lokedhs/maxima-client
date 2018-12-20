@@ -221,10 +221,11 @@
   (list* :defvr (list type name)
          (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
 
-(defun parse-itemize (stream)
+(defun parse-itemize (stream args)
   ;; Any content before the first @item will be dropped
   ;; We should probably check for anchors here
-  (let ((all-content (skip-block stream "^@end itemize")))
+  (let ((bullet-p (cl-ppcre:scan "@bullet" args))
+        (all-content (skip-block stream "^@end itemize")))
     (collectors:with-collector (items-collector)
       (let ((current-item nil))
         (labels ((parse-item ()
@@ -247,7 +248,7 @@
                      ;; ELSE: Plain line
                      (push line current-item)))
             finally (parse-item))))
-      (cons :itemize (items-collector)))))
+      (list* :itemize (if bullet-p '(:bullet) nil) (items-collector)))))
 
 (defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
@@ -297,9 +298,9 @@
                        (collect-paragraph)
                        (info-collector (cons :pre (skip-block stream "^@end example"))))
 
-                      (("^@itemize *$")
+                      (("^@itemize(?: +(.*))?$" args)
                        (collect-paragraph)
-                       (info-collector (parse-itemize stream)))))
+                       (info-collector (parse-itemize stream (aref args 0))))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t
@@ -482,4 +483,5 @@ corresponding lisp files to the output directory."
   (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
-                         destination-directory)))
+                         destination-directory)
+    (generate-index)))

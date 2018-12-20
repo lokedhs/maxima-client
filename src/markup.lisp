@@ -42,11 +42,12 @@
     (bordeaux-threads:make-thread (lambda ()
                                     (uiop/run-program:run-program (list "xdg-open" s))))))
 
-(defun display-markup-list (stream content)
+(defun display-markup-list (stream content &key skip-first)
   (log:trace "displaying markup list: ~s" content)
   (loop
     for v in content
-    do (display-markup-int stream v)))
+    for first = t then nil
+    do (display-markup-int stream (if (and skip-first first (paragraph-item-p v)) (cdr v) v))))
 
 (defun keyword->key-label (key)
   (ecase key
@@ -125,6 +126,11 @@
 
 (defun make-documentation-text-link (name)
   (make-instance 'documentation-text-link :name name))
+
+(defun paragraph-item-p (item)
+  (and (listp item)
+       (or (eq (car item) :p)
+           (eq (car item) :paragraph))))
 
 (defun render-catbox (stream categories)
   (draw-current-line-and-reset stream)
@@ -223,6 +229,19 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
+(defun render-itemize (stream args content)
+  ;; For now, just render itemised blocks as a sequence of indented
+  ;; paragraphs. This seems to be in line with what the HTML renderer
+  ;; does.
+  (let ((bullet-p (member :bullet args)))
+    (with-indent (stream 50)
+      (dolist (item content)
+        (draw-current-line-and-reset stream)
+        (add-vspacing stream 18)
+        (when bullet-p
+          (word-wrap-draw-string stream (format nil "~c " #\BULLET)))
+        (display-markup-list stream item :skip-first t)))))
+
 (defun draw-presentation (stream obj)
   (let ((rec (clim:with-output-to-output-record (stream)
                (present-to-stream obj stream))))
@@ -240,7 +259,7 @@
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
              ((:code :math) (clim:with-text-family (stream :fix) (display (cdr content))))
              (:pre (render-preformatted stream (cdr content)))
-             (:link (draw-presentation stream (make-text-link-from-markup (cdr content))))
+             ((:link :url) (draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
              ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
              (:newline (draw-newline stream))
@@ -248,7 +267,7 @@
              (:subsection (render-subsection stream (cdr content)))
              (:fname (draw-presentation stream (make-documentation-text-link (cadr content))))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
-             ((:mrefdot :mref :mrefcomma :xref) (display (cdr content)))
+             ((:mrefdot :mxrefdot :mref :mrefcomma :xref) (display (cdr content)))
              (:catbox (render-catbox stream (cdr content)))
              (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
              (:deffn (render-deffn stream (second content) (cddr content)))
@@ -256,7 +275,9 @@
              (:anchor nil)
              (:node nil)
              (:menu nil)
-             (:footnote nil)))
+             (:footnote nil)
+             (:figure nil)
+             (:itemize (render-itemize stream (second content) (cddr content)))))
           ((listp content)
            (display-markup-list stream content)))))
 
