@@ -247,6 +247,22 @@
                (present-to-stream obj stream))))
     (word-wrap-draw-record stream rec)))
 
+(defun render-picture (stream file)
+  (let ((parsed-name (alexandria:if-let ((pos (position #\, file)))
+                       (subseq file 0 pos)
+                       file)))
+    (draw-current-line-and-reset stream)
+    (let* ((p (merge-pathnames (format nil "~a.png" parsed-name)
+                               (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/")))
+           (image (clim:make-pattern-from-bitmap-file p)))
+      (if image
+          (with-word-wrap-record (stream)
+            (clim:draw-design stream image)
+            (clim:draw-rectangle* stream 0 0 (clim:pattern-width image) (clim:pattern-height image)
+                                  :filled nil :ink clim:+black+))
+          ;; ELSE: Image couldn't be loaded
+          (log:warn "Could not load image file: ~s" p)))))
+
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
              (display-markup-list stream v)))
@@ -277,7 +293,9 @@
              (:menu nil)
              (:footnote nil)
              (:figure nil)
-             (:itemize (render-itemize stream (second content) (cddr content)))))
+             (:itemize (render-itemize stream (second content) (cddr content)))
+             (:ref (display (cdr content)))
+             (:image (render-picture stream (second content)))))
           ((listp content)
            (display-markup-list stream content)))))
 

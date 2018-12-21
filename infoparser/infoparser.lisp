@@ -250,6 +250,16 @@
             finally (parse-item))))
       (list* :itemize (if bullet-p '(:bullet) nil) (items-collector)))))
 
+(defun parse-ifhtml (stream)
+  (let ((content (skip-block stream "^@end ifhtml")))
+    (loop
+      for row in content
+      append (multiple-value-bind (match strings)
+                 (cl-ppcre:scan-to-strings "@image{([^}]+)}" row)
+               (if match
+                   (list (list :image (aref strings 0)))
+                   nil)))))
+
 (defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
     (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
@@ -283,7 +293,8 @@
                        (info-collector (list :subsection (aref name 0))))
 
                       (("^@c ") nil)
-                      (("^@ifhtml *$") (skip-block stream "^@end ifhtml"))
+                      (("^@ifhtml *$") (dolist (image (parse-ifhtml stream))
+                                         (info-collector image)))
                       (("^@iftex *$") (skip-block stream "^@end iftex"))
 
                       (("^@deffn +{([^}]+)} +([^ ]+) +(.*[^ ]) *$" args)
@@ -478,10 +489,33 @@ corresponding lisp files to the output directory."
             (let ((*print-readably* t))
               (print result))))))))
 
+(defun copy-file-to-dir (file dir)
+  (let ((destination-name (merge-pathnames (format nil "~a.~a" (pathname-name file) (pathname-type file)) dir)))
+    (uiop:copy-file file destination-name)))
+
+(defun convert-pdf-to-png (file destination-name)
+  (uiop:run-program (list "gs" "-sDEVICE=png16m" (format nil "-sOutputFile=~a" (namestring destination-name))
+                          "-dNOPAUSE" "-dBATCH" "-dQUIET" "-r85" (namestring file))))
+
+(defun convert-figures ()
+  (let ((destination-dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/figures/")))
+    (ensure-directories-exist destination-dir)
+    (dolist (file (directory (merge-pathnames #p"*.*" (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/figures/"))))
+      (multiple-value-bind (match strings)
+          (cl-ppcre:scan-to-strings "\\.(pdf|png)" (namestring file))
+        (when match
+          (log:trace "Converting file: ~s" file)
+          (let ((destination-name (merge-pathnames (format nil "~a.png" (pathname-name file))
+                                                   destination-dir)))
+            (string-case:string-case ((aref strings 0))
+              ("png" (copy-file-to-dir file destination-dir))
+              ("pdf" (convert-pdf-to-png file destination-name)))))))))
+
 (defun generate-doc-directory ()
   "Generate lisp files for all the texinfo files in the maxima distribution."
   (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
                          destination-directory)
-    (generate-index)))
+    (generate-index)
+    (convert-figures)))

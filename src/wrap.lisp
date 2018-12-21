@@ -48,9 +48,6 @@
        (climb:text-style-descent style stream))))
 
 (defun draw-current-line (stream)
-  (when (= 1 (length *word-wrap-line-content*))
-    (dimension-bind ((aref *word-wrap-line-content* 0) :width w :height h :x x :y y :bottom b)
-      (log:info "dim:(~s,~s) pos:(~s,~s) b:~s" w h x y b)))
   (when (plusp (length *word-wrap-line-content*))
     (let ((max-descent (max (font-descent stream)
                             (reduce #'max *word-wrap-line-content*
@@ -71,7 +68,7 @@
                    (clim:stream-add-output-record stream rec))
            (dimension-bind (rec :x x :y y)
              ;; We need to adjust the vertical coordinate so that text of different sizes are aligned to the same
-             ;; baseline. All text is drawn with the basline at y=0, and the ascent is a negative value.
+             ;; baseline. All text is drawn with the baseline at y=0, and the ascent is a negative value.
              (set-rec-position rec x (+ *word-wrap-y* max-ascent y))
              (clim:stream-add-output-record stream rec)))
       (incf *word-wrap-y* (+ max-ascent max-descent)))))

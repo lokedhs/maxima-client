@@ -36,12 +36,25 @@
       (clim:with-room-for-graphics (panel :first-quadrant nil)
         (maxima-client.markup:display-markup panel content)))))
 
+(defvar *doc-file-cache* nil)
+
+(defmacro with-doc-file-cache (&body body)
+  `(let ((*doc-file-cache* (make-hash-table :test 'equal)))
+     ,@body))
+
 (defun load-doc-file (name)
-  (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
-         (file (merge-pathnames (concatenate 'string name ".lisp") info-root-path))
-         (content (with-open-file (in file :external-format :utf-8)
-                    (read in))))
-    content))
+  (labels ((load ()
+             (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
+                    (file (merge-pathnames (concatenate 'string name ".lisp") info-root-path))
+                    (content (with-open-file (in file :external-format :utf-8)
+                               (read in))))
+               content))
+           (load-from-cache ()
+             (alexandria:ensure-gethash name *doc-file-cache* (load))))
+    (if *doc-file-cache*
+        (load-from-cache)
+        (with-doc-file-cache
+          (load-from-cache)))))
 
 (defun load-index ()
   (when (or (null *index-symbols*)
@@ -61,8 +74,7 @@
                                                              ;; The first element of each node descriptor is its name
                                                              (first (first v))))))
     (when entry
-      (let* ((file (second entry))
-             (file-content (load-doc-file file)))
+      (let ((file-content (load-doc-file (second entry))))
         ;; Find the content from the given node, until the next node
         (let ((start (member-if (lambda (v)
                                   (and (listp v)
@@ -75,6 +87,23 @@
             until (and (listp v)
                        (eq (car v) :node))
             collect v))))))
+
+(defun load-function (name)
+  (load-index)
+  (let ((entry (find name *index-symbols* :key #'car :test #'equal)))
+    (unless entry
+      (error "Function not found: ~s" name))
+    (with-doc-file-cache
+      (loop
+        for (type file description) in (cdr entry)
+        collect (let ((file-content (load-doc-file file)))
+                  (let ((found (find-if (lambda (definition)
+                                          (and (eq (car definition) type)
+                                               (equal (second (second definition)) name)))
+                                        file-content)))
+                    (unless found
+                      (error "symbol found in index but not in file: ~s type: ~s" name type))
+                    (list :paragraph found)))))))
 
 (defun display-documentation-frame ()
   (let ((frame (clim:make-application-frame 'documentation-frame
@@ -153,3 +182,8 @@
     ((name 'string :prompt "Node"))
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel) (load-node name))))
+
+(define-documentation-frame-command (function-command :name "Function")
+    ((name 'string :prompt "Name"))
+  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+    (setf (info-content-panel/content info-content-panel) (load-function name))))
