@@ -369,7 +369,7 @@
                                 :output (pathname output)
                                 :error-output (pathname error-out))
               (close output)
-              (with-open-file (s (pathname output))
+              (with-open-file (s (pathname output) :external-format :utf-8)
                 (read s)))
           (uiop:subprocess-error (condition)
             (close error-out)
@@ -405,7 +405,8 @@
                                       :type "lisp"
                                       :defaults destination-directory)
                        :direction :output
-                       :if-exists :supersede)
+                       :if-exists :supersede
+                       :external-format :utf-8)
       (with-standard-io-syntax
         (print processed s)))))
 
@@ -448,7 +449,9 @@ corresponding lisp files to the output directory."
       for file in (directory (merge-pathnames #p"*.lisp" destination-dir))
       for name = (pathname-name file)
       unless (equal name index-filename)
-        do (let  ((content (with-open-file (s file) (with-standard-io-syntax (read s)))))
+        do (let  ((content (with-open-file (s file :external-format :utf-8)
+                             (with-standard-io-syntax
+                               (read s)))))
              (extract-functions content functions nodes name)))
     (let* ((content-list (loop
                            for key being each hash-key in functions using (hash-value value)
@@ -461,7 +464,9 @@ corresponding lisp files to the output directory."
                                  (string< (string-downcase o1) (string-downcase o2)))
                                :key #'caar)))
       (with-open-file (s (merge-pathnames (format nil "~a.lisp" index-filename) destination-dir)
-                         :direction :output :if-exists :supersede)
+                         :direction :output
+                         :if-exists :supersede
+                         :external-format :utf-8)
         (with-standard-io-syntax
           (print `((:symbols . ,symbols-sorted)
                    (:nodes . ,nodes-sorted))
