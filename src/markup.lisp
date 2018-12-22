@@ -2,45 +2,89 @@
 
 (clim:define-command-table text-commands)
 
+(defclass markup-text-view ()
+  ())
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; text-link
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defclass text-link ()
-  ((src :initarg :src
-        :reader text-link/src)
-   (description :initarg :description
-                :initform nil)))
+  ())
 
-(defgeneric text-link/description (obj)
-  (:method ((obj text-link))
-    (or (slot-value obj 'description)
-        (text-link/src obj))))
+(defgeneric text-link/description (obj))
 
-(defun make-text-link-from-markup (args)
-  (cond ((alexandria:sequence-of-length-p args 1)
-         (make-instance 'text-link :src (first args)))
-        ((alexandria:sequence-of-length-p args 2)
-         (make-instance 'text-link :src (first args) :description (second args)))
-        (t
-         (error "Illegally formatted text-link entry: ~s" args))))
-
-(clim:define-presentation-method clim:present (obj (type text-link) stream (view t) &key)
+(clim:define-presentation-method clim:present (obj (type text-link) stream (view markup-text-view) &key)
   (clim:with-drawing-options (stream :ink clim:+blue+)
     (clim:draw-text* stream (text-link/description obj) 0 0)))
 
-(clim:define-presentation-translator text-to-text-link (string text-link text-commands)
-    (object)
-  (make-instance 'text-link :src object))
+(clim:define-presentation-method clim:present (obj (type text-link) stream (view clim:textual-view) &key)
+  (format stream "~a" (text-link/description obj)))
 
-(clim:define-presentation-to-command-translator select-url
-    (text-link open-url text-commands)
-    (obj)
-  (list obj))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; text-link-url
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass text-link-url (text-link)
+  ((src         :initarg :src
+                :reader text-link-url/src)
+   (description :initarg :description
+                :initform nil)))
+
+(defmethod text-link/description ((obj text-link-url))
+  (or (slot-value obj 'description)
+      (text-link-url/src obj)))
+
+(clim:define-presentation-translator text-to-text-link-url (string text-link-url text-commands)
+    (object)
+  (make-instance 'text-link-url :src object))
 
 (clim:define-command (open-url :name "Open URL" :menu t :command-table text-commands)
-    ((url 'text-link :prompt "URL"))
-  (let ((s (text-link/src url))
+    ((url 'text-link-url :prompt "URL"))
+  (let ((s (text-link-url/src url))
         (stream (find-interactor-pane)))
     (format stream "Opening URL: ~a" s)
     (bordeaux-threads:make-thread (lambda ()
                                     (uiop/run-program:run-program (list "xdg-open" s))))))
+
+(clim:define-presentation-to-command-translator select-url
+    (text-link-url open-url text-commands)
+    (obj)
+  (list obj))
+
+(defun make-text-link-from-markup (args)
+  (cond ((alexandria:sequence-of-length-p args 1)
+         (make-instance 'text-link-url :src (first args)))
+        ((alexandria:sequence-of-length-p args 2)
+         (make-instance 'text-link-url :src (first args) :description (second args)))
+        (t
+         (error "Illegally formatted text-link entry: ~s" args))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; maxima-function-reference
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass maxima-function-reference (text-link)
+  ((name :initarg :name
+         :reader maxima-function-reference/name)))
+
+(defmethod text-link/description ((obj maxima-function-reference))
+  (maxima-function-reference/name obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; maxima-function-reference
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass node-reference (text-link)
+  ((name :initarg :name
+         :reader node-reference/name)))
+
+(defmethod text-link/description ((obj node-reference))
+  (node-reference/name obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Markup rendering
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun display-markup-list (stream content &key skip-first)
   (log:trace "displaying markup list: ~s" content)
@@ -116,17 +160,6 @@
                           (clim:draw-text* stream string 0 0))))))))
     (word-wrap-draw-record stream rec)))
 
-(defclass documentation-text-link ()
-  ((name :initarg :name
-         :reader documentation-text-link/name)))
-
-(clim:define-presentation-method clim:present (obj (type documentation-text-link) stream (view t) &key)
-  (clim:with-drawing-options (stream :ink clim:+blue+)
-    (clim:draw-text* stream (documentation-text-link/name obj) 0 0)))
-
-(defun make-documentation-text-link (name)
-  (make-instance 'documentation-text-link :name name))
-
 (defun paragraph-item-p (item)
   (and (listp item)
        (or (eq (car item) :p)
@@ -141,7 +174,7 @@
         with pos = 0
         for name in categories
         do (let ((rec (clim:with-output-to-output-record (stream)
-                        (present-to-stream (make-documentation-text-link name) stream))))
+                        (present-to-stream (make-instance 'node-reference :name name) stream))))
              (move-rec rec pos 0)
              (dimension-bind (rec :width width)
                (incf pos (+ width 15)))
@@ -257,11 +290,37 @@
            (image (clim:make-pattern-from-bitmap-file p)))
       (if image
           (with-word-wrap-record (stream)
-            (clim:draw-design stream image)
+            (clim:draw-pattern* stream image 0 0)
             (clim:draw-rectangle* stream 0 0 (clim:pattern-width image) (clim:pattern-height image)
                                   :filled nil :ink clim:+black+))
           ;; ELSE: Image couldn't be loaded
           (log:warn "Could not load image file: ~s" p)))))
+
+(defun render-node (stream content)
+  (draw-current-line-and-reset stream)
+  (let ((title (first content))
+        (next (second content))
+        (prev (third content))
+        (up (fourth content)))
+    (word-wrap-draw-string stream (format nil "Title: ~a" title))
+    (draw-current-line-and-reset stream)
+    (when next
+      (word-wrap-draw-string stream "Next: ")
+      (draw-presentation stream (make-instance 'node-reference :name next))
+      (when prev
+        (word-wrap-draw-string stream " Previous: ")
+        (draw-presentation stream (make-instance 'node-reference :name prev))
+        (when up
+          (word-wrap-draw-string stream " Up: ")
+          (draw-presentation stream (make-instance 'node-reference :name up))))
+      (draw-current-line-and-reset stream))))
+
+(defun render-menu (stream content)
+  (declare (ignore stream content))
+  nil)
+
+(defun make-mref-link (name)
+  (make-instance 'maxima-function-reference :name name))
 
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
@@ -281,16 +340,16 @@
              (:newline (draw-newline stream))
              (:section (render-section stream (cdr content)))
              (:subsection (render-subsection stream (cdr content)))
-             (:fname (draw-presentation stream (make-documentation-text-link (cadr content))))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
-             ((:mrefdot :mxrefdot :mref :mrefcomma :xref) (display (cdr content)))
+             ((:mrefdot :mxrefdot :mrefcomma :xref) (display (cdr content)))
+             ((:mref :fname) (draw-presentation stream (make-mref-link (second content))))
              (:catbox (render-catbox stream (cdr content)))
              (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
              (:deffn (render-deffn stream (second content) (cddr content)))
              (:defvr (render-defvr stream (second content) (cddr content)))
              (:anchor nil)
-             (:node nil)
-             (:menu nil)
+             (:node (render-node stream (cdr content)))
+             (:menu (render-menu stream (cdr content)))
              (:footnote nil)
              (:figure nil)
              (:itemize (render-itemize stream (second content) (cddr content)))

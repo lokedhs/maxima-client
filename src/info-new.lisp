@@ -4,7 +4,10 @@
   (clim:define-presentation-type node ()
     :description "Node in the documentation"))
 
-(defclass info-content-panel-view (maxima-client::maxima-renderer-view)
+(clim:define-command-table info-commands
+  :inherit-from (maxima-client.markup:text-commands))
+
+(defclass info-content-panel-view (maxima-client::maxima-renderer-view maxima-client.markup:markup-text-view)
   ())
 
 (defvar *doc-frame-lock* (bordeaux-threads:make-lock "doc-frame-lock"))
@@ -27,7 +30,8 @@
   (:layouts (default (clim:vertically ()
                        (4/5 (clim:scrolling ()
                               info-content))
-                       (1/5 interaction-pane)))))
+                       (1/5 interaction-pane))))
+  (:command-table (documentation-frame :inherit-from (info-commands))))
 
 (defun display-text-content (frame panel)
   (declare (ignore frame))
@@ -92,7 +96,7 @@
   (load-index)
   (let ((entry (find name *index-symbols* :key #'car :test #'equal)))
     (unless entry
-      (error "Function not found: ~s" name))
+      (return-from load-function nil))
     (with-doc-file-cache
       (loop
         for (type file description) in (cdr entry)
@@ -142,6 +146,8 @@
     (setf (info-content-panel/content info-content-panel)
           '((:MENU "Numbers" "Strings" "Constants" "Lists" "Arrays" "Structures")
             (:NODE "Numbers" "Strings" "Data Types and Structures" "Data Types and Structures")
+            (:p (:url "http://www.reddit.com/"))
+            (:p (:mref "diff"))
             (:SECTION "Numbers")
             (:pre "This" "is some text" "third line")
             (:MENU "Introduction to Numbers" "Functions and Variables for Numbers")
@@ -178,12 +184,41 @@
     (setf (info-content-panel/content info-content-panel)
           '((:pre "some" "test" "line")))))
 
-(define-documentation-frame-command (node-command :name "Node")
-    ((name 'string :prompt "Node"))
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel) (load-node name))))
+(defun find-interaction-pane ()
+  (clim:find-pane-named clim:*application-frame* 'interaction-pane))
 
-(define-documentation-frame-command (function-command :name "Function")
-    ((name 'string :prompt "Name"))
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel) (load-function name))))
+(define-documentation-frame-command (open-help-node :name "Node")
+    ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
+  (let* ((node-name (etypecase name
+                               (string name)                                                                          
+                               (maxima-client.markup:node-reference (maxima-client.markup:node-reference/name name))))
+         (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
+         (content (load-node node-name)))
+    (if content
+        (setf (info-content-panel/content info-content-panel) content)
+        (format (find-interaction-pane) "Node not found: ~s" node-name))))
+
+(clim:define-command (open-help-function :name "Function" :menu t :command-table info-commands)
+    ((function '(or string maxima-client.markup:maxima-function-reference) :prompt "Name"))
+  (let* ((name (etypecase function
+                 (string function)
+                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:maxima-function-reference/name function))))
+         (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
+         (content (load-function name)))
+    (if content
+        (setf (info-content-panel/content info-content-panel) content)
+        (format (find-interaction-pane) "No documentation for: ~s" name))))
+
+(clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
+    (object)
+  (make-instance 'maxima-client.markup:maxima-function-reference :name object))
+
+(clim:define-presentation-to-command-translator select-maxima-function
+    (maxima-client.markup:maxima-function-reference open-help-function info-commands)
+    (obj)
+  (list obj))
+
+(clim:define-presentation-to-command-translator select-node
+    (maxima-client.markup:node-reference open-help-node info-commands)
+    (obj)
+  (list obj))

@@ -398,22 +398,23 @@
                  collect v)))
     (parse-branch info-content)))
 
+(defun parse-and-write-file (file destination-directory)
+  (let* ((content (parse-file file))
+         (processed (resolve-example-code content)))
+    (with-open-file (s (make-pathname :name (pathname-name file)
+                                      :type "lisp"
+                                      :defaults destination-directory)
+                       :direction :output
+                       :if-exists :supersede)
+      (with-standard-io-syntax
+        (print processed s)))))
+
 (defun parse-doc-directory (info-directory destination-directory)
   "Parse all texinfo files in the given directory and output
 corresponding lisp files to the output directory."
   (let ((dir (merge-pathnames "*.texi" info-directory)))
-    (loop
-      for file in (directory dir)
-      for content = (parse-file file)
-      for processed = (resolve-example-code content)
-      do (with-open-file (s (make-pathname :name (pathname-name file)
-                                           :type "lisp"
-                                           :defaults destination-directory)
-                            :direction :output
-                            :if-exists :supersede)
-           (with-standard-io-syntax
-             (let ((*print-readably* t))
-               (print processed s)))))))
+    (dolist (file (directory dir))
+      (parse-and-write-file file destination-directory))))
 
 (defun make-multiline-string (lines)
   (with-output-to-string (s)
@@ -462,10 +463,9 @@ corresponding lisp files to the output directory."
       (with-open-file (s (merge-pathnames (format nil "~a.lisp" index-filename) destination-dir)
                          :direction :output :if-exists :supersede)
         (with-standard-io-syntax
-          (let ((*print-readably* t))
-            (print `((:symbols . ,symbols-sorted)
-                     (:nodes . ,nodes-sorted))
-                   s))))
+          (print `((:symbols . ,symbols-sorted)
+                   (:nodes . ,nodes-sorted))
+                 s)))
       nil)))
 
 (defun resolve-example-code-external ()
@@ -486,8 +486,7 @@ corresponding lisp files to the output directory."
                                       ;; ELSE: Normal command, the result needs to be saved
                                       (cons :result res))))))
           (with-standard-io-syntax
-            (let ((*print-readably* t))
-              (print result))))))))
+            (print result)))))))
 
 (defun copy-file-to-dir (file dir)
   (let ((destination-name (merge-pathnames (format nil "~a.~a" (pathname-name file) (pathname-type file)) dir)))
@@ -519,3 +518,8 @@ corresponding lisp files to the output directory."
                          destination-directory)
     (generate-index)
     (convert-figures)))
+
+(defun generate-one-file (name)
+  (let ((file (merge-pathnames (format nil "~a.texi" name)
+                               (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/"))))
+    (parse-and-write-file file (resolve-destination-dir))))

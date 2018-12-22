@@ -17,7 +17,8 @@ terminated by ;.")
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
-(defclass maxima-pointer-documentation-view (maxima-renderer-view clim:pointer-documentation-view)
+(defclass maxima-pointer-documentation-view (maxima-renderer-view
+                                             clim:pointer-documentation-view)
   ())
 
 (defparameter +maxima-pointer-documentation-view+ (make-instance 'maxima-pointer-documentation-view))

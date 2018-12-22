@@ -19,7 +19,7 @@
 (defvar *lop*)
 (defvar *inhibit-presentations* nil)
 
-(defclass maxima-renderer-view ()
+(defclass maxima-renderer-view (maxima-client.markup:markup-text-view)
   ())
 
 (defclass maxima-interactor-view (maxima-renderer-view clim:textual-view)
@@ -150,6 +150,18 @@
 (defun render-inf (stream)
   (render-formatted stream "~c" #\INFINITY))
 
+(defun render-symbol-name-inner (stream formatted roman-font)
+  (labels ((render ()
+             (if (alexandria:starts-with-subseq "%" formatted)
+                 (with-aligned-rendering (stream)
+                   (with-font-size-change (stream (- (* (char-height stream) 0.6)))
+                     (render-aligned () (render-symbol-str stream "%")))
+                   (render-aligned () (render-formatted-with-replacement stream "~a" (subseq formatted 1))))
+                 (render-formatted-with-replacement stream "~a" formatted))))
+    (if roman-font
+        (with-roman-text-style (stream) (render))
+        (with-italic-text-style (stream) (render)))))
+
 (defun render-symbol-inner (stream sym roman-font)
   (case sym
     (maxima::$inf (render-inf stream))
@@ -157,17 +169,28 @@
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
     (maxima::%gamma (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_GAMMA))
-    (t (labels ((render ()
-                  (let ((formatted (format-sym-name sym)))
-                    (if (alexandria:starts-with-subseq "%" formatted)
-                        (with-aligned-rendering (stream)
-                          (with-font-size-change (stream (- (* (char-height stream) 0.6)))
-                            (render-aligned () (render-symbol-str stream "%")))
-                          (render-aligned () (render-formatted-with-replacement stream "~a" (subseq formatted 1))))
-                        (render-formatted-with-replacement stream "~a" formatted)))))
-         (if roman-font
-             (with-roman-text-style (stream) (render))
-             (with-italic-text-style (stream) (render)))))))
+    (t ;; Check if the symbol should be rendered using subscript. The
+     ;; rule is: If the name contains a single underscore, and one
+     ;; of the parts is a single letter, then the latter part should
+     ;; be subscripted.
+     (let* ((name (format-sym-name sym))
+            (parts (split-symbol-if-subscript name)))
+       (if parts
+           (render-subscript stream
+                             (lambda (stream)
+                               (render-symbol-name-inner stream (first parts) roman-font))
+                             (lambda (stream)
+                               (render-formatted-with-replacement stream "~a" (second parts))))
+           ;; ELSE: Don't render the symbol using subscript
+           (render-symbol-name-inner stream name roman-font))))))
+
+(defun split-symbol-if-subscript (name)
+  (let ((pos (position #\_ name)))
+    (when pos
+      (unless (position #\_ name :start (1+ pos))
+        (when (or (= pos 1)
+                  (= (- (length name) pos) 2))
+          (list (subseq name 0 pos)  (subseq name (1+ pos))))))))
 
 (defun render-symbol (stream sym &key roman-font)
   (case sym
@@ -642,17 +665,14 @@ Each element should be an output record."
           (with-wrapped-parens (stream)
             (render-aligned () (render-maxima-expression stream expr))))))))
 
-(defun render-array-reference (stream expr args &key paren-p)
-  (unless args
-    (error "Arg list should have at least one element"))
+(defun render-subscript (stream name-fn args-fn)
   (let ((rec (clim:with-output-to-output-record (stream)
-               (with-wrapped-optional-parens (stream paren-p)
-                 (render-maxima-expression stream expr)))))
+               (funcall name-fn stream))))
     (clim:stream-add-output-record stream rec)
     (dimension-bind (rec :y y :right right :bottom bottom :height height)
       (with-font-size-change (stream 0.8)
         (let ((args-rec (clim:with-output-to-output-record (stream)
-                          (render-arg-list stream args :spacing 0))))
+                          (funcall args-fn stream))))
           (dimension-bind (args-rec :x args-x :y args-y :bottom args-bottom :height args-height)
             (move-rec args-rec (- right args-x)
                       (if (>= args-height (/ height 2))
@@ -660,6 +680,16 @@ Each element should be an output record."
                           (let ((args-centre (/ (+ args-y args-bottom) 2)))
                             (- bottom args-centre))))
             (clim:stream-add-output-record stream args-rec)))))))
+
+(defun render-array-reference (stream expr args &key paren-p)
+  (unless args
+    (error "Arg list should have at least one element"))
+  (render-subscript stream
+                    (lambda (stream)
+                      (with-wrapped-optional-parens (stream paren-p)
+                        (render-maxima-expression stream expr)))
+                    (lambda (stream)
+                      (render-arg-list stream args :spacing 0))))
 
 (defun render-function-or-array-ref (stream arrayref-p paren-p expr args)
   (if arrayref-p

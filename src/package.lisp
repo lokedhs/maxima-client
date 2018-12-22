@@ -70,7 +70,15 @@
   (:use :cl :maxima-client.common)
   (:export #:display-markup
            #:text-commands
-           #:with-word-wrap))
+           #:with-word-wrap
+           #:text-link-url
+           #:text-link
+           #:text-link/description
+           #:maxima-function-reference
+           #:maxima-function-reference/name
+           #:markup-text-view
+           #:node-reference
+           #:node-reference/name))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)
