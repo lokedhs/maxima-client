@@ -326,8 +326,8 @@
     (clim:make-pattern-from-bitmap-file img-filename)))
 
 (defun find-info-root-path ()
-  (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
+  (or *info-directory*
+      (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/")))
 
 (defun find-interactor-pane ()
-  (or *info-directory*
-      (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor)))
+  (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor))
