@@ -6,6 +6,7 @@
 
 (defvar *font-directory* nil)
 (defvar *image-directory* nil)
+(defvar *info-directory* nil)
 
 (defmacro print-unreadable-safely ((&rest slots) object stream &body body)
   "A version of PRINT-UNREADABLE-OBJECT and WITH-SLOTS that is safe to use with unbound slots"
@@ -324,5 +325,9 @@
          (img-filename (merge-pathnames name img-dir)))
     (clim:make-pattern-from-bitmap-file img-filename)))
 
+(defun find-info-root-path ()
+  (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
+
 (defun find-interactor-pane ()
-  (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor))
+  (or *info-directory*
+      (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor)))

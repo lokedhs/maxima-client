@@ -285,8 +285,7 @@
                        (subseq file 0 pos)
                        file)))
     (draw-current-line-and-reset stream)
-    (let* ((p (merge-pathnames (format nil "~a.png" parsed-name)
-                               (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/")))
+    (let* ((p (merge-pathnames (format nil "~a.png" parsed-name) (find-info-root-path)))
            (image (clim:make-pattern-from-bitmap-file p)))
       (if image
           (with-word-wrap-record (stream)

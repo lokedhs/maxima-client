@@ -504,7 +504,7 @@ terminated by ;.")
   (let ((string (etypecase name
                   (string name)
                   (symbol (format-sym-name name)))))
-    (maxima-client.doc:add-info-page string)))
+    (maxima-client.doc-new:display-function-help string)))
 
 (clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
     ((size integer :prompt "points"))
@@ -524,7 +524,7 @@ terminated by ;.")
 
 (clim:define-command (show-documentation-frame-command :name "Show Documentation Frame" :menu t :command-table maxima-commands)
     ()
-  (maxima-client.doc-new:open-documentation-frame))
+  (maxima-client.doc-new:open-documentation-frame nil))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands
@@ -602,4 +602,5 @@ terminated by ;.")
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil
-                         :menu '(("Documentation" :command (show-documentation-frame-command))))
+                         :menu '(("Documentation" :command (show-documentation-frame-command))
+                                 ("Symbol Help" :command info-command)))

@@ -52,7 +52,9 @@
            #:load-image
            #:find-interactor-pane
            #:*font-directory*
-           #:*image-directory*))
+           #:*image-directory*
+           #:find-info-root-path
+           #:*info-directory*))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
@@ -104,4 +106,5 @@
 (defpackage :maxima-client.doc-new
   (:use :cl :maxima-client.common)
   (:export
-   #:open-documentation-frame))
+   #:open-documentation-frame
+   #:display-function-help))

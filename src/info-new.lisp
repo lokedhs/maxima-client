@@ -12,6 +12,7 @@
 
 (defvar *doc-frame-lock* (bordeaux-threads:make-lock "doc-frame-lock"))
 (defvar *doc-frame* nil)
+
 (defvar *index-symbols* nil)
 (defvar *index-nodes* nil)
 
@@ -22,7 +23,9 @@
             :accessor info-content-panel/content)))
 
 (clim:define-application-frame documentation-frame ()
-  ()
+  ((initial-request :initform nil
+                    :initarg :initial-request
+                    :accessor documentation-frame/initial-request))
   (:panes (info-content (clim:make-pane 'info-content-panel
                                         :display-function 'display-text-content
                                         :default-view +info-content-panel-view+))
@@ -32,6 +35,45 @@
                               info-content))
                        (1/5 interaction-pane))))
   (:command-table (documentation-frame :inherit-from (info-commands))))
+
+(defun process-documentation-request (command)
+  (destructuring-bind (type name)
+      command
+    (ecase type
+      (:function (open-help-function name)))))
+
+(defun display-function-help (name)
+  (open-documentation-frame (list :function name)))
+
+(defmethod clim:note-frame-enabled :after (fm (frame documentation-frame))
+  (alexandria:when-let ((command (documentation-frame/initial-request frame)))
+    (setf (documentation-frame/initial-request frame) nil)
+    (process-documentation-request command)))
+
+(defun display-documentation-frame ()
+  (let ((frame (clim:make-application-frame 'documentation-frame
+                                            :width 900
+                                            :height 800)))
+    (clim:run-frame-top-level frame)))
+
+(defun open-documentation-frame (command)
+  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
+    (if (null *doc-frame*)
+        (let ((frame (clim:make-application-frame 'documentation-frame
+                                                  :width 900
+                                                  :height 800)))
+          (setq *doc-frame* frame)
+          (setf (documentation-frame/initial-request frame) command)
+          (bordeaux-threads:make-thread (lambda ()
+                                          (clim:run-frame-top-level frame))))
+        ;; ELSE: Frame was already created, just run the command
+        (when command
+          (process-documentation-request command)))))
+
+(defmethod clim:frame-exit ((frame documentation-frame))
+  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
+    (setq *doc-frame* nil))
+  (call-next-method))
 
 (defun display-text-content (frame panel)
   (declare (ignore frame))
@@ -48,8 +90,8 @@
 
 (defun load-doc-file (name)
   (labels ((load ()
-             (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
-                    (file (merge-pathnames (concatenate 'string name ".lisp") info-root-path))
+             (let* ((info-root-path (find-info-root-path))
+                    (file (merge-pathnames (format nil "docs/~a.lisp" name) info-root-path))
                     (content (with-open-file (in file :external-format :utf-8)
                                (read in))))
                content))
@@ -63,8 +105,8 @@
 (defun load-index ()
   (when (or (null *index-symbols*)
             (null *index-nodes*))
-    (let* ((info-root-path (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
-           (file (merge-pathnames #p"index.lisp" info-root-path))
+    (let* ((info-root-path (find-info-root-path))
+           (file (merge-pathnames #p"docs/index.lisp" info-root-path))
            (content (with-open-file (in file :external-format :utf-8)
                       (read in))))
       (setq *index-symbols* (cdr (assoc :symbols content)))
@@ -108,27 +150,6 @@
                     (unless found
                       (error "symbol found in index but not in file: ~s type: ~s" name type))
                     (list :paragraph found)))))))
-
-(defun display-documentation-frame ()
-  (let ((frame (clim:make-application-frame 'documentation-frame
-                                            :width 900
-                                            :height 800)))
-    (clim:run-frame-top-level frame)))
-
-(defun open-documentation-frame ()
-  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
-    (unless *doc-frame*
-      (let ((frame (clim:make-application-frame 'documentation-frame
-                                                :width 900
-                                                :height 800)))
-        (setq *doc-frame* frame)
-        (bordeaux-threads:make-thread (lambda ()
-                                        (clim:run-frame-top-level frame)))))))
-
-(defmethod clim:frame-exit ((frame documentation-frame))
-  (bordeaux-threads:with-lock-held (*doc-frame-lock*)
-    (setq *doc-frame* nil))
-  (call-next-method))
 
 (define-documentation-frame-command (datatypes-command :name "datatypes")
     ()
@@ -205,9 +226,11 @@
                  (maxima-client.markup:maxima-function-reference (maxima-client.markup:maxima-function-reference/name function))))
          (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
          (content (load-function name)))
-    (if content
-        (setf (info-content-panel/content info-content-panel) content)
-        (format (find-interaction-pane) "No documentation for: ~s" name))))
+    (cond (content
+           (setf (info-content-panel/content info-content-panel) content)
+           (clim:redisplay-frame-pane clim:*application-frame* info-content-panel))
+          (t
+           (format (find-interaction-pane) "No documentation for: ~s" name)))))
 
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)
