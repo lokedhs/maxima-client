@@ -270,7 +270,7 @@ terminated by ;.")
             do (progn
                  (clim:with-activation-gestures (nil :override t)
                    (clim:stream-process-gesture stream gesture nil)))
-          finally 
+          finally
              (progn
                (clim:unread-gesture gesture :stream stream)
                (let ((string (cleanup-input current-command)))

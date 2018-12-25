@@ -250,7 +250,7 @@
     (display-markup-int stream content)))
 
 (defun render-preformatted (stream content)
-  (draw-current-line-and-reset stream)  
+  (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream))
   (with-word-wrap-record (stream)
     (clim:with-identity-transformation (stream)

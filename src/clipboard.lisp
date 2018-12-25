@@ -22,7 +22,7 @@
   (if (null (clim-clx::selection-event-property event))
       (progn
         (format *trace-output* "~&;; Oops, selection-notify property is null. Trying the cut buffer instead..~%")
-        (xlib:cut-buffer (clim-clx::clx-port-display port)))                
+        (xlib:cut-buffer (clim-clx::clx-port-display port)))
       (let ((v (xlib:get-property (clim-clx::sheet-xmirror (clim::event-sheet event))
                                   (clim-clx::selection-event-property event)
                                   ;; :type :text
@@ -62,7 +62,7 @@
 	   ((:STRING :COMPOUND_TEXT)
 	    (xlib:change-property requestor property
 			          (babel:string-to-octets string :encoding :utf-8)
-			          target 8)            
+			          target 8)
 	    (send-event :target target))
 	   ((:TEXT)
 	    (cond
@@ -71,7 +71,7 @@
                                      (babel:string-to-octets string :encoding :utf-8)
 				     :STRING 8)
 	       (send-event :target :STRING))
-	      (t 
+	      (t
 	       (xlib:change-property requestor property
 				     (babel:string-to-octets string :encoding :utf-8)
 				     :UTF8_STRING 8)

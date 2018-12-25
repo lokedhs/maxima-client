@@ -211,7 +211,7 @@
 (define-documentation-frame-command (open-help-node :name "Node")
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
   (let* ((node-name (etypecase name
-                               (string name)                                                                          
+                               (string name)
                                (maxima-client.markup:node-reference (maxima-client.markup:node-reference/name name))))
          (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
          (content (load-node node-name)))
