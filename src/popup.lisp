@@ -15,21 +15,28 @@
   (:method ((value string) stream viewport-width)
     (clim:draw-text* stream value 0 0)))
 
+(defgeneric element-dimensions (value stream viewport-width)
+  (:method ((value string) stream viewport-width)
+    (let ((text-style (clim:medium-text-style stream)))
+      (values (climb:text-style-ascent text-style stream)
+              (climb:text-style-descent text-style stream)))))
+
 (defgeneric get-element-filter-name (value)
   (:method ((value string))
     value))
 
 (defun display-popup-menu-entry (stream value element-selected)
-  (let* ((viewport-width (clim:rectangle-width (clim:pane-viewport-region stream)))
-         (rec (clim:with-output-to-output-record (stream)
-                (render-element value stream viewport-width))))
-    (dimension-bind (rec :height h)
-      (clim:draw-rectangle* stream 0 0 viewport-width h
-                            :ink (if element-selected
-                                     (clim:make-rgb-color 0.7 1 0.7)
-                                     clim:+white+))
-      (set-rec-position rec nil 0)
-      (clim:stream-add-output-record stream rec))))
+  (let ((viewport-width (clim:rectangle-width (clim:pane-viewport-region stream))))
+    (multiple-value-bind (ascent descent)
+        (element-dimensions value stream viewport-width)
+      (let ((rec (clim:with-output-to-output-record (stream)
+                   (render-element value stream viewport-width))))
+        (clim:draw-rectangle* stream 0 0 viewport-width (+ ascent descent)
+                              :ink (if element-selected
+                                       (clim:make-rgb-color 0.7 1 0.7)
+                                       clim:+white+))
+        (move-rec rec 0 ascent)
+        (clim:stream-add-output-record stream rec)))))
 
 (defclass popup-menu-clickable-element ()
   ((value :initarg :value

@@ -59,6 +59,10 @@
   (clim:draw-text* stream (char-popup-element/char value) 2 0 :ink clim:+black+)
   (clim:draw-text* stream (char-popup-element/description value) 40 0 :ink clim:+black+))
 
+(defmethod maxima-client.gui-tools:element-dimensions ((value char-popup-element) stream viewport-width)
+  (let ((text-style (clim:medium-text-style stream)))
+    (values (climb:text-style-ascent text-style stream)
+            (climb:text-style-descent text-style stream))))
 (defmethod maxima-client.gui-tools:get-element-filter-name ((value char-popup-element))
   (char-popup-element/description value))
 

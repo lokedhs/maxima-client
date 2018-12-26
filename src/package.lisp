@@ -66,7 +66,8 @@
   (:use :cl :maxima-client.common)
   (:export #:render-element
            #:get-element-filter-name
-           #:select-completion-match))
+           #:select-completion-match
+           #:element-dimensions))
 
 (defpackage :maxima-client.markup
   (:use :cl :maxima-client.common)

@@ -66,6 +66,11 @@
           (clim:text-size stream args)
         (clim:draw-text* stream args (- viewport-width width 2) 0)))))
 
+(defmethod maxima-client.gui-tools:element-dimensions ((value completion-popup-element) stream viewport-width)
+  (let ((text-style (clim:medium-text-style stream)))
+    (values (climb:text-style-ascent text-style stream)
+            (climb:text-style-descent text-style stream))))
+
 (defmethod maxima-client.gui-tools:get-element-filter-name ((value completion-popup-element))
   (completion-popup-element/name value))
 
