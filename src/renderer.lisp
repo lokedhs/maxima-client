@@ -805,13 +805,13 @@ Each element should be an output record."
                    (funcall fn stream)))))
       (dimension-bind (exp :y exp-y :width exp-width :height exp-height)
         (let ((top-line-y (- exp-y spacing)))
-
-          (let ((sqrt-sym (clim:with-output-to-output-record (stream)
-                            (destructuring-bind (font size x-offset y-offset)
-                                (find-paren-font stream (+ exp-height spacing))
-                              (declare (ignore x-offset y-offset))
-                              (with-font (stream font size)
-                                (clim:draw-text* stream (format nil "~c" #\SQUARE_ROOT) 0 0))))))
+          (multiple-value-bind (sqrt-sym sqrt-sym-ascent sqrt-sym-descent sqrt-sym-width)
+              (destructuring-bind (font size x-offset y-offset)
+                  (find-paren-font stream (+ exp-height spacing))
+                (declare (ignore x-offset y-offset))
+                (with-font (stream font size)
+                  (render-and-measure-string stream (format nil "~c" #\SQUARE_ROOT) 0 0)))
+            (declare (ignore sqrt-sym-ascent sqrt-sym-descent))
             (dimension-bind (sqrt-sym :y sqrt-sym-y)
               ;; Move the sqrt symbol to align the top of the symbol with the top of the expr
               (move-rec sqrt-sym 0 (- top-line-y sqrt-sym-y) #+nil (- exp-y sqrt-sym-ascent))
@@ -821,7 +821,8 @@ Each element should be an output record."
                 (move-rec exp sqrt-sym-right 0)
                 (clim:stream-add-output-record stream exp)
                 ;; Draw line above the expr
-                (clim:draw-line* stream sqrt-sym-right
+                (clim:draw-line* stream
+                                 sqrt-sym-width
                                  top-line-y
                                  (+ sqrt-sym-right exp-width (/ (char-width stream) 4))
                                  top-line-y)))))))))
