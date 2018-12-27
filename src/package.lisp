@@ -54,7 +54,9 @@
            #:*font-directory*
            #:*image-directory*
            #:find-info-root-path
-           #:*info-directory*))
+           #:*info-directory*
+           #:xdimension-bind
+           #:dimension-bind-new))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

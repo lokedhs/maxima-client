@@ -523,7 +523,7 @@ terminated by ;.")
 
 (clim:define-command (show-documentation-frame-command :name "Show Documentation Frame" :menu t :command-table maxima-commands)
     ()
-  (maxima-client.doc-new:open-documentation-frame nil))
+  (maxima-client.doc-new:open-documentation-frame '(:file "maxima-client")))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands

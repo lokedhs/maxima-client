@@ -106,7 +106,7 @@
                (funcall fn stream))))
     (clim:stream-add-output-record stream rec)
     (let ((x-spacing 2))
-      (dimension-bind (rec :x x :y y :right right :bottom bottom)
+      (dimension-bind-new (stream rec :x x :y y :right right :bottom bottom)
         (clim:draw-rectangle* stream
                               (- x x-spacing)
                               (min (- (font-ascent stream)) y)
@@ -148,15 +148,17 @@
                  (loop
                    for group in key-seq
                    do (with-key-string (stream)
-                        (let ((string (with-output-to-string (s)
-                                        (loop
-                                          for key in group
-                                          for first = t then nil
-                                          unless first
-                                            do (format s "-")
-                                          do (etypecase key
-                                               (keyword (format s "~a" (keyword->key-label key)))
-                                               (string (format s "~a" key)))))))
+                        (let ((string (etypecase group
+                                        (string group)
+                                        (list (with-output-to-string (s)
+                                                (loop
+                                                  for key in group
+                                                  for first = t then nil
+                                                  unless first
+                                                    do (format s "-")
+                                                  do (etypecase key
+                                                       (keyword (format s "~a" (keyword->key-label key)))
+                                                       (string (format s "~a" key)))))))))
                           (clim:draw-text* stream string 0 0))))))))
     (word-wrap-draw-record stream rec)))
 

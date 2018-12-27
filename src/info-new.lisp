@@ -36,11 +36,16 @@
                        (1/5 interaction-pane))))
   (:command-table (documentation-frame :inherit-from (info-commands))))
 
-(defun process-documentation-request (command)
+(defun process-documentation-request (frame command)
   (destructuring-bind (type name)
       command
-    (ecase type
-      (:function (open-help-function name)))))
+    (let ((content (ecase type
+                     (:function (load-function name))
+                     (:file (load-doc-file name)))))
+      (unless content
+        (error "Documentation not found: ~s" command))
+      (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
+        (setf (info-content-panel/content info-content-panel) content)))))
 
 (defun display-function-help (name)
   (open-documentation-frame (list :function name)))
@@ -48,12 +53,13 @@
 (defmethod clim:note-frame-enabled :after (fm (frame documentation-frame))
   (alexandria:when-let ((command (documentation-frame/initial-request frame)))
     (setf (documentation-frame/initial-request frame) nil)
-    (process-documentation-request command)))
+    (process-documentation-request frame command)))
 
-(defun display-documentation-frame ()
+(defun display-documentation-frame (&optional command)
   (let ((frame (clim:make-application-frame 'documentation-frame
                                             :width 900
-                                            :height 800)))
+                                            :height 800
+                                            :initial-request command)))
     (clim:run-frame-top-level frame)))
 
 (defun open-documentation-frame (command)
@@ -68,7 +74,7 @@
                                           (clim:run-frame-top-level frame))))
         ;; ELSE: Frame was already created, just run the command
         (when command
-          (process-documentation-request command)))))
+          (process-documentation-request *doc-frame* command)))))
 
 (defmethod clim:frame-exit ((frame documentation-frame))
   (bordeaux-threads:with-lock-held (*doc-frame-lock*)

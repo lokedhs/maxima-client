@@ -238,13 +238,15 @@
             with before-first-item = t
             for line in all-content
             do (multiple-value-bind (match strings)
-                   (cl-ppcre:scan-to-strings "^@item +(.*)$" line)
+                   (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" line)
                  (if match
-                     (cond (before-first-item
-                            (setq before-first-item nil))
-                           (t
-                            (parse-item)
-                            (setq current-item (list (aref strings 0)))))
+                     (progn
+                       (cond (before-first-item
+                              (setq before-first-item nil))
+                             (t
+                              (parse-item)))
+                       (setq current-item (let ((row (aref strings 0)))
+                                            (if row (list row) nil))))
                      ;; ELSE: Plain line
                      (push line current-item)))
             finally (parse-item))))
@@ -399,6 +401,7 @@
     (parse-branch info-content)))
 
 (defun parse-and-write-file (file destination-directory)
+  (log:info "Parsing file: ~s" file)
   (let* ((content (parse-file file))
          (processed (resolve-example-code content)))
     (with-open-file (s (make-pathname :name (pathname-name file)
@@ -520,6 +523,8 @@ corresponding lisp files to the output directory."
   (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
+                         destination-directory)
+    (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima-client) "info/")
                          destination-directory)
     (generate-index)
     (convert-figures)))
