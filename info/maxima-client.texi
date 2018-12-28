@@ -1,0 +1,72 @@
+@node Main
+
+@section Introduction to maxima-client
+
+This is the documentation for the CLIM-based frontend to Maxima.
+
+More information about Maxima can be found here:
+@url{http://maxima.sourceforge.net/}.
+
+CLIM is the Common Lisp Interface Manager, and this application uses the
+McCLIM implementation (@url{https://common-lisp.net/project/mcclim/}).
+
+If you don't have experience with CLIM-based applications, you will
+notice that some features are somewhat different from what you might be
+used to in other applications. The purpose of this page is to make it
+easier to understand how this application works.
+
+As this application is not complete, there are a lot of features
+missing. These are the most important ones:
+
+@itemize @bullet
+@item
+Copy&paste does not work. This is because McCLIM currently does
+not implement it completely. Once McCLIM has a new implementation of
+copy&paste, this application will be able to take advantage of it.
+
+@item
+The documentation isn't always rendered correctly. This is because it
+doesn't use the native Texinfo implementation, but rather reimplements a
+more limited version of Texinfo that is able to render the Maxima
+documentation. However, it still misses some features which causes
+incorrect rendering in some places.
+
+@item
+There needs to be a way to save a session and load it back later.
+@end itemize
+
+@subsection Input
+
+Input editing uses Emacs keybindings. Here is a summary of the most
+important keys:
+
+@itemize
+@item @key{Meta-p} previous command in history
+
+@item @key{Meta-n} next command in history
+
+@item @key{Shift-RET} insert a newline into the current command
+
+@item @key{Meta-s} insert a special symbol. @emph{(it is a known problem
+that this does not work when the input is empty, i.e. as the first
+character typed)}
+
+@item @key{TAB} complete the currently typed word
+@end itemize
+
+@subsection Commands
+
+CLIM applications are command-driven, with most clickable objects on the
+screen translating into commands. Since the main Maxima interface is
+command-based too, the : character is used as a prefix to specify CLIM
+commands. The Regular Maxima interface also uses : as a prefix character
+for its internal commands, but its commands are mostly different
+(although in cases where functionality overlap, the same command name
+will be used).
+
+Some important commands are:
+
+@itemize
+@item @code{:Lisp} Evaluate a Lisp expression
+@item @code{:Info} Open the documentation for a Maxima symbol
+@end itemize
