@@ -358,7 +358,8 @@
 (defun evaluate-demo-src (src standard-input-content)
   (uiop:with-temporary-file (:stream input)
     (with-standard-io-syntax
-      (print (list src standard-input-content) input))
+      (let ((*print-circle* t))
+        (print (list src standard-input-content) input)))
     (close input)
     (uiop:with-temporary-file (:stream output)
       (uiop:with-temporary-file (:stream error-out)
@@ -413,7 +414,8 @@
                        :if-exists :supersede
                        :external-format :utf-8)
       (with-standard-io-syntax
-        (print processed s)))))
+        (let ((*print-circle* t))
+          (print processed s))))))
 
 (defun parse-doc-directory (info-directory destination-directory &key skip-example)
   "Parse all texinfo files in the given directory and output
@@ -473,9 +475,10 @@ corresponding lisp files to the output directory."
                          :if-exists :supersede
                          :external-format :utf-8)
         (with-standard-io-syntax
-          (print `((:symbols . ,symbols-sorted)
-                   (:nodes . ,nodes-sorted))
-                 s)))
+          (let ((*print-circle* t))
+            (print `((:symbols . ,symbols-sorted)
+                     (:nodes . ,nodes-sorted))
+                   s))))
       nil)))
 
 (defun resolve-example-code-external ()
@@ -496,7 +499,8 @@ corresponding lisp files to the output directory."
                                       ;; ELSE: Normal command, the result needs to be saved
                                       (cons :result res))))))
           (with-standard-io-syntax
-            (print result)))))))
+            (let ((*print-circle* t))
+              (print result))))))))
 
 (defun copy-file-to-dir (file dir)
   (let ((destination-name (merge-pathnames (format nil "~a.~a" (pathname-name file) (pathname-type file)) dir)))
