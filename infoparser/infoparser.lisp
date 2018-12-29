@@ -400,10 +400,12 @@
                  collect v)))
     (parse-branch info-content)))
 
-(defun parse-and-write-file (file destination-directory)
+(defun parse-and-write-file (file destination-directory &key skip-example)
   (log:info "Parsing file: ~s" file)
   (let* ((content (parse-file file))
-         (processed (resolve-example-code content)))
+         (processed (if skip-example
+                        content
+                        (resolve-example-code content))))
     (with-open-file (s (make-pathname :name (pathname-name file)
                                       :type "lisp"
                                       :defaults destination-directory)
@@ -413,12 +415,12 @@
       (with-standard-io-syntax
         (print processed s)))))
 
-(defun parse-doc-directory (info-directory destination-directory)
+(defun parse-doc-directory (info-directory destination-directory &key skip-example)
   "Parse all texinfo files in the given directory and output
 corresponding lisp files to the output directory."
   (let ((dir (merge-pathnames "*.texi" info-directory)))
     (dolist (file (directory dir))
-      (parse-and-write-file file destination-directory))))
+      (parse-and-write-file file destination-directory :skip-example skip-example))))
 
 (defun make-multiline-string (lines)
   (with-output-to-string (s)
@@ -518,16 +520,19 @@ corresponding lisp files to the output directory."
               ("png" (copy-file-to-dir file destination-dir))
               ("pdf" (convert-pdf-to-png file destination-name)))))))))
 
-(defun generate-doc-directory ()
+(defun generate-doc-directory (&key skip-example skip-figures)
   "Generate lisp files for all the texinfo files in the maxima distribution."
   (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
-                         destination-directory)
+                         destination-directory
+                         :skip-example skip-example)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima-client) "info/")
-                         destination-directory)
+                         destination-directory
+                         :skip-example skip-example)
     (generate-index)
-    (convert-figures)))
+    (unless skip-figures
+      (convert-figures))))
 
 (defun generate-one-file (name)
   (let ((file (merge-pathnames (format nil "~a.texi" name)
