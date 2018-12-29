@@ -141,16 +141,24 @@
       (vector-push-extend rec *word-wrap-line-content*))))
 
 (defun word-wrap-draw-string (stream string)
-  (let ((parts (split-word string)))
-    (loop
-      while parts
-      do (setq parts (word-wrap-draw-one-line stream parts)))))
+  (clim:with-identity-transformation (stream)
+    (let ((parts (split-word string)))
+      (loop
+        while parts
+        do (setq parts (word-wrap-draw-one-line stream parts))))))
 
 (defmacro with-word-wrap-record ((stream) &body body)
-  (alexandria:once-only (stream)
-    (alexandria:with-gensyms (rec bottom)
-      `(let ((,rec (clim:with-output-to-output-record (,stream)
-                     ,@body)))
-         (dimension-bind (,rec :bottom ,bottom)
-           (move-rec ,rec 0 (- ,bottom)))
-         (word-wrap-draw-record ,stream ,rec)))))
+  (clim:with-identity-transformation (stream)
+    (alexandria:once-only (stream)
+      (alexandria:with-gensyms (rec bottom)
+        `(let ((,rec (clim:with-output-to-output-record (,stream)
+                       ,@body)))
+           (dimension-bind (,rec :bottom ,bottom)
+             (move-rec ,rec 0 (- ,bottom)))
+           (word-wrap-draw-record ,stream ,rec))))))
+
+(defun word-wrap-draw-presentation (stream obj &key presentation-type)
+  (clim:with-identity-transformation (stream)
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (clim:stream-present stream obj (or presentation-type (clim:presentation-type-of obj))))))
+      (word-wrap-draw-record stream rec))))

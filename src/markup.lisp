@@ -287,11 +287,6 @@
           (word-wrap-draw-string stream (format nil "~c " #\BULLET)))
         (display-markup-list stream item :skip-first t)))))
 
-(defun draw-presentation (stream obj)
-  (let ((rec (clim:with-output-to-output-record (stream)
-               (present-to-stream obj stream))))
-    (word-wrap-draw-record stream rec)))
-
 (defun render-picture (stream file)
   (let ((parsed-name (alexandria:if-let ((pos (position #\, file)))
                        (subseq file 0 pos)
@@ -317,13 +312,13 @@
     (draw-current-line-and-reset stream)
     (when next
       (word-wrap-draw-string stream "Next: ")
-      (draw-presentation stream (make-instance 'node-reference :name next))
+      (word-wrap-draw-presentation stream (make-instance 'node-reference :name next))
       (when prev
         (word-wrap-draw-string stream " Previous: ")
-        (draw-presentation stream (make-instance 'node-reference :name prev))
+        (word-wrap-draw-presentation stream (make-instance 'node-reference :name prev))
         (when up
           (word-wrap-draw-string stream " Up: ")
-          (draw-presentation stream (make-instance 'node-reference :name up))))
+          (word-wrap-draw-presentation stream (make-instance 'node-reference :name up))))
       (draw-current-line-and-reset stream))))
 
 (defun render-menu (stream content)
@@ -345,7 +340,7 @@
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
              ((:code :math) (clim:with-text-family (stream :fix) (display (cdr content))))
              (:pre (render-preformatted stream (cdr content)))
-             ((:link :url) (draw-presentation stream (make-text-link-from-markup (cdr content))))
+             ((:link :url) (word-wrap-draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
              ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
              (:newline (draw-newline stream))
@@ -353,7 +348,7 @@
              (:subsection (render-subsection stream (cdr content)))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
              ((:mrefdot :mxrefdot :mrefcomma :xref) (display (cdr content)))
-             ((:mref :fname) (draw-presentation stream (make-mref-link (second content))))
+             ((:mref :fname) (word-wrap-draw-presentation stream (make-mref-link (second content))))
              (:catbox (render-catbox stream (cdr content)))
              (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
              (:deffn (render-deffn stream (second content) (cddr content)))

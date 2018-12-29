@@ -2,7 +2,9 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (clim:define-presentation-type node ()
-    :description "Node in the documentation"))
+    :description "Node in the documentation")
+  (clim:define-presentation-type category ()
+    :description "A list of references to a category"))
 
 (clim:define-command-table info-commands
   :inherit-from (maxima-client.markup:text-commands))
@@ -19,7 +21,21 @@
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
-(clim:define-presentation-type category-list ())
+(clim:define-presentation-method clim:present (obj (type category) stream view &key)
+  (format stream "Category ~a~%~%" (first obj))
+  (clim:with-room-for-graphics (stream)
+    (maxima-client.markup:with-word-wrap (stream)
+      (dolist (desc (second obj))
+        (maxima-client.markup:add-vspacing stream 8)
+        (destructuring-bind (definition-type type name)
+            desc
+          (declare (ignore definition-type))
+          (clim:with-text-face (stream :bold)
+            (maxima-client.markup:word-wrap-draw-string stream type))
+          (maxima-client.markup:word-wrap-draw-string stream " ")
+          (let ((p (make-instance 'maxima-client.markup:maxima-function-reference :name name)))
+            (maxima-client.markup:word-wrap-draw-presentation stream p))
+          (maxima-client.markup:draw-current-line-and-reset stream))))))
 
 (defclass info-content-panel (clim:application-pane)
   ((content :initform nil
@@ -57,16 +73,13 @@
 (defun process-documentation-request (frame command)
   (destructuring-bind (type name)
       command
-    (flet ((ensure-not-null (v)
-             (unless v
-               (error 'content-load-error :type type :name name :message "definition not found in index"))
-             v))
-      (let ((content (ecase type
-                       (:function (cons 'maxima-client.markup:markup (ensure-not-null (load-function name))))
-                       (:node (cons 'maxima-client.markup:markup (ensure-not-null (load-node name))))
-                       (:file (cons 'maxima-client.markup:markup (ensure-not-null (load-doc-file name)))))))
-        (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
-          (setf (info-content-panel/content info-content-panel) content))))))
+    (let ((content (ecase type
+                     (:function (cons 'maxima-client.markup:markup (load-function name)))
+                     (:node (cons 'maxima-client.markup:markup (load-node name)))
+                     (:file (cons 'maxima-client.markup:markup (load-doc-file name)))
+                     (:category (cons 'category (load-category name))))))
+      (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
+        (setf (info-content-panel/content info-content-panel) content)))))
 
 (defun display-function-help (name)
   (open-documentation-frame (list :function name)))
@@ -118,7 +131,9 @@
   (labels ((load ()
              (let* ((info-root-path (find-info-root-path))
                     (file (merge-pathnames (format nil "docs/~a.lisp" name) info-root-path))
-                    (content (with-open-file (in file :external-format :utf-8)
+                    (content (with-open-file (in file :external-format :utf-8 :if-does-not-exist nil)
+                               (unless in
+                                 (error 'content-load-error :type :file :name name :message "file not found"))
                                (read in))))
                content))
            (load-from-cache ()
@@ -147,26 +162,27 @@
                                                              ;; Each node descriptor consists of 4 elements
                                                              ;; The first element of each node descriptor is its name
                                                              (first (first v))))))
-    (when entry
-      (let ((file-content (load-doc-file (second entry))))
-        ;; Find the content from the given node, until the next node
-        (let ((start (member-if (lambda (v)
-                                  (and (listp v)
-                                       (eq (car v) :node)
-                                       (equal (second v) name)))
-                                file-content)))
-          ;; Copy everything up until the next node
-          (loop
-            for v in (cdr start)
-            until (and (listp v)
-                       (eq (car v) :node))
-            collect v))))))
+    (unless entry
+      (error 'content-load-error :type :node :name name :message "node not found"))
+    (let ((file-content (load-doc-file (second entry))))
+      ;; Find the content from the given node, until the next node
+      (let ((start (member-if (lambda (v)
+                                (and (listp v)
+                                     (eq (car v) :node)
+                                     (equal (second v) name)))
+                              file-content)))
+        ;; Copy everything up until the next node
+        (loop
+          for v in (cdr start)
+          until (and (listp v)
+                     (eq (car v) :node))
+          collect v)))))
 
 (defun load-function (name)
   (load-index)
   (let ((entry (find name *index-symbols* :key #'car :test #'equal)))
     (unless entry
-      (return-from load-function nil))
+      (error 'content-load-error :type :function :name name :message "function not found"))
     (with-doc-file-cache
       (loop
         for (type file description) in (cdr entry)
@@ -178,6 +194,13 @@
                     (unless found
                       (error "symbol found in index but not in file: ~s type: ~s" name type))
                     (list :paragraph found)))))))
+
+(defun load-category (name)
+  (load-index)
+  (let ((entry (find name *index-categories* :key #'car :test #'equal)))
+    (unless entry
+      (error 'content-load-error :type :cateogry :name name :message "category not found"))
+    (list name (cdr entry))))
 
 (define-documentation-frame-command (datatypes-command :name "datatypes")
     ()
@@ -277,7 +300,7 @@
   (let ((name (etypecase category
                 (string category)
                 (maxima-client.markup:category-reference (maxima-client.markup:named-reference/name category)))))
-    (log:info "Showing category: ~s" name)))
+    (process-doc-command-and-redisplay clim:*application-frame* :category name)))
 
 (clim:define-presentation-to-command-translator select-category
     (maxima-client.markup:category-reference show-category-command info-commands)

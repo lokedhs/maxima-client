@@ -87,7 +87,11 @@
            #:named-reference
            #:named-reference/name
            #:category-reference
-           #:markup))
+           #:markup
+           #:word-wrap-draw-string
+           #:word-wrap-draw-presentation
+           #:draw-current-line-and-reset
+           #:add-vspacing))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)
