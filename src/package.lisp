@@ -83,7 +83,11 @@
            #:maxima-function-reference/name
            #:markup-text-view
            #:node-reference
-           #:node-reference/name))
+           #:node-reference/name
+           #:named-reference
+           #:named-reference/name
+           #:category-reference
+           #:markup))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)

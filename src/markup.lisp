@@ -61,26 +61,36 @@
          (error "Illegally formatted text-link entry: ~s" args))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Named reference
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass named-reference (text-link)
+  ((name :initarg :name
+         :reader named-reference/name)))
+
+(defmethod text-link/description ((obj named-reference))
+  (named-reference/name obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; maxima-function-reference
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defclass maxima-function-reference (text-link)
-  ((name :initarg :name
-         :reader maxima-function-reference/name)))
-
-(defmethod text-link/description ((obj maxima-function-reference))
-  (maxima-function-reference/name obj))
+(defclass maxima-function-reference (named-reference)
+  ())
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; maxima-function-reference
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defclass node-reference (text-link)
-  ((name :initarg :name
-         :reader node-reference/name)))
+(defclass node-reference (named-reference)
+  ())
 
-(defmethod text-link/description ((obj node-reference))
-  (node-reference/name obj))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Category reference
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass category-reference (named-reference)
+  ())
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Markup rendering
@@ -176,7 +186,7 @@
         with pos = 0
         for name in categories
         do (let ((rec (clim:with-output-to-output-record (stream)
-                        (present-to-stream (make-instance 'node-reference :name name) stream))))
+                        (present-to-stream (make-instance 'category-reference :name name) stream))))
              (move-rec rec pos 0)
              (dimension-bind (rec :width width)
                (incf pos (+ width 15)))
@@ -367,3 +377,9 @@
 (defun display-markup (stream content)
   (maxima-client.markup:with-word-wrap (stream)
     (display-markup-int stream content)))
+
+(clim:define-presentation-type markup ())
+
+(clim:define-presentation-method clim:present (obj (type markup) stream view &key)
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (maxima-client.markup:display-markup stream obj)))

@@ -19,6 +19,8 @@
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
+(clim:define-presentation-type category-list ())
+
 (defclass info-content-panel (clim:application-pane)
   ((content :initform nil
             :accessor info-content-panel/content)))
@@ -37,16 +39,34 @@
                        (1/5 interaction-pane))))
   (:command-table (documentation-frame :inherit-from (info-commands))))
 
+(define-condition content-load-error (error)
+  ((type    :initarg :type
+            :initform (error "~s is a required initarg for ~s" :type 'content-load-error)
+            :reader content-load-error/command)
+   (name    :initarg :name
+            :initform (error "~s is a required initarg for ~s" :name 'content-load-error)
+            :reader content-load-error/name)
+   (message :initarg :message
+            :initform (error "~s is a required initarg for ~s" :message 'content-load-error)
+            :reader content-load-error/message))
+  (:report (lambda (condition stream)
+             (format stream "Error loading ~a: ~a"
+                     (content-load-error/name condition)
+                     (content-load-error/message condition)))))
+
 (defun process-documentation-request (frame command)
   (destructuring-bind (type name)
       command
-    (let ((content (ecase type
-                     (:function (load-function name))
-                     (:file (load-doc-file name)))))
-      (unless content
-        (error "Documentation not found: ~s" command))
-      (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
-        (setf (info-content-panel/content info-content-panel) content)))))
+    (flet ((ensure-not-null (v)
+             (unless v
+               (error 'content-load-error :type type :name name :message "definition not found in index"))
+             v))
+      (let ((content (ecase type
+                       (:function (cons 'maxima-client.markup:markup (ensure-not-null (load-function name))))
+                       (:node (cons 'maxima-client.markup:markup (ensure-not-null (load-node name))))
+                       (:file (cons 'maxima-client.markup:markup (ensure-not-null (load-doc-file name)))))))
+        (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
+          (setf (info-content-panel/content info-content-panel) content))))))
 
 (defun display-function-help (name)
   (open-documentation-frame (list :function name)))
@@ -86,8 +106,7 @@
   (declare (ignore frame))
   (let ((content (info-content-panel/content panel)))
     (when content
-      (clim:with-room-for-graphics (panel :first-quadrant nil)
-        (maxima-client.markup:display-markup panel content)))))
+      (clim:stream-present panel (cdr content) (car content)))))
 
 (defvar *doc-file-cache* nil)
 
@@ -165,11 +184,6 @@
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel) (load-doc-file "DataTypes"))))
 
-(define-documentation-frame-command (file-command :name "file")
-    ((file 'string :prompt "Filename"))
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel) (load-doc-file file))))
-
 (define-documentation-frame-command (add-test-doc-command :name "testdoc")
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
@@ -217,33 +231,36 @@
 (defun find-interaction-pane ()
   (clim:find-pane-named clim:*application-frame* 'interaction-pane))
 
+(defun process-doc-command-and-redisplay (frame type name)
+  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+    (handler-case
+        (progn
+          (process-documentation-request frame (list type name))
+          (clim:redisplay-frame-pane clim:*application-frame* info-content-panel))
+      (content-load-error (condition)
+        (format (find-interaction-pane) "~a~%" condition)))))
+
 (define-documentation-frame-command (open-help-node :name "Node")
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
   (let* ((node-name (etypecase name
                                (string name)
-                               (maxima-client.markup:node-reference (maxima-client.markup:node-reference/name name))))
-         (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
-         (content (load-node node-name)))
-    (if content
-        (setf (info-content-panel/content info-content-panel) content)
-        (format (find-interaction-pane) "Node not found: ~s" node-name))))
+                               (maxima-client.markup:node-reference (maxima-client.markup:named-reference/name name)))))
+    (process-doc-command-and-redisplay clim:*application-frame* :node node-name)))
 
 (clim:define-command (open-help-function :name "Function" :menu t :command-table info-commands)
     ((function '(or string maxima-client.markup:maxima-function-reference) :prompt "Name"))
   (let* ((name (etypecase function
                  (string function)
-                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:maxima-function-reference/name function))))
-         (info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content))
-         (content (load-function name)))
-    (cond (content
-           (setf (info-content-panel/content info-content-panel) content)
-           (clim:redisplay-frame-pane clim:*application-frame* info-content-panel))
-          (t
-           (format (find-interaction-pane) "No documentation for: ~s" name)))))
+                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/name function)))))
+    (process-doc-command-and-redisplay clim:*application-frame* :function name)))
+
+(define-documentation-frame-command (file-command :name "file")
+    ((file 'string :prompt "Filename"))
+  (process-doc-command-and-redisplay clim:*application-frame* :file file))
 
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)
-  (make-instance 'maxima-client.markup:maxima-function-reference :name object))
+  (make-instance 'maxima-client.markup:named-reference :name object))
 
 (clim:define-presentation-to-command-translator select-maxima-function
     (maxima-client.markup:maxima-function-reference open-help-function info-commands)
@@ -252,5 +269,17 @@
 
 (clim:define-presentation-to-command-translator select-node
     (maxima-client.markup:node-reference open-help-node info-commands)
+    (obj)
+  (list obj))
+
+(clim:define-command (show-category-command :name "Category" :menu t :command-table info-commands)
+    ((category '(or string maxima-client.markup:category-reference) :prompt "Category"))
+  (let ((name (etypecase category
+                (string category)
+                (maxima-client.markup:category-reference (maxima-client.markup:named-reference/name category)))))
+    (log:info "Showing category: ~s" name)))
+
+(clim:define-presentation-to-command-translator select-category
+    (maxima-client.markup:category-reference show-category-command info-commands)
     (obj)
   (list obj))
