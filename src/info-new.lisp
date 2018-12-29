@@ -65,7 +65,7 @@
    (message :initarg :message
             :initform (error "~s is a required initarg for ~s" :message 'content-load-error)
             :reader content-load-error/message))
-  (:report (lambda (condition stream)
+  #+nil (:report (lambda (condition stream)
              (format stream "Error loading ~a: ~a"
                      (content-load-error/name condition)
                      (content-load-error/message condition)))))

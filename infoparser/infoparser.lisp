@@ -175,13 +175,15 @@
 
 (alexandria:define-constant +newline-str+ (format nil "~c" #\Newline) :test #'equal)
 
-(defun process-demo-code (stream)
+(defun process-demo-code (stream extended)
   (multiple-value-bind (code input)
       (collectors:with-collectors (coll input-coll)
         (loop
           with curr = ""
           for s = (read-line stream)
-          until (cl-ppcre:scan "^@c ===end===" s)
+          until (if extended
+                    (cl-ppcre:scan "^@c ===endx===" s)
+                    (cl-ppcre:scan "^@c ===end===" s))
           unless (zerop (length s))
             do (progn
                  (process-single-line-command s
@@ -278,7 +280,9 @@
                          (cl-ppcre:scan end-tag s)))
           do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
                     (process-single-line-command s
-                      (("^@c ===beg===") (collect-paragraph) (info-collector (process-demo-code stream)))
+                      (("^@c ===beg(x?)===" args)
+                       (collect-paragraph)
+                       (info-collector (process-demo-code stream (not (equal (aref args 0) "")))))
                       (("^@menu *$") (collect-paragraph) (info-collector (process-menu stream)))
                       (("^@opencatbox *$") (collect-paragraph) (info-collector (process-opencatbox stream)))
 

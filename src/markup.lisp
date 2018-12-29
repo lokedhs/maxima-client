@@ -135,7 +135,7 @@
                  (with-adjusted-margin ((+ padding margin))
                    (funcall fn stream)))))
       (move-rec rec (+ padding margin) (+ padding margin))
-      (dimension-bind (rec :height height)
+      (dimension-bind-new (stream rec :height height)
         (let ((x1 margin)
               (y1 margin)
               (x2 (- *word-wrap-right-margin* margin))
@@ -205,8 +205,8 @@
   (add-vspacing stream (font-height stream))
   (if (eq (car results) :error)
       (log:info "Not rendering error output: ~s" results)
-      (with-word-wrap-record (stream)
-        (clim:with-identity-transformation (stream)
+      (clim:with-identity-transformation (stream)
+        (with-word-wrap-record (stream)
           (with-spanned-box (stream)
             (loop
               for code-line in code

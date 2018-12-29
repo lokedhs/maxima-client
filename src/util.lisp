@@ -125,6 +125,7 @@
                                 ,(make-coordinate-bind-form))))
                      (make-baseline))))
         `(let ((,transformation (clim:medium-transformation ,stream)))
+           (declare (ignorable ,transformation))
            ,(if (or width-sym height-sym right-sym bottom-sym)
                 `(multiple-value-bind (,width ,height)
                      (clim:rectangle-size ,output-record)
