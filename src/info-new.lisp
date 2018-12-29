@@ -15,6 +15,7 @@
 
 (defvar *index-symbols* nil)
 (defvar *index-nodes* nil)
+(defvar *index-categories* nil)
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
@@ -110,13 +111,15 @@
 
 (defun load-index ()
   (when (or (null *index-symbols*)
-            (null *index-nodes*))
+            (null *index-nodes*)
+            (null *index-categories*))
     (let* ((info-root-path (find-info-root-path))
            (file (merge-pathnames #p"docs/index.lisp" info-root-path))
            (content (with-open-file (in file :external-format :utf-8)
                       (read in))))
       (setq *index-symbols* (cdr (assoc :symbols content)))
-      (setq *index-nodes* (cdr (assoc :nodes content))))))
+      (setq *index-nodes* (cdr (assoc :nodes content)))
+      (setq *index-categories* (cdr (assoc :categories content))))))
 
 (defun load-node (name)
   (load-index)

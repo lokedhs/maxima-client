@@ -414,7 +414,8 @@
                        :if-exists :supersede
                        :external-format :utf-8)
       (with-standard-io-syntax
-        (let ((*print-circle* t))
+        (let ((*print-circle* t)
+              (*print-pretty* t))
           (print processed s))))))
 
 (defun parse-doc-directory (info-directory destination-directory &key skip-example)
@@ -430,7 +431,16 @@ corresponding lisp files to the output directory."
       for line in lines
       do (format s "~a~%" line))))
 
-(defun extract-functions (content functions-hash nodes-hash file)
+(defun scan-categories (definition-type type name hash content)
+  (loop
+    for v in content
+    when (eq (car v) :catbox)
+      do (loop for category-name in (cdr v)
+               do (let ((refs (gethash category-name hash)))
+                    (setf (gethash category-name hash)
+                          (cons (list definition-type type name) refs))))))
+
+(defun extract-functions (content functions-hash nodes-hash categories file)
   (loop
     for v in content
     when (and (listp v)
@@ -441,7 +451,8 @@ corresponding lisp files to the output directory."
                 (fn (second args))
                 (prev (gethash fn functions-hash)))
            (setf (gethash fn functions-hash) (cons (list (car v) file type)
-                                                   prev)))
+                                                   prev))
+           (scan-categories (car v) type fn categories (cddr v)))
     when (and (listp v)
               (eq (car v) :node))
       do (let ((name (second v)))
@@ -451,7 +462,8 @@ corresponding lisp files to the output directory."
   (let ((destination-dir (resolve-destination-dir))
         (index-filename "index")
         (functions (make-hash-table :test 'equal))
-        (nodes (make-hash-table :test 'equal)))
+        (nodes (make-hash-table :test 'equal))
+        (categories (make-hash-table :test 'equal)))
     (loop
       for file in (directory (merge-pathnames #p"*.lisp" destination-dir))
       for name = (pathname-name file)
@@ -459,7 +471,7 @@ corresponding lisp files to the output directory."
         do (let  ((content (with-open-file (s file :external-format :utf-8)
                              (with-standard-io-syntax
                                (read s)))))
-             (extract-functions content functions nodes name)))
+             (extract-functions content functions nodes categories name)))
     (let* ((content-list (loop
                            for key being each hash-key in functions using (hash-value value)
                            collect (cons key value)))
@@ -469,15 +481,23 @@ corresponding lisp files to the output directory."
            (nodes-sorted (sort (loop for v being each hash-value in nodes collect v)
                                (lambda (o1 o2)
                                  (string< (string-downcase o1) (string-downcase o2)))
-                               :key #'caar)))
+                               :key #'caar))
+           (categories-sorted (sort (collectors:with-collector (categories-collector)
+                                      (maphash (lambda (key value)
+                                                 (categories-collector (cons key value)))
+                                               categories)
+                                      (categories-collector))
+                                    #'string<
+                                    :key #'car)))
       (with-open-file (s (merge-pathnames (format nil "~a.lisp" index-filename) destination-dir)
                          :direction :output
                          :if-exists :supersede
                          :external-format :utf-8)
         (with-standard-io-syntax
-          (let ((*print-circle* t))
+          (let ((*print-pretty* t))
             (print `((:symbols . ,symbols-sorted)
-                     (:nodes . ,nodes-sorted))
+                     (:nodes . ,nodes-sorted)
+                     (:categories . ,categories-sorted))
                    s))))
       nil)))
 
