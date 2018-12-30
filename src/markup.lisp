@@ -132,7 +132,7 @@
   (let ((margin 50)
         (padding 5))
     (let ((rec (clim:with-output-to-output-record (stream)
-                 (with-adjusted-margin ((+ padding margin))
+                 (with-adjusted-margin (0 (+ padding margin))
                    (funcall fn stream)))))
       (move-rec rec (+ padding margin) (+ padding margin))
       (dimension-bind-new (stream rec :height height)
@@ -194,11 +194,10 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream 10))
 
-(defmacro with-indent ((stream indent) &body body)
-  (alexandria:once-only (stream indent)
-    `(clim:with-translation (,stream ,indent 0)
-       (with-adjusted-margin (,indent)
-         ,@body))))
+(defmacro with-indent ((indent) &body body)
+  (alexandria:once-only (indent)
+    `(with-adjusted-margin (,indent (- ,indent))
+       ,@body)))
 
 (defun render-example (stream code results)
   (draw-current-line-and-reset stream)
@@ -236,7 +235,7 @@
   (when args
     (display-markup-int stream args))
   (draw-current-line-and-reset stream)
-  (with-indent (stream 30)
+  (with-indent (30)
     (display-markup-int stream content)))
 
 (defun render-deffn (stream descriptor content)
@@ -279,7 +278,7 @@
   ;; paragraphs. This seems to be in line with what the HTML renderer
   ;; does.
   (let ((bullet-p (member :bullet args)))
-    (with-indent (stream 50)
+    (with-indent (50)
       (dolist (item content)
         (draw-current-line-and-reset stream)
         (add-vspacing stream 18)

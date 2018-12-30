@@ -65,7 +65,7 @@
    (message :initarg :message
             :initform (error "~s is a required initarg for ~s" :message 'content-load-error)
             :reader content-load-error/message))
-  #+nil (:report (lambda (condition stream)
+  (:report (lambda (condition stream)
              (format stream "Error loading ~a: ~a"
                      (content-load-error/name condition)
                      (content-load-error/message condition)))))
@@ -249,7 +249,13 @@
     ()
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (setf (info-content-panel/content info-content-panel)
-          '((:pre "some" "test" "line")))))
+          '(maxima-client.markup:markup . ((:p "This is some text")
+                                           (:p "another line")
+                                           (:itemize ()
+                                            ((:p "foo"))
+                                            ((:p "some text")))
+                                           (:p "another paragraph here")
+                                           (:p "test test"))))))
 
 (defun find-interaction-pane ()
   (clim:find-pane-named clim:*application-frame* 'interaction-pane))

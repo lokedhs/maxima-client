@@ -27,11 +27,13 @@
 (defvar *word-wrap-x* nil)
 (defvar *word-wrap-y* nil)
 (defvar *word-wrap-line-content* nil)
+(defvar *word-wrap-left-margin* nil)
 (defvar *word-wrap-right-margin* nil)
 
-(defmacro with-adjusted-margin ((delta) &body body)
-  (alexandria:once-only (delta)
-    `(let ((*word-wrap-right-margin* (- *word-wrap-right-margin* ,delta)))
+(defmacro with-adjusted-margin ((left right) &body body)
+  (alexandria:once-only (left right)
+    `(let ((*word-wrap-left-margin* (+ *word-wrap-left-margin* ,left))
+           (*word-wrap-right-margin* (+ *word-wrap-right-margin* ,right)))
        ,@body)))
 
 (defun font-ascent (stream)
@@ -52,12 +54,12 @@
     (let ((max-descent (max (font-descent stream)
                             (reduce #'max *word-wrap-line-content*
                                     :key (lambda (rec)
-                                           (dimension-bind (rec :bottom bottom)
+                                           (dimension-bind-new (stream rec :bottom bottom)
                                              bottom)))))
           (max-ascent (max (climb:text-style-ascent (clim:medium-text-style stream) stream)
                            (reduce #'max *word-wrap-line-content*
                                    :key (lambda (rec)
-                                          (dimension-bind (rec :y y)
+                                          (dimension-bind-new (stream rec :y y)
                                             (- y)))))))
       (loop
         for rec across *word-wrap-line-content*
@@ -66,7 +68,7 @@
                    (declare (ignore y))
                    (setf (clim:output-record-position rec) (values x *word-wrap-y*))
                    (clim:stream-add-output-record stream rec))
-           (dimension-bind (rec :x x :y y)
+           (dimension-bind-new (stream rec :x x :y y)
              ;; We need to adjust the vertical coordinate so that text of different sizes are aligned to the same
              ;; baseline. All text is drawn with the baseline at y=0, and the ascent is a negative value.
              (set-rec-position rec x (+ *word-wrap-y* max-ascent y))
@@ -76,7 +78,7 @@
 (defun draw-current-line-and-reset (stream)
   (draw-current-line stream)
   (setq *word-wrap-line-content* (make-array 0 :adjustable t :fill-pointer t))
-  (setq *word-wrap-x* 0))
+  (setq *word-wrap-x* *word-wrap-left-margin*))
 
 (defun add-vspacing (stream n)
   (draw-current-line-and-reset stream)
@@ -92,6 +94,7 @@
   (alexandria:once-only (stream right-margin)
     `(let ((*word-wrap-x* 0)
            (*word-wrap-y* 0)
+           (*word-wrap-left-margin* 0)
            (*word-wrap-right-margin* (or ,right-margin (clim:rectangle-width (clim:pane-viewport-region ,stream))))
            (*word-wrap-line-content* (make-array 0 :adjustable t :fill-pointer t)))
        (prog1
@@ -133,7 +136,7 @@
   (let ((start *word-wrap-x*)
         (right-margin *word-wrap-right-margin*))
     (move-rec rec start 0)
-    (dimension-bind (rec :width width)
+    (dimension-bind-new (stream rec :width width)
       (cond ((<= (+ start width) right-margin)
              (incf *word-wrap-x* width))
             (t
@@ -153,7 +156,7 @@
       `(clim:with-identity-transformation (,stream)
          (let ((,rec (clim:with-output-to-output-record (,stream)
                        ,@body)))
-           (dimension-bind (,rec :bottom ,bottom)
+           (dimension-bind-new (,stream ,rec :bottom ,bottom)
              (move-rec ,rec 0 (- ,bottom)))
            (word-wrap-draw-record ,stream ,rec))))))
 
