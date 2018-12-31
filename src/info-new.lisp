@@ -328,6 +328,10 @@
                  (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/name function)))))
     (process-doc-command-and-redisplay clim:*application-frame* :function name)))
 
+(define-documentation-frame-command (cmd-doc-introduction :name "Intro")
+    ()
+  (process-doc-command-and-redisplay clim:*application-frame* :file "maxima-client"))
+
 (define-documentation-frame-command (cmd-open-file :name "file")
     ((file 'string :prompt "Filename"))
   (process-doc-command-and-redisplay clim:*application-frame* :file file))
@@ -378,4 +382,5 @@
 
 (clim:make-command-table 'info-doc-command-table
                          :errorp nil
-                         :menu '(("Function" :command cmd-open-help-function)))
+                         :menu '(("Maxima-Client Introduction" :command cmd-doc-introduction)
+                                 ("Function" :command cmd-open-help-function)))
