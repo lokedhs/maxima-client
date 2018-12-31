@@ -38,21 +38,32 @@
           (maxima-client.markup:draw-current-line-and-reset stream))))))
 
 (defclass info-content-panel (clim:application-pane)
-  ((content :initform nil
-            :accessor info-content-panel/content)))
+  ())
 
 (clim:define-application-frame documentation-frame ()
-  ((initial-request :initform nil
-                    :initarg :initial-request
-                    :accessor documentation-frame/initial-request))
+  ((content       :initform nil
+                  :accessor documentation-frame/content)
+   (prev-commands :initform nil
+                  :accessor documentation-frame/prev-commands)
+   (curr-command  :initform nil
+                  :accessor documentation-frame/curr-command))
   (:panes (info-content (clim:make-pane 'info-content-panel
                                         :display-function 'display-text-content
                                         :default-view +info-content-panel-view+))
-          (interaction-pane :interactor))
+          (interaction-pane :interactor)
+          (prev-button (clim:make-pane 'clim:push-button-pane
+                                       :label "Previous"
+                                       :activate-callback 'prev-button-pressed))
+          (next-button (clim:make-pane 'clim:push-button-pane
+                                       :label "Next")))
   (:layouts (default (clim:vertically ()
+                       (clim:horizontally ()
+                         prev-button
+                         next-button)
                        (4/5 (clim:scrolling ()
                               info-content))
                        (1/5 interaction-pane))))
+  (:menu-bar info-menubar-command-table)
   (:command-table (documentation-frame :inherit-from (info-commands))))
 
 (define-condition content-load-error (error)
@@ -70,7 +81,11 @@
                      (content-load-error/name condition)
                      (content-load-error/message condition)))))
 
-(defun process-documentation-request (frame command)
+(defun process-documentation-request (frame command &key inhibit-history redisplay)
+  (when (and (not inhibit-history)
+             (documentation-frame/curr-command frame))
+    (push (documentation-frame/curr-command frame) (documentation-frame/prev-commands frame)))
+  (setf (documentation-frame/curr-command frame) command)
   (destructuring-bind (type name)
       command
     (let ((content (ecase type
@@ -78,22 +93,20 @@
                      (:node (cons 'maxima-client.markup:markup (load-node name)))
                      (:file (cons 'maxima-client.markup:markup (load-doc-file name)))
                      (:category (cons 'category (load-category name))))))
-      (let ((info-content-panel (clim:find-pane-named frame 'info-content)))
-        (setf (info-content-panel/content info-content-panel) content)))))
+      (setf (documentation-frame/content frame) content)
+      (when redisplay
+        (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
+          (clim:redisplay-frame-pane frame info-content-panel))))))
 
 (defun display-function-help (name)
   (open-documentation-frame (list :function name)))
 
-(defmethod clim:note-frame-enabled :after (fm (frame documentation-frame))
-  (alexandria:when-let ((command (documentation-frame/initial-request frame)))
-    (setf (documentation-frame/initial-request frame) nil)
-    (process-documentation-request frame command)))
-
 (defun display-documentation-frame (&optional command)
   (let ((frame (clim:make-application-frame 'documentation-frame
                                             :width 900
-                                            :height 800
-                                            :initial-request command)))
+                                            :height 800)))
+    (when command
+      (process-documentation-request frame command))
     (clim:run-frame-top-level frame)))
 
 (defun open-documentation-frame (command)
@@ -103,7 +116,7 @@
                                                   :width 900
                                                   :height 800)))
           (setq *doc-frame* frame)
-          (setf (documentation-frame/initial-request frame) command)
+          (process-documentation-request frame command)
           (bordeaux-threads:make-thread (lambda ()
                                           (clim:run-frame-top-level frame))))
         ;; ELSE: Frame was already created, just run the command
@@ -116,8 +129,7 @@
   (call-next-method))
 
 (defun display-text-content (frame panel)
-  (declare (ignore frame))
-  (let ((content (info-content-panel/content panel)))
+  (let ((content (documentation-frame/content frame)))
     (when content
       (clim:stream-present panel (cdr content) (car content)))))
 
@@ -202,60 +214,54 @@
       (error 'content-load-error :type :cateogry :name name :message "category not found"))
     (list name (cdr entry))))
 
-(define-documentation-frame-command (datatypes-command :name "datatypes")
-    ()
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel) (load-doc-file "DataTypes"))))
-
 (define-documentation-frame-command (add-test-doc-command :name "testdoc")
     ()
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel)
-          '((:MENU "Numbers" "Strings" "Constants" "Lists" "Arrays" "Structures")
-            (:NODE "Numbers" "Strings" "Data Types and Structures" "Data Types and Structures")
-            (:p (:url "http://www.reddit.com/"))
-            (:p (:mref "diff"))
-            (:SECTION "Numbers")
-            (:pre "This" "is some text" "third line")
-            (:MENU "Introduction to Numbers" "Functions and Variables for Numbers")
-            (:NODE "Introduction to Numbers" "Functions and Variables for Numbers" "Numbers" "Numbers")
-            (:SUBSECTION "Introduction to Numbers")
-            (:PARAGRAPH "A complex expression is specified in Maxima by adding the real part of the expression to "
-             (:CODE "%i") " times the imaginary part.  Thus the roots of the equation " (:CODE "x^2 - 4*x + 13 = 0")
-             " are " (:CODE "2 + 3*%i") " and " (:CODE "2 - 3*%i")
-             ". Note that simplification of products of complex expressions can be effected by expanding the product.  Simplification of quotients, roots, and other functions of complex expressions can usually be accomplished by using the "
-             (:CODE "realpart") ", " (:CODE "imagpart") ", " (:CODE "rectform") ", " (:CODE "polarform")
-             ", " (:CODE "abs") ", " (:CODE "carg") " functions.")
-            (:CATBOX "Complex variables")
-            (:NODE "Functions and Variables for Numbers" NIL "Introduction to Numbers" "Numbers")
-            (:SUBSECTION "Functions and Variables for Numbers")
-            (:PARAGRAPH (:ANCHOR "bfloat"))
-            (:DEFFN ("Function" "bfloat" ("(" (:VAR "expr") ")"))
-             (:PARAGRAPH "Converts all numbers and functions of numbers in " (:VAR "expr")
-              " to bigfloat numbers. The number of significant digits in the resulting bigfloats is specified by the global variable "
-              (:MREFDOT "fpprec"))
-             (:PARAGRAPH "When " (:MREF "float2bf") " is " (:CODE "false")
-              " a warning message is printed when a floating point number is converted into a bigfloat number (since this may lead to loss of precision).")
-             (:CATBOX "Numerical evaluation"))
-            (:PARAGRAPH (:ANCHOR "bfloatp"))
-            (:DEFFN ("Function" "bfloatp" ("(" (:VAR "expr") ")"))
-             (:PARAGRAPH "Returns " (:CODE "true") " if " (:VAR "expr") " is a bigfloat number, otherwise " (:CODE "false") ".")
-             (:paragraph (:DEMO-CODE (:DEMO-SOURCE #A((33) BASE-CHAR . "[sqrt(2), sin(1), 1/(1+sqrt(3))];") #A((39) BASE-CHAR . "[sqrt(2), sin(1), 1/(1+sqrt(3))],numer;")) (:EXAMPLE-INFO "@group" "(%i1) [sqrt(2), sin(1), 1/(1+sqrt(3))];" "                                        1" "(%o1)            [sqrt(2), sin(1), -----------]" "                                   sqrt(3) + 1" "@end group" "@group" "(%i2) [sqrt(2), sin(1), 1/(1+sqrt(3))],numer;" "(%o2) [1.414213562373095, 0.8414709848078965, 0.3660254037844387]" "@end group") (:DEMO-RESULT ((MAXIMA::MLIST MAXIMA::SIMP) ((MAXIMA::MEXPT MAXIMA::SIMP) 2 ((MAXIMA::RAT MAXIMA::SIMP) 1 2)) ((MAXIMA::%SIN MAXIMA::SIMP) 1) ((MAXIMA::MEXPT MAXIMA::SIMP) ((MAXIMA::MPLUS MAXIMA::SIMP) 1 ((MAXIMA::MEXPT MAXIMA::SIMP) 3 ((MAXIMA::RAT MAXIMA::SIMP) 1 2))) -1)) ((MAXIMA::MLIST MAXIMA::SIMP) 1.4142135623730951d0 0.8414709848078965d0 0.36602540378443865d0))))
-             (:paragraph "After example code")
-             (:CATBOX "Numerical evaluation" "Predicate functions"))
-            (:p "test")))))
+  (setf (documentation-frame/content clim:*application-frame*)
+        (cons 'maxima-client.markup:markup
+              '((:MENU "Numbers" "Strings" "Constants" "Lists" "Arrays" "Structures")
+                (:NODE "Numbers" "Strings" "Data Types and Structures" "Data Types and Structures")
+                (:p (:url "http://www.reddit.com/"))
+                (:p (:mref "diff"))
+                (:SECTION "Numbers")
+                (:pre "This" "is some text" "third line")
+                (:MENU "Introduction to Numbers" "Functions and Variables for Numbers")
+                (:NODE "Introduction to Numbers" "Functions and Variables for Numbers" "Numbers" "Numbers")
+                (:SUBSECTION "Introduction to Numbers")
+                (:PARAGRAPH "A complex expression is specified in Maxima by adding the real part of the expression to "
+                 (:CODE "%i") " times the imaginary part.  Thus the roots of the equation " (:CODE "x^2 - 4*x + 13 = 0")
+                 " are " (:CODE "2 + 3*%i") " and " (:CODE "2 - 3*%i")
+                 ". Note that simplification of products of complex expressions can be effected by expanding the product.  Simplification of quotients, roots, and other functions of complex expressions can usually be accomplished by using the "
+                 (:CODE "realpart") ", " (:CODE "imagpart") ", " (:CODE "rectform") ", " (:CODE "polarform")
+                 ", " (:CODE "abs") ", " (:CODE "carg") " functions.")
+                (:CATBOX "Complex variables")
+                (:NODE "Functions and Variables for Numbers" NIL "Introduction to Numbers" "Numbers")
+                (:SUBSECTION "Functions and Variables for Numbers")
+                (:PARAGRAPH (:ANCHOR "bfloat"))
+                (:DEFFN ("Function" "bfloat" ("(" (:VAR "expr") ")"))
+                 (:PARAGRAPH "Converts all numbers and functions of numbers in " (:VAR "expr")
+                  " to bigfloat numbers. The number of significant digits in the resulting bigfloats is specified by the global variable "
+                  (:MREFDOT "fpprec"))
+                 (:PARAGRAPH "When " (:MREF "float2bf") " is " (:CODE "false")
+                  " a warning message is printed when a floating point number is converted into a bigfloat number (since this may lead to loss of precision).")
+                 (:CATBOX "Numerical evaluation"))
+                (:PARAGRAPH (:ANCHOR "bfloatp"))
+                (:DEFFN ("Function" "bfloatp" ("(" (:VAR "expr") ")"))
+                 (:PARAGRAPH "Returns " (:CODE "true") " if " (:VAR "expr") " is a bigfloat number, otherwise " (:CODE "false") ".")
+                 (:paragraph (:DEMO-CODE (:DEMO-SOURCE #A((33) BASE-CHAR . "[sqrt(2), sin(1), 1/(1+sqrt(3))];") #A((39) BASE-CHAR . "[sqrt(2), sin(1), 1/(1+sqrt(3))],numer;")) (:EXAMPLE-INFO "@group" "(%i1) [sqrt(2), sin(1), 1/(1+sqrt(3))];" "                                        1" "(%o1)            [sqrt(2), sin(1), -----------]" "                                   sqrt(3) + 1" "@end group" "@group" "(%i2) [sqrt(2), sin(1), 1/(1+sqrt(3))],numer;" "(%o2) [1.414213562373095, 0.8414709848078965, 0.3660254037844387]" "@end group") (:DEMO-RESULT ((MAXIMA::MLIST MAXIMA::SIMP) ((MAXIMA::MEXPT MAXIMA::SIMP) 2 ((MAXIMA::RAT MAXIMA::SIMP) 1 2)) ((MAXIMA::%SIN MAXIMA::SIMP) 1) ((MAXIMA::MEXPT MAXIMA::SIMP) ((MAXIMA::MPLUS MAXIMA::SIMP) 1 ((MAXIMA::MEXPT MAXIMA::SIMP) 3 ((MAXIMA::RAT MAXIMA::SIMP) 1 2))) -1)) ((MAXIMA::MLIST MAXIMA::SIMP) 1.4142135623730951d0 0.8414709848078965d0 0.36602540378443865d0))))
+                 (:paragraph "After example code")
+                 (:CATBOX "Numerical evaluation" "Predicate functions"))
+                (:p "test")))))
 
 (define-documentation-frame-command (add-code-command :name "code")
     ()
-  (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
-    (setf (info-content-panel/content info-content-panel)
-          '(maxima-client.markup:markup . ((:p "This is some text")
-                                           (:p "another line")
-                                           (:itemize ()
-                                            ((:p "foo"))
-                                            ((:p "some text")))
-                                           (:p "another paragraph here")
-                                           (:p "test test"))))))
+  (setf (documentation-frame/content clim:*application-frame*)
+        '(maxima-client.markup:markup . ((:p "This is some text")
+                                         (:p "another line")
+                                         (:itemize ()
+                                          ((:p "foo"))
+                                          ((:p "some text")))
+                                         (:p "another paragraph here")
+                                         (:p "test test")))))
 
 (defun find-interaction-pane ()
   (clim:find-pane-named clim:*application-frame* 'interaction-pane))
@@ -264,10 +270,27 @@
   (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
     (handler-case
         (progn
-          (process-documentation-request frame (list type name))
+          (process-documentation-request frame (list type name) :redisplay t)
           (clim:redisplay-frame-pane clim:*application-frame* info-content-panel))
       (content-load-error (condition)
         (format (find-interaction-pane) "~a~%" condition)))))
+
+(define-documentation-frame-command (cmd-prev-screen :name "Previous")
+    ()
+  (let ((frame clim:*application-frame*))
+    (cond ((documentation-frame/prev-commands frame)
+           (let ((command (pop (documentation-frame/prev-commands frame))))
+             (process-documentation-request frame command :inhibit-history t :redisplay t)))
+          (t
+           (format (find-interaction-pane) "~&History is empty~%")))))
+
+(define-documentation-frame-command (cmd-info-close :name "Close")
+    ()
+  (clim:frame-exit clim:*application-frame*))
+
+(defun prev-button-pressed (pane)
+  (declare (ignore pane))
+  (clim:execute-frame-command clim:*application-frame* '(prev-screen-command)))
 
 (define-documentation-frame-command (open-help-node :name "Node")
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
@@ -312,3 +335,16 @@
     (maxima-client.markup:category-reference show-category-command info-commands)
     (obj)
   (list obj))
+
+(clim:make-command-table 'info-menubar-command-table
+                         :errorp nil
+                         :menu '(("File" :menu info-file-command-table)
+                                 ("Navigation" :menu info-nav-command-table)))
+
+(clim:make-command-table 'info-file-command-table
+                         :errorp nil
+                         :menu '(("Close" :command cmd-info-close)))
+
+(clim:make-command-table 'info-nav-command-table
+                         :errorp nil
+                         :menu '(("Previous Page" :command cmd-prev-screen)))
