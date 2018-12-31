@@ -45,6 +45,8 @@
                   :accessor documentation-frame/content)
    (prev-commands :initform nil
                   :accessor documentation-frame/prev-commands)
+   (next-commands :initform nil
+                  :accessor documentation-frame/next-commands)
    (curr-command  :initform nil
                   :accessor documentation-frame/curr-command))
   (:panes (info-content (clim:make-pane 'info-content-panel
@@ -52,10 +54,11 @@
                                         :default-view +info-content-panel-view+))
           (interaction-pane :interactor)
           (prev-button (clim:make-pane 'clim:push-button-pane
-                                       :label "Previous"
+                                       :label "Back"
                                        :activate-callback 'prev-button-pressed))
           (next-button (clim:make-pane 'clim:push-button-pane
-                                       :label "Next")))
+                                       :label "Forward"
+                                       :activate-callback 'next-button-pressed)))
   (:layouts (default (clim:vertically ()
                        (clim:horizontally ()
                          prev-button
@@ -275,22 +278,41 @@
       (content-load-error (condition)
         (format (find-interaction-pane) "~a~%" condition)))))
 
-(define-documentation-frame-command (cmd-prev-screen :name "Previous")
+(defun prev-button-pressed (pane)
+  (declare (ignore pane))
+  (clim:execute-frame-command clim:*application-frame* '(cmd-prev-screen)))
+
+(define-documentation-frame-command (cmd-prev-screen :name "History Back")
     ()
   (let ((frame clim:*application-frame*))
     (cond ((documentation-frame/prev-commands frame)
-           (let ((command (pop (documentation-frame/prev-commands frame))))
+           (let* ((command (pop (documentation-frame/prev-commands frame)))
+                  (curr (documentation-frame/curr-command frame)))
+             (when curr
+               (push curr (documentation-frame/next-commands frame)))
              (process-documentation-request frame command :inhibit-history t :redisplay t)))
           (t
            (format (find-interaction-pane) "~&History is empty~%")))))
 
+(defun next-button-pressed (pane)
+  (declare (ignore pane))
+  (clim:execute-frame-command clim:*application-frame* '(cmd-next-screen)))
+
+(define-documentation-frame-command (cmd-next-screen :name "History Forward")
+    ()
+  (let ((frame clim:*application-frame*))
+    (cond ((documentation-frame/next-commands frame)
+           (let* ((command (pop (documentation-frame/next-commands frame)))
+                  (curr (documentation-frame/curr-command frame)))
+             (when curr
+               (push curr (documentation-frame/prev-commands frame)))
+             (process-documentation-request frame command :inhibit-history t :redisplay t)))
+          (t
+           (format (find-interaction-pane) "~&No next screen in history~%")))))
+
 (define-documentation-frame-command (cmd-info-close :name "Close")
     ()
   (clim:frame-exit clim:*application-frame*))
-
-(defun prev-button-pressed (pane)
-  (declare (ignore pane))
-  (clim:execute-frame-command clim:*application-frame* '(prev-screen-command)))
 
 (define-documentation-frame-command (cmd-open-help-node :name "Node")
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
@@ -348,7 +370,11 @@
 
 (clim:make-command-table 'info-nav-command-table
                          :errorp nil
-                         :menu '(("Previous Page" :command cmd-prev-screen)))
+                         :menu '(("History Back" :command cmd-prev-screen)))
+
+(clim:make-command-table 'info-nav-command-table
+                         :errorp nil
+                         :menu '(("History Forward" :command cmd-next-screen)))
 
 (clim:make-command-table 'info-doc-command-table
                          :errorp nil
