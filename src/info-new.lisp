@@ -214,7 +214,7 @@
       (error 'content-load-error :type :cateogry :name name :message "category not found"))
     (list name (cdr entry))))
 
-(define-documentation-frame-command (add-test-doc-command :name "testdoc")
+(define-documentation-frame-command (cmd-add-test-doc :name "testdoc")
     ()
   (setf (documentation-frame/content clim:*application-frame*)
         (cons 'maxima-client.markup:markup
@@ -252,7 +252,7 @@
                  (:CATBOX "Numerical evaluation" "Predicate functions"))
                 (:p "test")))))
 
-(define-documentation-frame-command (add-code-command :name "code")
+(define-documentation-frame-command (cmd-add-code :name "code")
     ()
   (setf (documentation-frame/content clim:*application-frame*)
         '(maxima-client.markup:markup . ((:p "This is some text")
@@ -292,21 +292,21 @@
   (declare (ignore pane))
   (clim:execute-frame-command clim:*application-frame* '(prev-screen-command)))
 
-(define-documentation-frame-command (open-help-node :name "Node")
+(define-documentation-frame-command (cmd-open-help-node :name "Node")
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
   (let* ((node-name (etypecase name
                                (string name)
                                (maxima-client.markup:node-reference (maxima-client.markup:named-reference/name name)))))
     (process-doc-command-and-redisplay clim:*application-frame* :node node-name)))
 
-(clim:define-command (open-help-function :name "Function" :menu t :command-table info-commands)
+(clim:define-command (cmd-open-help-function :name "Function" :menu t :command-table info-commands)
     ((function '(or string maxima-client.markup:maxima-function-reference) :prompt "Name"))
   (let* ((name (etypecase function
                  (string function)
                  (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/name function)))))
     (process-doc-command-and-redisplay clim:*application-frame* :function name)))
 
-(define-documentation-frame-command (file-command :name "file")
+(define-documentation-frame-command (cmd-open-file :name "file")
     ((file 'string :prompt "Filename"))
   (process-doc-command-and-redisplay clim:*application-frame* :file file))
 
@@ -315,12 +315,12 @@
   (make-instance 'maxima-client.markup:named-reference :name object))
 
 (clim:define-presentation-to-command-translator select-maxima-function
-    (maxima-client.markup:maxima-function-reference open-help-function info-commands)
+    (maxima-client.markup:maxima-function-reference cmd-open-help-function info-commands)
     (obj)
   (list obj))
 
 (clim:define-presentation-to-command-translator select-node
-    (maxima-client.markup:node-reference open-help-node info-commands)
+    (maxima-client.markup:node-reference cmd-open-help-node info-commands)
     (obj)
   (list obj))
 
@@ -339,7 +339,8 @@
 (clim:make-command-table 'info-menubar-command-table
                          :errorp nil
                          :menu '(("File" :menu info-file-command-table)
-                                 ("Navigation" :menu info-nav-command-table)))
+                                 ("Navigation" :menu info-nav-command-table)
+                                 ("Documentation" :menu info-doc-command-table)))
 
 (clim:make-command-table 'info-file-command-table
                          :errorp nil
@@ -348,3 +349,7 @@
 (clim:make-command-table 'info-nav-command-table
                          :errorp nil
                          :menu '(("Previous Page" :command cmd-prev-screen)))
+
+(clim:make-command-table 'info-doc-command-table
+                         :errorp nil
+                         :menu '(("Function" :command cmd-open-help-function)))
