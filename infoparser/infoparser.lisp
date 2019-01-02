@@ -115,7 +115,6 @@
     ("b" :bold)
     ("anchor" :anchor)
     ("xref" :xref)
-    ("fname" :fname)
     ("math" :math)
     ("ref" :ref)
     ("mxref" :mxref)
@@ -143,7 +142,7 @@
              (car s)))
     (let ((tag (find name *simple-tags* :key #'car :test #'equal)))
       (cond (tag
-             (list (list (cadr tag) (ensure-string-arg args))))
+             (list (list (cadr tag) args)))
             (t
              (string-case:string-case (name)
                ("code" (list (cons :code args)))
@@ -153,9 +152,33 @@
                ("mxrefcomma" `((:mxref ,(ensure-string-arg args)) ","))
                ("mxrefdot" `((:mxref ,(ensure-string-arg args)) "."))
                ("mxrefparen" `((:mxref ,(ensure-string-arg args)) ")"))
+               ("w" nil)
                ("dots" '("…"))))))))
 
-(defun parse-paragraph-content (s start recursive-p)
+(defun compress-strings (list)
+  (collectors:with-collector (coll)
+    (loop
+      with curr-string = nil
+      for e in list
+      if (stringp e)
+        do (setq curr-string (if curr-string (concatenate 'string curr-string e) e))
+      else
+        do (progn
+             (when curr-string
+               (coll curr-string)
+               (setq curr-string nil))
+             (coll e))
+      finally (when curr-string
+                (coll curr-string)))
+    (coll)))
+
+(defun no-recurse-tag-p (name)
+  (member name '("anchor") :test #'equal))
+
+(defun no-latex-tag-p (name)
+  (member name '("anchor" "code") :test #'equal))
+
+(defun parse-paragraph-content (s start recursive-p no-recurse no-latex)
   (collectors:with-collector (coll)
     (let ((len (length s))
           (beg start)
@@ -166,35 +189,66 @@
         (loop
           while (< i len)
           do (let ((ch (aref s i)))
-               (when (eql ch #\})
-                 (if recursive-p
-                     (progn
-                       (collect-str)
-                       (return (values (coll) (1+ i))))
-                     (error "Unexpected end-of-arglist character")))
-               (if (eql ch #\@)
-                   (let ((pos (position #\{ s :start (1+ i))))
-                     (unless pos
-                       (error "No arglist found"))
-                     (collect-str)
-                     (let ((name (subseq s (1+ i) pos)))
-                       (multiple-value-bind (result next-pos)
-                           (parse-paragraph-content s (1+ pos) t)
-                         (let ((processed (process-markup-tag name result)))
-                           (dolist (val processed)
-                             (coll val)))
-                         (setq beg next-pos)
-                         (setq i next-pos))))
-                   ;; ELSE: Check next character
-                   (incf i)))
+               (cond ((eql ch #\})
+                      (if recursive-p
+                          (progn
+                            (collect-str)
+                            (return (values (compress-strings (coll)) (1+ i))))
+                          (error "Unexpected end-of-arglist character")))
+                     ((eql ch #\@)
+                      (cond ((and (< i (1- len))
+                                  (eql (aref s (1+ i)) #\@))
+                             ;; This is an escaped @-sign
+                             (collect-str)
+                             (setq beg (1+ i))
+                             (incf i 2))
+                            (no-recurse
+                             (incf i))
+                            (t
+                             (let ((pos (position #\{ s :start (1+ i))))
+                               (unless pos
+                                 (error "No arglist found"))
+                               (collect-str)
+                               (let ((name (subseq s (1+ i) pos)))
+                                 (multiple-value-bind (result next-pos)
+                                     (parse-paragraph-content s (1+ pos) t (no-recurse-tag-p name) (no-latex-tag-p name))
+                                   (let ((processed (process-markup-tag name result)))
+                                     (dolist (val processed)
+                                       (coll val)))
+                                   (setq beg next-pos)
+                                   (setq i next-pos)))))))
+                     ((and (not no-latex)
+                           (eql ch #\$)
+                           (< i (1- len))
+                           (eql (aref s (1+ i)) #\$))
+                      ;; A LaTeX block should be appended as :CODE
+                      (collect-str)
+                      (let ((pos (search "$$" s :start2 (+ i 2))))
+                        (unless pos
+                          (error "No end of LaTeX section block found"))
+                        (coll (list :code (format nil "$$~a$$"  (subseq s (+ i 2) pos))))
+                        (setq i (+ pos 2))
+                        (setq beg i)))
+                     ((and (not no-latex)
+                           (eql ch #\$))
+                      (collect-str)
+                      (let ((pos (position #\$ s :start (1+ i))))
+                        (unless pos
+                          (error "No end of inline LaTeX maths found"))
+                        (coll (list :code (format nil "$~a$" (subseq s (1+ i) pos))))
+                        (setq i (1+ pos))
+                        (setq beg i)))
+                     (t
+                      ;; ELSE: Check next character
+                      (incf i))))
           finally (progn
                     (when recursive-p
                       (error "End of string while scanning for end-of-arglist character"))
                     (collect-str)
-                    (return (values (coll) len))))))))
+                    (return (values (compress-strings (coll)) len))))))))
 
 (defun parse-paragraph (s)
-  (cons :paragraph (parse-paragraph-content s 0 nil)
+  (cons :paragraph (parse-paragraph-content s 0 nil nil nil)
         #+nil
         (markup-from-regexp "@([a-z]+){([^}]+)}" s
                             (lambda (reg-starts reg-ends)
@@ -297,13 +351,38 @@
                    ,@(if input `((:input . ,input)) nil)
                    (:example-info . ,example)))))
 
-(defun parse-deffn (stream type name args)
-  (let ((parsed-arglist (with-input-from-string (s args)
+(defun parse-arglist (args-string)
+  (let ((parsed-arglist (with-input-from-string (s args-string)
                           (parse-stream s nil))))
     (unless (and (alexandria:sequence-of-length-p parsed-arglist 1)
                  (eq (caar parsed-arglist) :paragraph))
-      (error "Unexpected arglist format: ~s" args))
-    (list* :deffn (list type name (cdar parsed-arglist))
+      (error "Unexpected arglist format: ~s" args-string))
+    (cdar parsed-arglist)))
+
+(defun parse-deffn (stream type name args)
+  (let ((parsed-arglist (parse-arglist args)))
+    (list* :deffn type name parsed-arglist nil
+           (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
+
+(defun parse-multiple-deffn (stream type name args)
+  (let ((definitions (loop
+                       with completed-p = nil
+                       for line = (read-line stream)
+                       collect (multiple-value-bind (match strings)
+                                   (cl-ppcre:scan-to-strings "^@fname{([^ }]+)} +(.*[^ ]) *$" line)
+                                 (unless match
+                                   (error "Unexpected format for @fname row: ~s" line))
+                                 (let ((fname-name (aref strings 0))
+                                       (fname-args (aref strings 1)))
+                                   (if (cl-ppcre:scan "@$" fname-args)
+                                       ;; If the line ends with a @, then trim off the last character
+                                       (setq fname-args (string-trim " " (subseq fname-args 0 (1- (length fname-args)))))
+                                       ;; ELSE: We're done
+                                       (setq completed-p t))
+                                   (let ((parsed-arglist (parse-arglist fname-args)))
+                                     (list fname-name parsed-arglist))))
+                       until completed-p)))
+    (list* :deffn type name (if args (parse-arglist args) nil) definitions
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
 (defun parse-defvr (stream type name)
@@ -390,7 +469,11 @@
                                          (info-collector image)))
                       (("^@iftex *$") (skip-block stream "^@end iftex"))
 
-                      (("^@deffn +{([^}]+)} +([^ ]+) +(.*[^ ]) *$" args)
+                      (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? *@ *$" args)
+                       (collect-paragraph)
+                       (info-collector (parse-multiple-deffn stream (aref args 0) (aref args 1) (aref args 2))))
+
+                      (("^@deffn *{([^}]+)} +([^ ]+) +(.*[^ @]) *$" args)
                        (collect-paragraph)
                        (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))
 
