@@ -378,7 +378,8 @@
 
 (clim:make-command-table 'info-nav-command-table
                          :errorp nil
-                         :menu '(("History Forward" :command cmd-next-screen)))
+                         :menu '(("History Back" :command cmd-prev-screen)
+                                 ("History Forward" :command cmd-next-screen)))
 
 (clim:make-command-table 'info-doc-command-table
                          :errorp nil
