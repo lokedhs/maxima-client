@@ -143,7 +143,7 @@
      ,@body))
 
 (defun load-doc-file (name)
-  (labels ((load ()
+  (labels ((load-file ()
              (let* ((info-root-path (find-info-root-path))
                     (file (merge-pathnames (format nil "docs/~a.lisp" name) info-root-path))
                     (content (with-open-file (in file :external-format :utf-8 :if-does-not-exist nil)
@@ -152,7 +152,7 @@
                                (read in))))
                content))
            (load-from-cache ()
-             (alexandria:ensure-gethash name *doc-file-cache* (load))))
+             (alexandria:ensure-gethash name *doc-file-cache* (load-file))))
     (if *doc-file-cache*
         (load-from-cache)
         (with-doc-file-cache
