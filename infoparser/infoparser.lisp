@@ -107,8 +107,95 @@
                        ;; ELSE: No match
                        nil)))))
 
+(defparameter *simple-tags*
+  '(("mref" :mref)
+    ("emph" :italic)
+    ("i" :italic)
+    ("strong" :bold)
+    ("b" :bold)
+    ("anchor" :anchor)
+    ("xref" :xref)
+    ("fname" :fname)
+    ("math" :math)
+    ("ref" :ref)
+    ("mxref" :mxref)
+    ("file" :file)
+    ("footnote" :footnote)
+    ("kbd" :kbd)
+    ("key" :key)
+    ("image" :image)
+    ("dfn" :dfn)
+    ("url" :url)
+    ("uref" :url)
+    ("figure" :figure)
+    ("verb" :verb)
+    ("dotless" :dotless)
+    ("email" :email)
+    ("pxref" :pxref)
+    ("var" :var)))
+
+(defun process-markup-tag (name args)
+  (labels ((ensure-string-arg (s)
+             (unless (and (listp s)
+                          (= (length s) 1)
+                          (stringp (car s)))
+               (error "Single argument expected"))
+             (car s)))
+    (let ((tag (find name *simple-tags* :key #'car :test #'equal)))
+      (cond (tag
+             (list (list (cadr tag) (ensure-string-arg args))))
+            (t
+             (string-case:string-case (name)
+               ("code" (list (cons :code args)))
+               ("mrefcomma" `((:mref ,(ensure-string-arg args)) ","))
+               ("mrefdot" `((:mref ,(ensure-string-arg args)) "."))
+               ("mrefparen" `((:mref ,(ensure-string-arg args)) ")"))
+               ("mxrefcomma" `((:mxref ,(ensure-string-arg args)) ","))
+               ("mxrefdot" `((:mxref ,(ensure-string-arg args)) "."))
+               ("mxrefparen" `((:mxref ,(ensure-string-arg args)) ")"))
+               ("dots" '("…"))))))))
+
+(defun parse-paragraph-content (s start recursive-p)
+  (collectors:with-collector (coll)
+    (let ((len (length s))
+          (beg start)
+          (i start))
+      (labels ((collect-str ()
+                 (when (> i beg)
+                   (coll (subseq s beg i)))))
+        (loop
+          while (< i len)
+          do (let ((ch (aref s i)))
+               (when (eql ch #\})
+                 (if recursive-p
+                     (progn
+                       (collect-str)
+                       (return (values (coll) (1+ i))))
+                     (error "Unexpected end-of-arglist character")))
+               (if (eql ch #\@)
+                   (let ((pos (position #\{ s :start (1+ i))))
+                     (unless pos
+                       (error "No arglist found"))
+                     (collect-str)
+                     (let ((name (subseq s (1+ i) pos)))
+                       (multiple-value-bind (result next-pos)
+                           (parse-paragraph-content s (1+ pos) t)
+                         (let ((processed (process-markup-tag name result)))
+                           (dolist (val processed)
+                             (coll val)))
+                         (setq beg next-pos)
+                         (setq i next-pos))))
+                   ;; ELSE: Check next character
+                   (incf i)))
+          finally (progn
+                    (when recursive-p
+                      (error "End of string while scanning for end-of-arglist character"))
+                    (collect-str)
+                    (return (values (coll) len))))))))
+
 (defun parse-paragraph (s)
-  (cons :paragraph
+  (cons :paragraph (parse-paragraph-content s 0 nil)
+        #+nil
         (markup-from-regexp "@([a-z]+){([^}]+)}" s
                             (lambda (reg-starts reg-ends)
                               (let ((cmd (subseq s (aref reg-starts 0) (aref reg-ends 0)))
