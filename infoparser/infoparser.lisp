@@ -142,7 +142,7 @@
              (car s)))
     (let ((tag (find name *simple-tags* :key #'car :test #'equal)))
       (cond (tag
-             (list (list (cadr tag) args)))
+             (list (cons (cadr tag) args)))
             (t
              (string-case:string-case (name)
                ("code" (list (cons :code args)))
@@ -153,7 +153,9 @@
                ("mxrefdot" `((:mxref ,(ensure-string-arg args)) "."))
                ("mxrefparen" `((:mxref ,(ensure-string-arg args)) ")"))
                ("w" nil)
-               ("dots" '("…"))))))))
+               ("dots" '("…"))
+               ("TeX" '("LaTeX"))
+               (t (error "Undefined tag: ~s" name))))))))
 
 (defun compress-strings (list)
   (collectors:with-collector (coll)
@@ -176,7 +178,7 @@
   (member name '("anchor") :test #'equal))
 
 (defun no-latex-tag-p (name)
-  (member name '("anchor" "code") :test #'equal))
+  (member name '("anchor" "code" "kbd") :test #'equal))
 
 (defun parse-paragraph-content (s start recursive-p no-recurse no-latex)
   (collectors:with-collector (coll)
@@ -195,13 +197,35 @@
                             (collect-str)
                             (return (values (compress-strings (coll)) (1+ i))))
                           (error "Unexpected end-of-arglist character")))
+                     ((eql ch #\{)
+                      (when no-recurse
+                        (error "Found opening brace when recursion is disabled"))
+                      (collect-str)
+                      (multiple-value-bind (result next-pos)
+                          (parse-paragraph-content s (1+ i) t nil no-latex)
+                        (dolist (entry result)
+                          (coll entry))
+                        (setq beg next-pos)
+                        (setq i next-pos)))
                      ((eql ch #\@)
                       (cond ((and (< i (1- len))
-                                  (eql (aref s (1+ i)) #\@))
+                                  (let ((ch (aref s (1+ i))))
+                                    (not (cl-ppcre:scan "^[a-zA-Z]$" (format nil "~c" ch)))))
                              ;; This is an escaped @-sign
                              (collect-str)
                              (setq beg (1+ i))
                              (incf i 2))
+                            ((and (< i (1- len))
+                                  (eql (aref s (1+ i)) #\-))
+                             (collect-str)
+                             (setq i (+ i 2))
+                             (setq beg i))
+                            ((and (< i (1- len))
+                                  (eql (aref s (1+ i)) #\*))
+                             (collect-str)
+                             (coll '(:newline))
+                             (setq i (+ i 2))
+                             (setq beg i))
                             (no-recurse
                              (incf i))
                             (t
@@ -359,35 +383,44 @@
       (error "Unexpected arglist format: ~s" args-string))
     (cdar parsed-arglist)))
 
+(defun parse-fnames (stream)
+  (loop
+    with completed-p = nil
+    for line = (read-line stream)
+    collect (multiple-value-bind (match strings)
+                (cl-ppcre:scan-to-strings "^@fname{([^ }]+)} +(.*[^ ]) *$" line)
+              (unless match
+                (error "Unexpected format for @fname row: ~s" line))
+              (let* ((fname-name (aref strings 0))
+                     (fname-args (aref strings 1))
+                     (continuation-marker (cl-ppcre:scan " +@$" fname-args)))
+                (if continuation-marker
+                    ;; If the line ends with a @, then trim off the last character
+                    (setq fname-args (subseq fname-args 0 continuation-marker))
+                    ;; ELSE: We're done
+                    (setq completed-p t))
+                (let ((parsed-arglist (parse-arglist fname-args)))
+                  (list fname-name parsed-arglist))))
+    until completed-p))
+
 (defun parse-deffn (stream type name args)
   (let ((parsed-arglist (parse-arglist args)))
-    (list* :deffn type name parsed-arglist nil
+    (list* :deffn (list type name parsed-arglist nil)
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
 (defun parse-multiple-deffn (stream type name args)
-  (let ((definitions (loop
-                       with completed-p = nil
-                       for line = (read-line stream)
-                       collect (multiple-value-bind (match strings)
-                                   (cl-ppcre:scan-to-strings "^@fname{([^ }]+)} +(.*[^ ]) *$" line)
-                                 (unless match
-                                   (error "Unexpected format for @fname row: ~s" line))
-                                 (let ((fname-name (aref strings 0))
-                                       (fname-args (aref strings 1)))
-                                   (if (cl-ppcre:scan "@$" fname-args)
-                                       ;; If the line ends with a @, then trim off the last character
-                                       (setq fname-args (string-trim " " (subseq fname-args 0 (1- (length fname-args)))))
-                                       ;; ELSE: We're done
-                                       (setq completed-p t))
-                                   (let ((parsed-arglist (parse-arglist fname-args)))
-                                     (list fname-name parsed-arglist))))
-                       until completed-p)))
-    (list* :deffn type name (if args (parse-arglist args) nil) definitions
+  (let ((definitions (parse-fnames stream)))
+    (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
-(defun parse-defvr (stream type name)
-  (list* :defvr (list type name)
+(defun parse-defvr (stream type name args)
+  (list* :defvr (list type name (if args (parse-arglist args) nil) nil)
          (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
+
+(defun parse-multiple-defvr (stream type name args)
+  (let ((definitions (parse-fnames stream)))
+    (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
+           (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
 (defun parse-itemize (stream args)
   ;; Any content before the first @item will be dropped
@@ -430,6 +463,16 @@
                    (list (list :image (aref strings 0)))
                    nil)))))
 
+(defun trim-comment (s)
+  (if s
+      (string-trim " "
+                   (let ((pos (search "@c " s)))
+                     ;; Lines starting with @c might need special treatment
+                     (if (and pos (plusp pos))
+                         (subseq s 0 pos)
+                         s)))
+      nil))
+
 (defun parse-stream (stream end-tag)
   (collectors:with-collector (info-collector)
     (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
@@ -439,7 +482,7 @@
                    (info-collector (parse-paragraph current-paragraph))
                    (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
         (loop
-          for s = (read-line stream nil nil)
+          for s = (trim-comment (read-line stream nil nil))
           do (setq terminating-string s)
           until (or (null s)
                     (and end-tag
@@ -468,8 +511,9 @@
                       (("^@ifhtml *$") (dolist (image (parse-ifhtml stream))
                                          (info-collector image)))
                       (("^@iftex *$") (skip-block stream "^@end iftex"))
+                      (("^@ifnotinfo *$") (skip-block stream "^@end ifnotinfo"))
 
-                      (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? *@ *$" args)
+                      (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? +@ *$" args)
                        (collect-paragraph)
                        (info-collector (parse-multiple-deffn stream (aref args 0) (aref args 1) (aref args 2))))
 
@@ -477,9 +521,13 @@
                        (collect-paragraph)
                        (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))
 
-                      (("^@defvr +{([^}]+)} +(.*[^ ]) *$" args)
+                      (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? +@ *$" args)
                        (collect-paragraph)
-                       (info-collector (parse-defvr stream (aref args 0) (aref args 1))))
+                       (info-collector (parse-multiple-defvr stream (aref args 0) (aref args 1) (aref args 2))))
+
+                      (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? *$" args)
+                       (collect-paragraph)
+                       (info-collector (parse-defvr stream (aref args 0) (aref args 1) (aref args 2))))
 
                       (("^@example *$")
                        (collect-paragraph)
@@ -597,7 +645,8 @@
 corresponding lisp files to the output directory."
   (let ((dir (merge-pathnames "*.texi" info-directory)))
     (dolist (file (directory dir))
-      (parse-and-write-file file destination-directory :skip-example skip-example))))
+      (unless (member (pathname-name file) '("category-macros") :test #'equal)
+        (parse-and-write-file file destination-directory :skip-example skip-example)))))
 
 (defun make-multiline-string (lines)
   (with-output-to-string (s)

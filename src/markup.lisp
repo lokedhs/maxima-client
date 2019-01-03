@@ -199,54 +199,69 @@
     `(with-adjusted-margin (,indent (- ,indent))
        ,@body)))
 
-(defun render-example (stream code results)
-  (draw-current-line-and-reset stream)
-  (add-vspacing stream (font-height stream))
-  (if (eq (car results) :error)
-      (log:info "Not rendering error output: ~s" results)
-      (clim:with-identity-transformation (stream)
-        (with-word-wrap-record (stream)
-          (with-spanned-box (stream)
-            (loop
-              for code-line in code
-              for res in results
-              for i from 1
-              do (progn
-                   (clim:with-text-face (stream :bold)
-                     (format stream "~&(%i~a) " i))
-                   (clim:with-text-family (stream :fix)
-                     (format stream "~a~%" code-line))
-                   (when (eq (car res) :result)
-                     (clim:formatting-table (stream)
-                       (clim:formatting-row (stream)
-                         (clim:formatting-cell (stream :align-y :center :min-width 75)
-                           (format stream "(%o~a)" i))
-                         (clim:formatting-cell (stream :align-y :center)
-                           (clim:with-identity-transformation (stream)
-                             (present-to-stream (make-instance 'maxima-native-expr :expr (cdr res)) stream))))))))))))
+(defun render-example (stream content)
+  (let ((res (assoc :demo-result content)))
+    (if (null res)
+        (render-preformatted stream (cdr (assoc :example-info content)))
+        ;; ELSE: We have results, use nice rendering
+        (let ((results (cdr res)))
+          (if (eq (car results) :error)
+              ;; Check for error output, this shouldn't be needed
+              (render-preformatted stream (cdr (assoc :example-info content)))
+              ;; ELSE: No error            
+              (let ((code (cdr (assoc :demo-source content))))
+                (draw-current-line-and-reset stream)
+                (add-vspacing stream (font-height stream))
+                (clim:with-identity-transformation (stream)
+                  (with-word-wrap-record (stream)
+                    (with-spanned-box (stream)
+                      (loop
+                        for code-line in code
+                        for res in results
+                        for i from 1
+                        do (progn
+                             (clim:with-text-face (stream :bold)
+                               (format stream "~&(%i~a) " i))
+                             (clim:with-text-family (stream :fix)
+                               (format stream "~a~%" code-line))
+                             (when (eq (car res) :result)
+                               (clim:formatting-table (stream)
+                                 (clim:formatting-row (stream)
+                                   (clim:formatting-cell (stream :align-y :center :min-width 75)
+                                     (format stream "(%o~a)" i))
+                                   (clim:formatting-cell (stream :align-y :center)
+                                     (clim:with-identity-transformation (stream)
+                                       (present-to-stream (make-instance 'maxima-native-expr :expr (cdr res)) stream))))))))))))))))
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
-(defun render-definition (stream type name args content)
+(defun render-definition (stream type name primary-args secondary-args content)
   (draw-current-line-and-reset stream)
   (word-wrap-draw-string stream (format nil "~a: " type))
   (clim:with-text-face (stream :bold)
     (word-wrap-draw-string stream name))
-  (when args
-    (display-markup-int stream args))
+  (when primary-args
+    (display-markup-int stream primary-args))
   (draw-current-line-and-reset stream)
+  (dolist (args-descriptor secondary-args)
+    (destructuring-bind (name args)
+        args-descriptor
+      (with-indent (10)
+        (word-wrap-draw-string stream (format nil "~a " name))
+        (display-markup-int stream args))
+      (draw-current-line-and-reset stream)))
   (with-indent (30)
     (display-markup-int stream content)))
 
 (defun render-deffn (stream descriptor content)
-  (destructuring-bind (type name args)
+  (destructuring-bind (type name primary-args secondary-args)
       descriptor
-    (render-definition stream type name args content)))
+    (render-definition stream type name primary-args secondary-args content)))
 
 (defun render-defvr (stream descriptor content)
-  (destructuring-bind (type name)
+  (destructuring-bind (type name primary-args secondary-args)
       descriptor
-    (render-definition stream type name nil content)))
+    (render-definition stream type name primary-args secondary-args content)))
 
 (defun render-section (stream content)
   (draw-current-line-and-reset stream)
@@ -349,7 +364,7 @@
              ((:mrefdot :mxrefdot :mrefcomma :xref) (display (cdr content)))
              ((:mref :fname) (word-wrap-draw-presentation stream (make-mref-link (second content))))
              (:catbox (render-catbox stream (cdr content)))
-             (:demo-code (render-example stream (cdr (assoc :demo-source (cdr content))) (cdr (assoc :demo-result (cdr content)))))
+             (:demo-code (render-example stream (cdr content)))
              (:deffn (render-deffn stream (second content) (cddr content)))
              (:defvr (render-defvr stream (second content) (cddr content)))
              (:anchor nil)
