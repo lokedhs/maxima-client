@@ -635,19 +635,17 @@ Each element should be an output record."
         (let ((line-x (+ (- right x) (* spacing 2))))
           (clim:draw-line* stream line-x y line-x bottom))))))
 
-(defun render-derivative (stream expr sym exp)
-  (let ((compressed-form-p (symbolp expr)))
-    (labels ((render-sym (stream bottom-sym-p)
-               (with-aligned-rendering (stream)
-                 (render-aligned () (render-symbol stream '$d))
-                 (when bottom-sym-p
-                   (render-aligned () (render-symbol stream sym)))))
-             (render-sym-expt (stream bottom-sym-p)
+(defun render-derivative (stream expr sym-list)
+  (let ((varlist (loop
+                   for (sym exp) on sym-list by #'cddr
+                   collect (cons sym exp)))
+        (compressed-form-p (symbolp expr)))
+    (labels ((render-sym (sym exp)
                (if (eql exp 1)
-                   (render-sym stream bottom-sym-p)
+                   (render-symbol stream sym)
                    (%render-expt stream
                                  (lambda (stream)
-                                   (render-sym stream bottom-sym-p))
+                                   (render-symbol stream sym))
                                  (lambda (stream)
                                    (render-maxima-expression stream exp))))))
       (with-aligned-rendering (stream)
@@ -655,11 +653,20 @@ Each element should be an output record."
                              (%render-quotient stream
                                                (lambda (stream)
                                                  (with-aligned-rendering (stream)
-                                                   (render-aligned () (render-sym-expt stream nil))
-                                                   (when compressed-form-p
-                                                     (render-aligned () (render-symbol stream expr)))))
+                                                   (let ((exp (reduce #'+ varlist :key #'cdr)))
+                                                     (render-aligned () (render-sym 'maxima::$d exp))
+                                                     (when compressed-form-p
+                                                       (render-aligned () (render-symbol stream expr))))))
                                                (lambda (stream)
-                                                 (render-sym-expt stream t)))))
+                                                 (with-aligned-rendering (stream)
+                                                   (loop
+                                                     for (sym . exp) in varlist
+                                                     for first = t then nil
+                                                     unless first
+                                                       do (aligned-spacing 0.4)
+                                                     do (progn
+                                                          (render-aligned () (render-symbol stream 'maxima::$d))
+                                                          (render-aligned () (render-sym sym exp)))))))))
         (unless compressed-form-p
           (aligned-spacing 0.5)
           (with-wrapped-parens (stream)
@@ -888,7 +895,7 @@ Each element should be an output record."
                (maxima::mprog (render-function stream '(maxima::$block) (cdr fixed)))
                (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                (maxima::mabs (render-mabs stream (second fixed)))
-               (maxima::%derivative (render-derivative stream (second fixed) (third fixed) (fourth fixed)))
+               (maxima::%derivative (render-derivative stream (second fixed) (cddr fixed)))
                (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
                (maxima::mnctimes (render-op-list stream 'maxima::mnctimes (format nil "~c" #\DOT_OPERATOR) (cdr fixed)))
                (maxima::mncexpt (render-mncexcept stream (second fixed) (third fixed)))
