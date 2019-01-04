@@ -422,36 +422,56 @@
     (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
            (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
+(defun parse-item-content (all-content)
+  (collectors:with-collector (items-collector)
+    (let ((current-item nil))
+      (labels ((parse-item ()
+                 (when current-item
+                   (items-collector (reverse current-item))
+                   (setq current-item nil))))
+        (loop
+          with before-first-item = t
+          for line in all-content
+          do (multiple-value-bind (match strings)
+                 (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" line)
+               (if match
+                   (progn
+                     (cond (before-first-item
+                            (setq before-first-item nil))
+                           (t
+                            (parse-item)))
+                     (setq current-item (let ((row (aref strings 0)))
+                                          (if row (list row) nil))))
+                   ;; ELSE: Plain line
+                   (push line current-item)))
+          finally (parse-item))))
+    (items-collector)))
+
 (defun parse-itemize (stream args)
   ;; Any content before the first @item will be dropped
   ;; We should probably check for anchors here
   (let ((bullet-p (cl-ppcre:scan "@bullet" args))
-        (all-content (skip-block stream "^@end itemize")))
-    (collectors:with-collector (items-collector)
-      (let ((current-item nil))
-        (labels ((parse-item ()
-                   (when current-item
-                     (let ((string (make-multiline-string (reverse current-item))))
-                       (with-input-from-string (s string)
-                         (items-collector (parse-stream s nil))))
-                     (setq current-item nil))))
-          (loop
-            with before-first-item = t
-            for line in all-content
-            do (multiple-value-bind (match strings)
-                   (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" line)
-                 (if match
-                     (progn
-                       (cond (before-first-item
-                              (setq before-first-item nil))
-                             (t
-                              (parse-item)))
-                       (setq current-item (let ((row (aref strings 0)))
-                                            (if row (list row) nil))))
-                     ;; ELSE: Plain line
-                     (push line current-item)))
-            finally (parse-item))))
-      (list* :itemize (if bullet-p '(:bullet) nil) (items-collector)))))
+        (content (parse-item-content (skip-block stream "^@end itemize"))))
+    (list* :itemize (if bullet-p '(:bullet) nil)
+           (mapcar (lambda (v)
+                     (with-input-from-string (s (make-multiline-string v))
+                       (parse-stream s nil)))
+                   content))))
+
+(defun parse-table (stream args)
+  (let ((flags (if (cl-ppcre:scan "@code" args)
+                   '(:code)
+                   nil))
+        (content (parse-item-content (skip-block stream "^@end table"))))
+    (list* :table flags
+           (mapcar (lambda (v)
+                     (unless (car v)
+                       (error "Item with no text: ~s" v))
+                     (list* :item
+                            (car v)
+                            (with-input-from-string (s (make-multiline-string (cdr v)))
+                              (parse-stream s nil))))
+                   content))))
 
 (defun parse-ifhtml (stream)
   (let ((content (skip-block stream "^@end ifhtml")))
@@ -535,7 +555,11 @@
 
                       (("^@itemize(?: +(.*))?$" args)
                        (collect-paragraph)
-                       (info-collector (parse-itemize stream (aref args 0))))))
+                       (info-collector (parse-itemize stream (aref args 0))))
+
+                      (("^@table(?: +(.*))?$" args)
+                       (collect-paragraph)
+                       (info-collector (parse-table stream (aref args 0))))))
                    ((cl-ppcre:scan "^ *$" s)
                     (collect-paragraph))
                    (t
@@ -577,7 +601,7 @@
         (error "Error when evaluating command: ~s: ~s" src eval-ret))
       (cdr eval-ret))))
 
-(defun evaluate-demo-src (src standard-input-content)
+(defun %evaluate-demo-src (src standard-input-content)
   (uiop:with-temporary-file (:stream input)
     (with-standard-io-syntax
       (let ((*print-circle* t))
@@ -589,6 +613,7 @@
             (let* ((dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
                    (exec-file (merge-pathnames "maxima-parser.bin" dir))
                    (exec-name (namestring exec-file)))
+              (log:info "infile=~s outfile=~s" input output)
               (uiop:run-program (list exec-name "--dynamic-space-size" "3000")
                                 :input (pathname input)
                                 :output (pathname output)
@@ -605,6 +630,12 @@
           (error (condition)
             (format t "Error while evaluating Maxima expression: ~a" condition)
             (list :error "Error evaluating expression")))))))
+
+(defun evaluate-demo-src (src standard-input-content)
+  (log:info "Evaluating code: ~s. input: ~s" src standard-input-content)
+  (let ((res (%evaluate-demo-src src standard-input-content)))
+    (log:info "Result: ~s" res)
+    res))
 
 (defun resolve-example-code (info-content)
   (labels ((parse-branch (nodes)

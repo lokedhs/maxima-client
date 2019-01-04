@@ -82,7 +82,8 @@
 
 (defun add-vspacing (stream n)
   (draw-current-line-and-reset stream)
-  (incf *word-wrap-y* n))
+  (incf *word-wrap-y* n)
+  (draw-current-line-and-reset stream))
 
 (defun draw-newline (stream)
   (let ((x *word-wrap-x*))
@@ -144,11 +145,10 @@
       (vector-push-extend rec *word-wrap-line-content*))))
 
 (defun word-wrap-draw-string (stream string)
-  (clim:with-identity-transformation (stream)
-    (let ((parts (split-word string)))
-      (loop
-        while parts
-        do (setq parts (word-wrap-draw-one-line stream parts))))))
+  (let ((parts (split-word string)))
+    (loop
+      while parts
+      do (setq parts (word-wrap-draw-one-line stream parts)))))
 
 (defmacro with-word-wrap-record ((stream) &body body)
   (alexandria:once-only (stream)

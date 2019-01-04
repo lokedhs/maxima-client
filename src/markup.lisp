@@ -194,10 +194,12 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream 10))
 
-(defmacro with-indent ((indent) &body body)
-  (alexandria:once-only (indent)
+(defmacro with-indent ((stream indent) &body body)
+  (alexandria:once-only (stream indent)
     `(with-adjusted-margin (,indent (- ,indent))
-       ,@body)))
+       (draw-current-line-and-reset ,stream)
+       ,@body
+       (draw-current-line-and-reset ,stream))))
 
 (defun render-example (stream content)
   (let ((res (assoc :demo-result content)))
@@ -246,11 +248,11 @@
   (dolist (args-descriptor secondary-args)
     (destructuring-bind (name args)
         args-descriptor
-      (with-indent (10)
+      (with-indent (stream 10)
         (word-wrap-draw-string stream (format nil "~a " name))
         (display-markup-int stream args))
       (draw-current-line-and-reset stream)))
-  (with-indent (30)
+  (with-indent (stream 30)
     (display-markup-int stream content)))
 
 (defun render-deffn (stream descriptor content)
@@ -293,13 +295,31 @@
   ;; paragraphs. This seems to be in line with what the HTML renderer
   ;; does.
   (let ((bullet-p (member :bullet args)))
-    (with-indent (50)
+    (with-indent (stream 50)
       (dolist (item content)
-        (draw-current-line-and-reset stream)
         (add-vspacing stream 18)
         (when bullet-p
           (word-wrap-draw-string stream (format nil "~c " #\BULLET)))
         (display-markup-list stream item :skip-first t)))))
+
+(defun render-table (stream args content)
+  (let ((fix-p (member :code args)))
+    (dolist (entry content)
+      (draw-current-line-and-reset stream)
+      (add-vspacing stream 18)
+      (when (eq (first entry) :item)
+        (let ((label (second entry))
+              (item (cddr entry)))
+          (with-indent (stream 10)
+            (if fix-p
+                (clim:with-text-family (stream :fix)
+                  (word-wrap-draw-string stream label))
+                (word-wrap-draw-string stream label))
+            (draw-current-line-and-reset stream))
+          (add-vspacing stream 10)
+          (with-indent (stream 50)
+            (display-markup-list stream item :skip-first t)
+            (draw-current-line-and-reset stream)))))))
 
 (defun render-picture (stream file)
   (let ((parsed-name (alexandria:if-let ((pos (position #\, file)))
@@ -373,6 +393,7 @@
              (:footnote nil)
              (:figure nil)
              (:itemize (render-itemize stream (second content) (cddr content)))
+             (:table (render-table stream (second content) (cddr content)))
              (:ref (display (cdr content)))
              (:image (render-picture stream (second content)))))
           ((listp content)
