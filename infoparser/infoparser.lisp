@@ -613,7 +613,6 @@
             (let* ((dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
                    (exec-file (merge-pathnames "maxima-parser.bin" dir))
                    (exec-name (namestring exec-file)))
-              (log:info "infile=~s outfile=~s" input output)
               (uiop:run-program (list exec-name "--dynamic-space-size" "3000")
                                 :input (pathname input)
                                 :output (pathname output)
@@ -632,9 +631,9 @@
             (list :error "Error evaluating expression")))))))
 
 (defun evaluate-demo-src (src standard-input-content)
-  (log:info "Evaluating code: ~s. input: ~s" src standard-input-content)
+  (log:trace "Evaluating code: ~s. input: ~s" src standard-input-content)
   (let ((res (%evaluate-demo-src src standard-input-content)))
-    (log:info "Result: ~s" res)
+    (log:trace "Result: ~s" res)
     res))
 
 (defun resolve-example-code (info-content)
