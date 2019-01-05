@@ -548,7 +548,6 @@
                       (("^@ifhtml *$") (dolist (image (parse-ifhtml stream))
                                          (info-collector image)))
                       (("^@iftex *$") (skip-block stream "^@end iftex"))
-                      (("^@ifnotinfo *$") (skip-block stream "^@end ifnotinfo"))
 
                       (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? +@ *$" args)
                        (collect-paragraph)
@@ -648,7 +647,17 @@
             (list :error "Error evaluating expression")))))))
 
 (defun evaluate-demo-src (src standard-input-content)
-  (when (equal (car src) "w[i,j] := random (1.0) + %i * random (1.0);")
+  (when (or (equal (car src) "w[i,j] := random (1.0) + %i * random (1.0);")
+            (loop for v in src
+                  when (or (alexandria:starts-with-subseq "plot2d" v)
+                           (alexandria:starts-with-subseq "plot3d" v)
+                           (alexandria:starts-with-subseq "implicit_plot" v)
+                           (alexandria:starts-with-subseq "contour_plot" v)
+                           (alexandria:starts-with-subseq "mandelbrot" v)
+                           (alexandria:starts-with-subseq "julia" v)
+                           (alexandria:starts-with-subseq "geomview_command" v)
+                           (alexandria:starts-with-subseq "gnuplot_command" v))
+                    return t))
     (log:warn "Skipping example: ~s" src)
     (return-from evaluate-demo-src (list :error "Skip example")))
   (log:trace "Evaluating code: ~s. input: ~s" src standard-input-content)
