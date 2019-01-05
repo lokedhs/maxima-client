@@ -648,6 +648,9 @@
             (list :error "Error evaluating expression")))))))
 
 (defun evaluate-demo-src (src standard-input-content)
+  (when (equal (car src) "w[i,j] := random (1.0) + %i * random (1.0);")
+    (log:warn "Skipping example: ~s" src)
+    (return-from evaluate-demo-src (list :error "Skip example")))
   (log:trace "Evaluating code: ~s. input: ~s" src standard-input-content)
   (let ((res (%evaluate-demo-src src standard-input-content)))
     (log:trace "Result: ~s" res)
