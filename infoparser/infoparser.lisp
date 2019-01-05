@@ -422,56 +422,69 @@
     (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
            (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
-(defun parse-item-content (all-content)
-  (collectors:with-collector (items-collector)
-    (let ((current-item nil))
-      (labels ((parse-item ()
-                 (when current-item
-                   (items-collector (reverse current-item))
-                   (setq current-item nil))))
-        (loop
-          with before-first-item = t
-          for line in all-content
-          do (multiple-value-bind (match strings)
-                 (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" line)
-               (if match
-                   (progn
-                     (cond (before-first-item
-                            (setq before-first-item nil))
-                           (t
-                            (parse-item)))
-                     (setq current-item (let ((row (aref strings 0)))
-                                          (if row (list row) nil))))
-                   ;; ELSE: Plain line
-                   (push line current-item)))
-          finally (parse-item))))
-    (items-collector)))
-
 (defun parse-itemize (stream args)
-  ;; Any content before the first @item will be dropped
-  ;; We should probably check for anchors here
-  (let ((bullet-p (cl-ppcre:scan "@bullet" args))
-        (content (parse-item-content (skip-block stream "^@end itemize"))))
-    (list* :itemize (if bullet-p '(:bullet) nil)
-           (mapcar (lambda (v)
-                     (with-input-from-string (s (make-multiline-string v))
-                       (parse-stream s nil)))
-                   content))))
+  (let ((flags (if (cl-ppcre:scan "@code" args)
+                   '(:bullet)
+                   nil)))
+    (collectors:with-collector (coll)
+      (loop
+        with curr-item = nil
+        with curr-item-set = nil
+        while (multiple-value-bind (content terminating-string)
+                  (parse-stream stream
+                                (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end itemize)) *$"))
+                                curr-item)
+                (multiple-value-bind (item-match item-strings)
+                    (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" terminating-string)
+                  (labels ((collect-item ()
+                             (when curr-item-set
+                               (coll content))))
+                    (if item-match
+                        (progn
+                          (collect-item)
+                          (setq curr-item (aref item-strings 0))
+                          (setq curr-item-set t)
+                          t)
+                        ;; ELSE: Must be end of table, but let's ensure that's the case
+                        (if (cl-ppcre:scan "^@end itemize *$" terminating-string)
+                            ;; Found end of table, return nil to stop iterating
+                            (progn
+                              (collect-item)
+                              nil)
+                            ;; ELSE: The first regex should not allow anything through to this point
+                            (error "When parsing table, first regex suceeded, but the second failed: ~s" terminating-string)))))))
+      (list* :itemize flags (coll)))))
 
 (defun parse-table (stream args)
   (let ((flags (if (cl-ppcre:scan "@code" args)
                    '(:code)
-                   nil))
-        (content (parse-item-content (skip-block stream "^@end table"))))
-    (list* :table flags
-           (mapcar (lambda (v)
-                     (unless (car v)
-                       (error "Item with no text: ~s" v))
-                     (list* :item
-                            (car v)
-                            (with-input-from-string (s (make-multiline-string (cdr v)))
-                              (parse-stream s nil))))
-                   content))))
+                   nil)))
+    (collectors:with-collector (coll)
+      (loop
+        with curr-item = nil
+        with curr-item-set = nil
+        while (multiple-value-bind (content terminating-string)
+                  (parse-stream stream (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end table)) *$")))
+                (multiple-value-bind (item-match item-strings)
+                    (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" terminating-string)
+                  (labels ((collect-item ()
+                             (when curr-item-set
+                               (coll (list* :item curr-item content)))))
+                    (if item-match
+                        (progn
+                          (collect-item)
+                          (setq curr-item (aref item-strings 0))
+                          (setq curr-item-set t)
+                          t)
+                        ;; ELSE: Must be end of table, but let's ensure that's the case
+                        (if (cl-ppcre:scan "^@end table *$" terminating-string)
+                            ;; Found end of table, return nil to stop iterating
+                            (progn
+                              (collect-item)
+                              nil)
+                            ;; ELSE: The first regex should not allow anything through to this point
+                            (error "When parsing table, first regex suceeded, but the second failed: ~s" terminating-string)))))))
+      (list* :table flags (coll)))))
 
 (defun parse-ifhtml (stream)
   (let ((content (skip-block stream "^@end ifhtml")))
@@ -493,7 +506,7 @@
                          s)))
       nil))
 
-(defun parse-stream (stream end-tag)
+(defun parse-stream (stream &optional end-tag initial-content)
   (collectors:with-collector (info-collector)
     (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
           (terminating-string nil))
@@ -502,7 +515,11 @@
                    (info-collector (parse-paragraph current-paragraph))
                    (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
         (loop
-          for s = (trim-comment (read-line stream nil nil))
+          with injected-s = initial-content
+          for line = (if injected-s
+                      (prog1 injected-s (setq injected-s nil))
+                      (read-line stream nil nil))
+          for s = (trim-comment line)
           do (setq terminating-string s)
           until (or (null s)
                     (and end-tag
