@@ -33,7 +33,7 @@
           (clim:with-text-face (stream :bold)
             (maxima-client.markup:word-wrap-draw-string stream type))
           (maxima-client.markup:word-wrap-draw-string stream " ")
-          (let ((p (make-instance 'maxima-client.markup:maxima-function-reference :name name)))
+          (let ((p (make-instance 'maxima-client.markup:maxima-function-reference :destination name)))
             (maxima-client.markup:word-wrap-draw-presentation stream p))
           (maxima-client.markup:draw-current-line-and-reset stream))))))
 
@@ -314,14 +314,14 @@
     ((name '(or string maxima-client.markup:node-reference) :prompt "Node"))
   (let* ((node-name (etypecase name
                                (string name)
-                               (maxima-client.markup:node-reference (maxima-client.markup:named-reference/name name)))))
+                               (maxima-client.markup:node-reference (maxima-client.markup:named-reference/destination name)))))
     (process-doc-command-and-redisplay clim:*application-frame* :node node-name)))
 
 (clim:define-command (cmd-open-help-function :name "Function" :menu t :command-table info-commands)
     ((function '(or string maxima-client.markup:maxima-function-reference) :prompt "Name"))
   (let* ((name (etypecase function
                  (string function)
-                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/name function)))))
+                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/destination function)))))
     (process-doc-command-and-redisplay clim:*application-frame* :function name)))
 
 (define-documentation-frame-command (cmd-doc-introduction :name "Intro")
@@ -334,7 +334,7 @@
 
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)
-  (make-instance 'maxima-client.markup:named-reference :name object))
+  (make-instance 'maxima-client.markup:named-reference :destination object))
 
 (clim:define-presentation-to-command-translator select-maxima-function
     (maxima-client.markup:maxima-function-reference cmd-open-help-function info-commands)
@@ -350,7 +350,7 @@
     ((category '(or string maxima-client.markup:category-reference) :prompt "Category"))
   (let ((name (etypecase category
                 (string category)
-                (maxima-client.markup:category-reference (maxima-client.markup:named-reference/name category)))))
+                (maxima-client.markup:category-reference (maxima-client.markup:named-reference/destination category)))))
     (process-doc-command-and-redisplay clim:*application-frame* :category name)))
 
 (clim:define-presentation-to-command-translator select-category

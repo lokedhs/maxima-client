@@ -65,11 +65,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass named-reference (text-link)
-  ((name :initarg :name
-         :reader named-reference/name)))
+  ((name        :initarg :name
+                :initform nil
+                :reader named-reference/name)
+   (destination :initarg :destination
+                :initform (error "~s required when creating ~s" :destination 'named-reference)
+                :reader named-reference/destination)))
 
 (defmethod text-link/description ((obj named-reference))
-  (named-reference/name obj))
+  (or (named-reference/name obj)
+      (named-reference/destination obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; maxima-function-reference
@@ -186,7 +191,7 @@
         with pos = 0
         for name in categories
         do (let ((rec (clim:with-output-to-output-record (stream)
-                        (present-to-stream (make-instance 'category-reference :name name) stream))))
+                        (present-to-stream (make-instance 'category-reference :destination name) stream))))
              (move-rec rec pos 0)
              (dimension-bind (rec :width width)
                (incf pos (+ width 15)))
@@ -346,21 +351,21 @@
     (draw-current-line-and-reset stream)
     (when next
       (word-wrap-draw-string stream "Next: ")
-      (word-wrap-draw-presentation stream (make-instance 'node-reference :name next))
+      (word-wrap-draw-presentation stream (make-instance 'node-reference :destination next))
       (when prev
         (word-wrap-draw-string stream " Previous: ")
-        (word-wrap-draw-presentation stream (make-instance 'node-reference :name prev))
+        (word-wrap-draw-presentation stream (make-instance 'node-reference :destination prev))
         (when up
           (word-wrap-draw-string stream " Up: ")
-          (word-wrap-draw-presentation stream (make-instance 'node-reference :name up))))
+          (word-wrap-draw-presentation stream (make-instance 'node-reference :destination up))))
       (draw-current-line-and-reset stream))))
 
 (defun render-menu (stream content)
   (declare (ignore stream content))
   nil)
 
-(defun make-mref-link (name)
-  (make-instance 'maxima-function-reference :name name))
+(defun make-mref-link (link &optional name)
+  (make-instance 'maxima-function-reference :name name :destination link))
 
 (defun display-possibly-tagged-list (stream content)
   (labels ((display (v)
@@ -381,7 +386,7 @@
              (:section (render-section stream (cdr content)))
              (:subsection (render-subsection stream (cdr content)))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
-             ((:mrefdot :mxrefdot :mrefcomma :xref) (display (cdr content)))
+             ((:mxref :xref) (display (list (third content)))) ;; Format: (:mxref "link" "text")
              ((:mref :fname) (word-wrap-draw-presentation stream (make-mref-link (second content))))
              (:catbox (render-catbox stream (cdr content)))
              (:demo-code (render-example stream (cdr content)))

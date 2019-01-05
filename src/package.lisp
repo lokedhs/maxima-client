@@ -80,12 +80,12 @@
            #:text-link
            #:text-link/description
            #:maxima-function-reference
-           #:maxima-function-reference/name
            #:markup-text-view
            #:node-reference
            #:node-reference/name
            #:named-reference
            #:named-reference/name
+           #:named-reference/destination
            #:category-reference
            #:markup
            #:word-wrap-draw-string
