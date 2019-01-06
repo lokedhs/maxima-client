@@ -457,7 +457,7 @@
       (render-intsum-inner stream f var from-fn to symbol sym2 font-fn)))
 
 (defun find-integrate-font (size)
-  (log:info "Finding integrate font: ~s" size)
+  (log:trace "Finding integrate font: ~s" size)
   (let ((adjusted-size (+ size 10)))
     (cond ((< adjusted-size 65)
            (list *font-integrate-size1* (* adjusted-size 0.7)))
