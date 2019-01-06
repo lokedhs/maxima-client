@@ -124,8 +124,9 @@
         (right-margin *word-wrap-right-margin*))
     (multiple-value-bind (initial more-parts width)
         (split-string-at-right-margin stream parts (- right-margin start))
-      (let ((rec (clim:with-output-to-output-record (stream)
-                   (clim:draw-text* stream initial start 0))))
+      (let ((rec (clim:with-identity-transformation (stream)
+                   (clim:with-output-to-output-record (stream)
+                     (clim:draw-text* stream initial start 0)))))
         (vector-push-extend rec *word-wrap-line-content*))
       (cond (more-parts
              (draw-current-line-and-reset stream))
@@ -138,11 +139,11 @@
         (right-margin *word-wrap-right-margin*))
     (move-rec rec start 0)
     (dimension-bind-new (stream rec :width width)
-      (cond ((<= (+ start width) right-margin)
-             (incf *word-wrap-x* width))
-            (t
-             (draw-current-line-and-reset stream)))
-      (vector-push-extend rec *word-wrap-line-content*))))
+      (when (> (+ start width) right-margin)
+        (draw-current-line-and-reset stream)
+        (set-rec-position rec *word-wrap-left-margin* nil))
+      (vector-push-extend rec *word-wrap-line-content*)
+      (incf *word-wrap-x* width))))
 
 (defun word-wrap-draw-string (stream string)
   (let ((parts (split-word string)))

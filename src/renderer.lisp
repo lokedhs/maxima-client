@@ -857,13 +857,36 @@ Each element should be an output record."
 (defun render-lisp-array (stream value)
   (render-formatted stream "{Lisp Array: ~s}" value))
 
+(defun single-mlist-element-or-nil (element)
+  (let ((mlist-p (eq (caar element) 'maxima::mlist)))
+    (cond ((and mlist-p
+                (cdr element)
+                (not (cddr element)))
+           (second element))
+          ((not mlist-p)
+           element)
+          (t
+           nil))))
+
 (defun render-at (stream expr values)
   (let ((vert-line-spacing (/ (char-width stream) 2))
         (height-adjustment (char-height stream))
         (rec (clim:with-output-to-output-record (stream)
                (render-maxima-expression stream expr)))
         (values-rec (clim:with-output-to-output-record (stream)
-                      (render-maxima-expression stream values))))
+                      (with-paren-op
+                        (alexandria:if-let ((single-element (single-mlist-element-or-nil values)))
+                          (render-maxima-expression stream single-element)
+                          ;; ELSE: Multiple elements
+                          (with-aligned-rendering (stream)
+                            (loop
+                              for element in (cdr values)
+                              for first = t then nil
+                              do (let ((rec (clim:with-output-to-output-record (stream)
+                                              (render-maxima-expression stream element))))
+                                   (unless first
+                                     (aligned-spacing 0.5))
+                                   (render-aligned () (wrap-with-parens stream rec))))))))))
     (clim:stream-add-output-record stream rec)
     (dimension-bind (rec :y y1 :bottom y2 :right right)
       (let ((line-y1 (- y1 height-adjustment))
@@ -908,7 +931,7 @@ Each element should be an output record."
                ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (maxima::bigfloat (render-bigfloat stream fixed))
-               (maxima::%$at (render-at stream (second fixed) (third fixed)))
+               ((maxima::%$at maxima::%at) (render-at stream (second fixed) (third fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
