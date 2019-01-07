@@ -61,10 +61,9 @@
                          ;; ELSE: The match is at the beginning of the string
                          (list highlight)))
                    ;; ELSE: No match, copy the last part of the text and finish the loop
-                   (progn
-                     (let ((old-start start))
-                       (setq start length)
-                       (markup-string (subseq string old-start)))))))))
+                   (let ((old-start start))
+                     (setq start length)
+                     (markup-string (subseq string old-start))))))))
 
 (defmacro markup-from-regexp (regexp string callback &optional plain-string-markup-fn &environment env)
   `(%markup-from-regexp ,(if (constantp regexp env) `(load-time-value (cl-ppcre:create-scanner ,regexp)) regexp)
