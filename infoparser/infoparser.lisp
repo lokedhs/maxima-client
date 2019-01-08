@@ -439,7 +439,7 @@
         while (multiple-value-bind (content terminating-string)
                   (parse-stream stream
                                 (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end itemize)) *$"))
-                                curr-item)
+                                (if curr-item (list curr-item) nil))
                 (multiple-value-bind (item-match item-strings)
                     (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" terminating-string)
                   (labels ((collect-item ()
@@ -529,8 +529,8 @@
         (loop
           with injected-s = initial-content
           for line = (if injected-s
-                      (prog1 injected-s (setq injected-s nil))
-                      (read-line stream nil nil))
+                         (prog1 (car injected-s) (setq injected-s (cdr injected-s)))
+                         (read-line stream nil nil))
           for s = (trim-comment line)
           do (setq terminating-string s)
           until (or (null s)
@@ -598,10 +598,10 @@
         (collect-paragraph)
         (values (info-collector) terminating-string)))))
 
-(defun parse-file (file)
+(defun parse-file (file initial-content)
   (log:trace "Parsing file: ~s" file)
   (with-open-file (stream file :direction :input :external-format :utf-8)
-    (parse-stream stream nil)))
+    (parse-stream stream nil initial-content)))
 
 (defun evaluate-one-demo-src-line (src)
   (when (cl-ppcre:scan "^ *:" src)
@@ -662,14 +662,11 @@
   (when (or (equal (car src) "w[i,j] := random (1.0) + %i * random (1.0);")
             (loop
               for v in src
-              when (or (alexandria:starts-with-subseq "plot2d" v)
-                       (alexandria:starts-with-subseq "plot3d" v)
-                       (alexandria:starts-with-subseq "implicit_plot" v)
-                       (alexandria:starts-with-subseq "contour_plot" v)
-                       (alexandria:starts-with-subseq "mandelbrot" v)
-                       (alexandria:starts-with-subseq "julia" v)
-                       (alexandria:starts-with-subseq "geomview_command" v)
-                       (alexandria:starts-with-subseq "gnuplot_command" v))
+              when (member-if (lambda (p)
+                                (alexandria:starts-with-subseq p v))
+                              '("plot2d" "plot3d" "implicit_plot" "contour_plot" "mandelbrot" "julia"
+                                "geomview_command" "gnuplot_command" "draw_graph" "barsplot"
+                                "histogram" "piechart"))
                 return t))
     (log:warn "Skipping example: ~s" src)
     (return-from evaluate-demo-src (list :error "Skip example")))
@@ -695,22 +692,26 @@
                  collect v)))
     (parse-branch info-content)))
 
-(defun parse-and-write-file (file destination-directory &key skip-example)
+(defun parse-and-write-file (file destination-directory &key skip-example initial-content)
   (log:info "Parsing file: ~s" file)
-  (let* ((content (parse-file file))
+  (let* ((content (parse-file file initial-content))
          (processed (if skip-example
                         content
                         (resolve-example-code content))))
-    (with-open-file (s (make-pathname :name (pathname-name file)
-                                      :type "lisp"
-                                      :defaults destination-directory)
-                       :direction :output
-                       :if-exists :supersede
-                       :external-format :utf-8)
-      (with-standard-io-syntax
-        (let ((*print-circle* t)
-              (*print-pretty* t))
-          (print processed s))))))
+    (write-parsed-content-to-file processed
+                                  (make-pathname :name (pathname-name file)
+                                                 :type "lisp"
+                                                 :defaults destination-directory))))
+
+(defun write-parsed-content-to-file (processed file)
+  (with-open-file (s file
+                     :direction :output
+                     :if-exists :supersede
+                     :external-format :utf-8)
+    (with-standard-io-syntax
+      (let ((*print-circle* t)
+            (*print-pretty* t))
+        (print processed s)))))
 
 (defun parse-doc-directory (info-directory destination-directory &key skip-example)
   "Parse all texinfo files in the given directory and output
@@ -839,11 +840,50 @@ corresponding lisp files to the output directory."
               ("png" (copy-file-to-dir file destination-dir))
               ("pdf" (convert-pdf-to-png file destination-name)))))))))
 
+(defun parse-toplevel-file (file destination-directory &key skip-example)
+  (with-open-file (stream file :direction :input)
+    (let* ((titlepage-row (loop for s = (read-line stream) until (cl-ppcre:scan "^@titlepage *$" s) finally (return s)))
+           (main-content (with-output-to-string (out-stream)
+                           (format out-stream "~a~%" titlepage-row)
+                           (loop
+                             for s = (read-line stream)
+                             do (format out-stream "~a~%" s)
+                             until (cl-ppcre:scan "^@end menu *" s)))))
+      ;; At this point, we want to find all files specified using
+      ;; @include directives. If the directive has a @node and
+      ;; @chapter section before the @include, it should be included
+      ;; before the file content.
+      (loop
+        with current-prefix = nil
+        for s = (read-line stream nil nil)
+        while s
+        do (multiple-value-bind (match strings)
+               (cl-ppcre:scan-to-strings "^@include +([^ ]+) *$" s)
+             (if match
+                 (progn
+                   (parse-and-write-file (merge-pathnames (aref strings 0)
+                                                          (make-pathname :directory (pathname-directory file)))
+                                         destination-directory
+                                         :initial-content (reverse current-prefix)
+                                         :skip-example skip-example)
+                   (setq current-prefix nil))
+                 (push s current-prefix))))
+      (let ((parsed (with-input-from-string (instring main-content)
+                      (parse-stream instring))))
+        (write-parsed-content-to-file parsed
+                                      (make-pathname :name (pathname-name file)
+                                                     :type "lisp"
+                                                     :defaults destination-directory))))))
+
 (defun generate-doc-directory (&key skip-example skip-figures)
   "Generate lisp files for all the texinfo files in the maxima distribution."
   (let ((destination-directory (resolve-destination-dir)))
     (ensure-directories-exist destination-directory)
+    #+nil
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/")
+                         destination-directory
+                         :skip-example skip-example)
+    (parse-toplevel-file (asdf:system-relative-pathname (asdf:find-system :maxima) "../doc/info/include-maxima.texi")
                          destination-directory
                          :skip-example skip-example)
     (parse-doc-directory (asdf:system-relative-pathname (asdf:find-system :maxima-client) "info/")
