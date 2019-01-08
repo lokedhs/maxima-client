@@ -49,6 +49,10 @@
     (+ (climb:text-style-ascent style stream)
        (climb:text-style-descent style stream))))
 
+(defun font-char-width (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-character-width style stream #\m)))
+
 (defun draw-current-line (stream)
   (when (plusp (length *word-wrap-line-content*))
     (let ((max-descent (max (font-descent stream)
@@ -166,3 +170,9 @@
     (let ((rec (clim:with-output-to-output-record (stream)
                  (clim:stream-present stream obj (or presentation-type (clim:presentation-type-of obj))))))
       (word-wrap-draw-record stream rec))))
+
+(defun word-wrap-add-absolute-spacing (position)
+  (when (or (< position *word-wrap-left-margin*)
+            (>= position *word-wrap-right-margin*))
+    (error "position out of range: ~s. Should be between ~s and ~s" position *word-wrap-left-margin* *word-wrap-right-margin*))
+  (setq *word-wrap-x* (max *word-wrap-x* position)))

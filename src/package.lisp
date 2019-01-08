@@ -91,7 +91,8 @@
            #:word-wrap-draw-string
            #:word-wrap-draw-presentation
            #:draw-current-line-and-reset
-           #:add-vspacing))
+           #:add-vspacing
+           #:font-char-width))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)
@@ -118,4 +119,5 @@
   (:use :cl :maxima-client.common)
   (:export
    #:open-documentation-frame
-   #:display-function-help))
+   #:display-function-help
+   #:*maxima-toplvel-filename*))

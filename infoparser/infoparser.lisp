@@ -94,17 +94,29 @@
                      (lambda (,sym) ,@body)))
 
 (defun process-menu (stream)
-  (cons :menu
-        ;; Only process lines matching * title ::
-        (loop
-          for s = (read-line stream)
-          until (cl-ppcre:scan "^@end menu *$" s)
-          append (multiple-value-bind (match strings)
-                     (cl-ppcre:scan-to-strings "^ *\\* *([^ ]+(?: +[^ ]+)*) *:: *$" s)
-                   (if match
-                       (list (aref strings 0))
-                       ;; ELSE: No match
-                       nil)))))
+  (let ((content (collectors:with-collector (coll)
+                   (let ((prefix nil))
+                     (labels ((collect-prefix ()
+                                (when prefix
+                                  (let ((parsed (with-input-from-string (s (make-multiline-string (reverse prefix)))
+                                                  (parse-stream s))))
+                                    (when parsed
+                                      (coll (list :menu-text parsed))))
+                                  (setq prefix nil))))
+                       (loop
+                         for s = (read-line stream)
+                         until (cl-ppcre:scan "^@end menu *$" s)
+                         append (multiple-value-bind (match strings)
+                                    (cl-ppcre:scan-to-strings "^ *\\* *([^ ]+(?: +[^ ]+)*) *:: *(.*[^ ])? *$" s)
+                                  (if match
+                                      (progn
+                                        (collect-prefix)
+                                        (coll (list :menu-entry (aref strings 0) (aref strings 1))))
+                                      ;; ELSE: No match
+                                      (push s prefix))))
+                       (collect-prefix)
+                       (coll))))))
+    (cons :menu content)))
 
 (defparameter *simple-tags*
   '(("mref" :mref)
@@ -666,7 +678,7 @@
                                 (alexandria:starts-with-subseq p v))
                               '("plot2d" "plot3d" "implicit_plot" "contour_plot" "mandelbrot" "julia"
                                 "geomview_command" "gnuplot_command" "draw_graph" "barsplot"
-                                "histogram" "piechart"))
+                                "histogram" "piechart" "plotdf" "ploteq" "scene"))
                 return t))
     (log:warn "Skipping example: ~s" src)
     (return-from evaluate-demo-src (list :error "Skip example")))
@@ -842,13 +854,12 @@ corresponding lisp files to the output directory."
 
 (defun parse-toplevel-file (file destination-directory &key skip-example)
   (with-open-file (stream file :direction :input)
-    (let* ((titlepage-row (loop for s = (read-line stream) until (cl-ppcre:scan "^@titlepage *$" s) finally (return s)))
-           (main-content (with-output-to-string (out-stream)
-                           (format out-stream "~a~%" titlepage-row)
-                           (loop
-                             for s = (read-line stream)
-                             do (format out-stream "~a~%" s)
-                             until (cl-ppcre:scan "^@end menu *" s)))))
+    (skip-block stream "^@summarycontents *")
+    (let ((main-content (with-output-to-string (out-stream)
+                          (loop
+                            for s = (read-line stream)
+                            do (format out-stream "~a~%" s)
+                            until (cl-ppcre:scan "^@end menu *" s)))))
       ;; At this point, we want to find all files specified using
       ;; @include directives. If the directive has a @node and
       ;; @chapter section before the @include, it should be included
@@ -870,10 +881,8 @@ corresponding lisp files to the output directory."
                  (push s current-prefix))))
       (let ((parsed (with-input-from-string (instring main-content)
                       (parse-stream instring))))
-        (write-parsed-content-to-file parsed
-                                      (make-pathname :name (pathname-name file)
-                                                     :type "lisp"
-                                                     :defaults destination-directory))))))
+        (write-parsed-content-to-file parsed (merge-pathnames maxima-client.doc-new:*maxima-toplvel-filename*
+                                                              destination-directory))))))
 
 (defun generate-doc-directory (&key skip-example skip-figures)
   "Generate lisp files for all the texinfo files in the maxima distribution."

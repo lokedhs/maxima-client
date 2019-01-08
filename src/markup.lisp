@@ -361,8 +361,19 @@
       (draw-current-line-and-reset stream))))
 
 (defun render-menu (stream content)
-  (declare (ignore stream content))
-  nil)
+  (loop
+    for e in content
+    for tag = (car e)
+    do (ecase tag
+         (:menu-text
+          (display-markup-int stream (cdr e))
+          (draw-current-line-and-reset stream))
+         (:menu-entry
+          (word-wrap-draw-presentation stream (make-instance 'node-reference :destination (second e)))
+          (alexandria:when-let ((description (third e)))
+            (word-wrap-add-absolute-spacing (* (font-char-width stream) 10))
+            (word-wrap-draw-string stream description))
+          (draw-current-line-and-reset stream)))))
 
 (defun make-mref-link (link &optional name)
   (make-instance 'maxima-function-reference :name name :destination link))

@@ -6,6 +6,8 @@
   (clim:define-presentation-type category ()
     :description "A list of references to a category"))
 
+(defparameter *maxima-toplvel-filename* #p"include-maxima.lisp")
+
 (clim:define-command-table info-commands
   :inherit-from (maxima-client.markup:text-commands))
 
@@ -332,6 +334,10 @@
     ((file 'string :prompt "Filename"))
   (process-doc-command-and-redisplay clim:*application-frame* :file file))
 
+(define-documentation-frame-command (cmd-doc-maxima-manual :name "Manual")
+    ()
+  (process-doc-command-and-redisplay clim:*application-frame* :file (pathname-name "maxima-toplevel")))
+
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)
   (make-instance 'maxima-client.markup:named-reference :destination object))
@@ -380,4 +386,5 @@
 (clim:make-command-table 'info-doc-command-table
                          :errorp nil
                          :menu '(("Maxima-Client Introduction" :command cmd-doc-introduction)
-                                 ("Function" :command cmd-open-help-function)))
+                                 ("Maxima Documentation" :command cmd-doc-maxima-manual)
+                                 ("Describe Function or Variable" :command cmd-open-help-function)))
