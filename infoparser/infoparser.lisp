@@ -449,7 +449,7 @@
            (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
 (defun parse-itemize (stream args)
-  (let ((flags (if (cl-ppcre:scan "@code" args)
+  (let ((flags (if (cl-ppcre:scan "@bullet" args)
                    '(:bullet)
                    nil)))
     (collectors:with-collector (coll)

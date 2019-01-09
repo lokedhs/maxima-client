@@ -387,7 +387,7 @@
              (:heading (draw-current-line-and-reset stream) (clim:with-text-style (stream (clim:make-text-style :sans-serif :bold :large)) (display (cdr content))))
              (:bold (clim:with-text-face (stream :bold) (display (cdr content))))
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
-             ((:code :math) (clim:with-text-family (stream :fix) (display (cdr content))))
+             ((:code :math :file) (clim:with-text-family (stream :fix) (display (cdr content))))
              (:pre (render-preformatted stream (cdr content)))
              ((:link :url) (word-wrap-draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
