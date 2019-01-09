@@ -130,9 +130,8 @@
     ("ref" :ref)
     ("file" :file)
     ("footnote" :footnote)
-    ("kbd" :kbd)
+    ("kbd" :key)
     ("key" :key)
-    ("image" :image)
     ("dfn" :dfn)
     ("url" :url)
     ("uref" :url)
@@ -142,6 +141,14 @@
     ("email" :email)
     ("pxref" :pxref)
     ("var" :var)))
+
+(defun parse-image (args)
+  (multiple-value-bind (match strings)
+      (cl-ppcre:scan-to-strings "^([^,]+)(?:,(.*))?$" args)
+    (unless match
+      (error "Unexpected format in image tag: ~s" args))
+    (let ((flags (aref strings 1)))
+      `(:image ,(aref strings 0) ,@(if flags (list flags) nil)))))
 
 (defun process-markup-tag (name args)
   (labels ((ensure-string-arg (s)
@@ -170,6 +177,7 @@
                ("mxrefcomma" `((:mxref ,@(parse-mxref-arg args)) ","))
                ("mxrefdot" `((:mxref ,@(parse-mxref-arg args)) "."))
                ("mxrefparen" `((:mxref ,@(parse-mxref-arg args)) ")"))
+               ("image" (list (parse-image (ensure-string-arg args))))
                ("w" nil)
                ("dots" '("…"))
                ("TeX" '("LaTeX"))

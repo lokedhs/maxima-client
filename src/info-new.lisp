@@ -189,11 +189,12 @@
                                      (equal (second v) name)))
                               file-content)))
         ;; Copy everything up until the next node
-        (loop
-          for v in (cdr start)
-          until (and (listp v)
-                     (eq (car v) :node))
-          collect v)))))
+        (cons (car start)
+              (loop
+                for v in (cdr start)
+                until (and (listp v)
+                           (eq (car v) :node))
+                collect v))))))
 
 (defun load-function (name)
   (load-index)
@@ -336,7 +337,7 @@
 
 (define-documentation-frame-command (cmd-doc-maxima-manual :name "Manual")
     ()
-  (process-doc-command-and-redisplay clim:*application-frame* :file (pathname-name "maxima-toplevel")))
+  (process-doc-command-and-redisplay clim:*application-frame* :file (pathname-name *maxima-toplvel-filename*)))
 
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)
@@ -373,10 +374,6 @@
 (clim:make-command-table 'info-file-command-table
                          :errorp nil
                          :menu '(("Close" :command cmd-info-close)))
-
-(clim:make-command-table 'info-nav-command-table
-                         :errorp nil
-                         :menu '(("History Back" :command cmd-prev-screen)))
 
 (clim:make-command-table 'info-nav-command-table
                          :errorp nil

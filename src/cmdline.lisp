@@ -525,6 +525,10 @@ terminated by ;.")
     ()
   (maxima-client.doc-new:open-documentation-frame '(:file "maxima-client")))
 
+(clim:define-command (cmd-show-maxima-manual :name "Maxima Documentation" :menu t :command-table maxima-commands)
+    ()
+  (maxima-client.doc-new:open-documentation-frame `(:file ,(pathname-name maxima-client.doc-new:*maxima-toplvel-filename*))))
+
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands
                         :echo nil :documentation "Copy expression as Maxima command")
@@ -601,5 +605,6 @@ terminated by ;.")
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil
-                         :menu '(("Documentation" :command (show-documentation-frame-command))
+                         :menu '(("Maxima-Client Introduction" :command (show-documentation-frame-command))
+                                 ("Maxima Documentation" :command (cmd-show-maxima-manual))
                                  ("Symbol Help" :command info-command)))

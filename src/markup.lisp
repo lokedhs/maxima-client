@@ -327,19 +327,16 @@
             (draw-current-line-and-reset stream)))))))
 
 (defun render-picture (stream file)
-  (let ((parsed-name (alexandria:if-let ((pos (position #\, file)))
-                       (subseq file 0 pos)
-                       file)))
-    (draw-current-line-and-reset stream)
-    (let* ((p (merge-pathnames (format nil "~a.png" parsed-name) (find-info-root-path)))
-           (image (clim:make-pattern-from-bitmap-file p)))
-      (if image
-          (with-word-wrap-record (stream)
-            (clim:draw-pattern* stream image 0 0)
-            (clim:draw-rectangle* stream 0 0 (clim:pattern-width image) (clim:pattern-height image)
-                                  :filled nil :ink clim:+black+))
-          ;; ELSE: Image couldn't be loaded
-          (log:warn "Could not load image file: ~s" p)))))
+  (draw-current-line-and-reset stream)
+  (let* ((p (merge-pathnames (format nil "~a.png" file) (find-info-root-path)))
+         (image (clim:make-pattern-from-bitmap-file p)))
+    (if image
+        (with-word-wrap-record (stream)
+          (clim:draw-pattern* stream image 0 0)
+          (clim:draw-rectangle* stream 0 0 (clim:pattern-width image) (clim:pattern-height image)
+                                :filled nil :ink clim:+black+))
+        ;; ELSE: Image couldn't be loaded
+        (log:warn "Could not load image file: ~s" p))))
 
 (defun render-node (stream content)
   (draw-current-line-and-reset stream)
@@ -361,12 +358,14 @@
       (draw-current-line-and-reset stream))))
 
 (defun render-menu (stream content)
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream 10)
   (loop
     for e in content
     for tag = (car e)
     do (ecase tag
          (:menu-text
-          (display-markup-int stream (cdr e))
+          (display-markup-list stream (cdr e))
           (draw-current-line-and-reset stream))
          (:menu-entry
           (word-wrap-draw-presentation stream (make-instance 'node-reference :destination (second e)))
