@@ -8,7 +8,8 @@ Precompiled binaries
 ====================
 
 The easiest way to run the application is to use the precompiled
-binary that is available from the Github project repository.
+binary that is available from the separate project:
+https://github.com/lokedhs/docker-maxima-client/
 
 Building
 ========
