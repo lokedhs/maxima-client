@@ -33,7 +33,7 @@
                   (clim:suggest (car e) (car e))))
               'maxima-function-name)
     (maxima-client.markup:maxima-function-reference
-     (let ((function-name (maxima-client.markup:text-link/description object)))
+     (let ((function-name (maxima-client.markup:named-reference/destination object)))
        (clim:replace-input stream function-name)))))
 
 (clim:define-presentation-method clim:present (obj (type category) stream view &key)
@@ -356,7 +356,7 @@
 (clim:define-presentation-to-command-translator select-maxima-function
     (maxima-client.markup:maxima-function-reference cmd-open-help-function info-commands)
     (obj)
-  (list obj))
+  (list (maxima-client.markup:named-reference/destination obj)))
 
 (clim:define-presentation-to-command-translator select-node
     (maxima-client.markup:node-reference cmd-open-help-node info-commands)
