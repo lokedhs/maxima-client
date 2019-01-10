@@ -499,7 +499,7 @@ terminated by ;.")
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
 
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
-    ((name '(or plain-text maxima-native-symbol) :prompt "Name"))
+    ((name '(or maxima-client.doc-new:maxima-function-name  maxima-native-symbol) :prompt "Name"))
   (log:info "type: ~s" name)
   (let ((string (etypecase name
                   (string name)
