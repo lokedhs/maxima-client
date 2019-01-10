@@ -83,6 +83,10 @@
 (defclass maxima-function-reference (named-reference)
   ())
 
+(defmethod print-object ((obj maxima-function-reference) stream)
+  (print-unreadable-safely (name destination) obj stream
+    (format stream "DESTINATION ~s NAME ~s" destination name)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; maxima-function-reference
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

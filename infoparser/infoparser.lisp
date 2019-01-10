@@ -731,7 +731,8 @@
     (with-standard-io-syntax
       (let ((*print-circle* t)
             (*print-pretty* t))
-        (print processed s)))))
+        (print processed s))))
+  nil)
 
 (defun parse-doc-directory (info-directory destination-directory &key skip-example)
   "Parse all texinfo files in the given directory and output

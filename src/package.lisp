@@ -56,7 +56,8 @@
            #:find-info-root-path
            #:*info-directory*
            #:xdimension-bind
-           #:dimension-bind-new))
+           #:dimension-bind-new
+           #:print-unreadable-safely))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)

@@ -4,7 +4,9 @@
   (clim:define-presentation-type node ()
     :description "Node in the documentation")
   (clim:define-presentation-type category ()
-    :description "A list of references to a category"))
+    :description "A list of references to a category")
+  (clim:define-presentation-type maxima-function-name ()
+    :description "The name of a maxima function in the documentation"))
 
 (defparameter *maxima-toplvel-filename* #p"include-maxima.lisp")
 
@@ -22,6 +24,17 @@
 (defvar *index-categories* nil)
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
+
+(clim:define-presentation-method clim:accept ((type maxima-function-name) stream view &key)
+  (clim:with-input-context ('maxima-client.markup:maxima-function-reference :override nil)
+      (object type)
+      (values (clim:completing-from-suggestions (stream :partial-completers '(#\Space))
+                (dolist (e *index-symbols*)
+                  (clim:suggest (car e) (car e))))
+              'maxima-function-name)
+    (maxima-client.markup:maxima-function-reference
+     (let ((function-name (maxima-client.markup:text-link/description object)))
+       (clim:replace-input stream function-name)))))
 
 (clim:define-presentation-method clim:present (obj (type category) stream view &key)
   (format stream "Category ~a~%~%" (first obj))
@@ -321,11 +334,8 @@
     (process-doc-command-and-redisplay clim:*application-frame* :node node-name)))
 
 (clim:define-command (cmd-open-help-function :name "Function" :menu t :command-table info-commands)
-    ((function '(or string maxima-client.markup:maxima-function-reference) :prompt "Name"))
-  (let* ((name (etypecase function
-                 (string function)
-                 (maxima-client.markup:maxima-function-reference (maxima-client.markup:named-reference/destination function)))))
-    (process-doc-command-and-redisplay clim:*application-frame* :function name)))
+    ((name 'maxima-function-name :prompt "Name"))
+  (process-doc-command-and-redisplay clim:*application-frame* :function name))
 
 (define-documentation-frame-command (cmd-doc-introduction :name "Intro")
     ()

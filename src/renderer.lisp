@@ -897,6 +897,14 @@ Each element should be an output record."
           (set-rec-position values-rec (+ right (* vert-line-spacing 2)) (- line-y2 values-height))
           (clim:stream-add-output-record stream values-rec))))))
 
+(defun render-mbox (stream expr)
+  (let ((margin 2)
+        (rec (clim:with-output-to-output-record (stream)
+               (render-maxima-expression stream expr))))
+    (dimension-bind-new (stream rec :x x1 :y y1 :right x2 :bottom y2)
+      (clim:stream-add-output-record stream rec)
+      (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -932,6 +940,7 @@ Each element should be an output record."
                 (render-plain stream (caar fixed) (second fixed) (third fixed)))
                (maxima::bigfloat (render-bigfloat stream fixed))
                ((maxima::%$at maxima::%at) (render-at stream (second fixed) (third fixed)))
+               (maxima::mbox (render-mbox stream (second fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
