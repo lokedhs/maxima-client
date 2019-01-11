@@ -399,55 +399,55 @@
         (let ((sigma (clim:with-output-to-output-record (stream)
                        (with-font (stream sigma-font sigma-size)
                          (clim:draw-text* stream (format nil "~c" symbol) 0 0)))))
-          (dimension-bind (sigma :width sigma-width :height sigma-height :right sigma-right :x sigma-x :y sigma-y)
+          (dimension-bind (sigma :width sigma-width :height sigma-height :y sigma-y-orig)
             (let ((centre (+ (/ sigma-height 2)
                              (/ (char-height stream) 2)
-                             sigma-y)))
+                             sigma-y-orig)))
               ;; centre is the y coordinate where the baseline should be located, so we move sigma
               ;; it is a negative value indicating the number of pixels above the baseline of the sigma itself
               (move-rec sigma 0 (- centre))
               (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
               ;;
-              (when from-fn
-                (let ((bottom (clim:with-output-to-output-record (stream)
-                                (with-font-size-change (stream 0.8)
-                                  (with-aligned-rendering (stream)
-                                    (with-paren-op
-                                      (when var
-                                        (render-aligned () (render-maxima-expression stream var))
-                                        (render-aligned () (render-formatted stream "=")))
-                                      (render-aligned () (funcall from-fn stream))))))))
-                  (dimension-bind (bottom :width bottom-width)
-                    (set-rec-position bottom
-                                      (+ sigma-x (/ (- sigma-width bottom-width) 2))
-                                      ;; centre is negative, so subtracting that value from the spacing
-                                      ;; moves the bottom rec downards to compensate for the adjustment of sigma
-                                      (+ (- centre) (/ (* (char-height stream) 0.8) 2)))
-                    (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))))
-              ;;
-              (when to
-                (let ((top (clim:with-output-to-output-record (stream)
-                             (with-font-size-change (stream 0.8)
-                               (with-paren-op
-                                 (render-maxima-expression stream to))))))
-                  (dimension-bind (top :width top-width :height top-height)
-                    (set-rec-position top
-                                      (/ (- sigma-width top-width) 2)
-                                      (- sigma-y centre top-height (/ (* (char-height stream) 0.8) 2)))
-                    (clim:stream-add-output-record stream (make-boxed-output-record stream top)))))
-              ;;
-              (set-rec-position exp (+ sigma-right (/ (char-width stream) 2)) nil)
-              (clim:stream-add-output-record stream (make-boxed-output-record stream exp))
-              ;;
-              (when sym2
-                (let ((variable (clim:with-output-to-output-record (stream)
-                                  (with-aligned-rendering (stream)
-                                    (render-aligned () (with-roman-text-style (stream)
-                                                         (render-formatted stream "d")))
-                                    (render-aligned () (render-maxima-expression stream sym2))))))
-                  (dimension-bind (exp :right x)
-                    (move-rec variable (+ x (/ (char-width stream) 2)) 0)
-                    (clim:stream-add-output-record stream variable)))))))))))
+              (dimension-bind (sigma :right sigma-right :x sigma-x :y sigma-y :bottom sigma-y2)
+                ;;
+                (when from-fn
+                  (let ((bottom (clim:with-output-to-output-record (stream)
+                                  (with-font-size-change (stream 0.8)
+                                    (with-aligned-rendering (stream)
+                                      (with-paren-op
+                                        (when var
+                                          (render-aligned () (render-maxima-expression stream var))
+                                          (render-aligned () (render-formatted stream "=")))
+                                        (render-aligned () (funcall from-fn stream))))))))
+                    (dimension-bind (bottom :width bottom-width)
+                      (set-rec-position bottom
+                                        (+ sigma-x (/ (- sigma-width bottom-width) 2))
+                                        (+ sigma-y2 (* (char-height stream) 0.2)))
+                      (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))))
+                ;;
+                (when to
+                  (let ((top (clim:with-output-to-output-record (stream)
+                               (with-font-size-change (stream 0.8)
+                                 (with-paren-op
+                                   (render-maxima-expression stream to))))))
+                    (dimension-bind (top :width top-width :height top-height)
+                      (set-rec-position top
+                                        (/ (- sigma-width top-width) 2)
+                                        (- sigma-y top-height (* (char-height stream) 0.2)))
+                      (clim:stream-add-output-record stream (make-boxed-output-record stream top)))))
+                ;;
+                (set-rec-position exp (+ sigma-right (/ (char-width stream) 2)) nil)
+                (clim:stream-add-output-record stream (make-boxed-output-record stream exp))
+                ;;
+                (when sym2
+                  (let ((variable (clim:with-output-to-output-record (stream)
+                                    (with-aligned-rendering (stream)
+                                      (render-aligned () (with-roman-text-style (stream)
+                                                           (render-formatted stream "d")))
+                                      (render-aligned () (render-maxima-expression stream sym2))))))
+                    (dimension-bind (exp :right x)
+                      (move-rec variable (+ x (/ (char-width stream) 2)) 0)
+                      (clim:stream-add-output-record stream variable))))))))))))
 
 (defun render-intsum (stream f var from-fn to symbol sym2 font-fn)
   (if (> (maxima::lbp *rop*) (maxima::rbp 'maxima::mparen))
@@ -457,7 +457,6 @@
       (render-intsum-inner stream f var from-fn to symbol sym2 font-fn)))
 
 (defun find-integrate-font (size)
-  (log:trace "Finding integrate font: ~s" size)
   (let ((adjusted-size (+ size 10)))
     (cond ((< adjusted-size 65)
            (list *font-integrate-size1* (* adjusted-size 0.7)))
