@@ -14,7 +14,8 @@ https://github.com/lokedhs/docker-maxima-client/
 Building
 ========
 
-To build the application manually, the follow dependencies must be satisfied:
+To build the application manually, the following dependencies must be
+satisfied:
 
   - libfreetype development headers
   - libfontconfig development headers
