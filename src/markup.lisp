@@ -265,14 +265,16 @@
     (display-markup-int stream content)))
 
 (defun render-deffn (stream descriptor content)
-  (destructuring-bind (type name primary-args secondary-args)
+  (destructuring-bind (type name &key arglist definitions anchors)
       descriptor
-    (render-definition stream type name primary-args secondary-args content)))
+    (declare (ignore anchors))
+    (render-definition stream type name arglist definitions content)))
 
 (defun render-defvr (stream descriptor content)
-  (destructuring-bind (type name primary-args secondary-args)
+  (destructuring-bind (type name &key arglist definitions anchors)
       descriptor
-    (render-definition stream type name primary-args secondary-args content)))
+    (declare (ignore anchors))
+    (render-definition stream type name arglist definitions content)))
 
 (defun render-section (stream content)
   (draw-current-line-and-reset stream)
@@ -414,7 +416,8 @@
              (:itemize (render-itemize stream (second content) (cddr content)))
              (:table (render-table stream (second content) (cddr content)))
              (:ref (display (cdr content)))
-             (:image (render-picture stream (second content)))))
+             (:image (render-picture stream (second content)))
+             (:chapter nil)))
           ((listp content)
            (display-markup-list stream content)))))
 

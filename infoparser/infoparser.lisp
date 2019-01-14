@@ -140,7 +140,8 @@
     ("dotless" :dotless)
     ("email" :email)
     ("pxref" :pxref)
-    ("var" :var)))
+    ("var" :var)
+    ("env" :code)))
 
 (defun parse-image (args)
   (multiple-value-bind (match strings)
@@ -402,12 +403,15 @@
                    (:example-info . ,(remove-group-entries example))))))
 
 (defun parse-arglist (args-string)
-  (let ((parsed-arglist (with-input-from-string (s args-string)
-                          (parse-stream s nil))))
-    (unless (and (alexandria:sequence-of-length-p parsed-arglist 1)
-                 (eq (caar parsed-arglist) :paragraph))
-      (error "Unexpected arglist format: ~s" args-string))
-    (cdar parsed-arglist)))
+  (if args-string
+      (let ((parsed-arglist (with-input-from-string (s args-string)
+                              (parse-stream s nil))))
+        (unless (and (alexandria:sequence-of-length-p parsed-arglist 1)
+                     (eq (caar parsed-arglist) :paragraph))
+          (error "Unexpected arglist format: ~s" args-string))
+        (cdar parsed-arglist))
+      ;; ELSE: no arglist, just return nil
+      nil))
 
 (defun parse-fnames (stream)
   (loop
@@ -429,23 +433,37 @@
                   (list fname-name parsed-arglist))))
     until completed-p))
 
-(defun parse-deffn (stream type name args)
+(defun parse-deffn (stream type name args anchors)
   (let ((parsed-arglist (parse-arglist args)))
-    (list* :deffn (list type name parsed-arglist nil)
+    (list* :deffn `(,type
+                    ,name
+                    :arglist ,parsed-arglist
+                    ,@(if anchors (list :anchors anchors)))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
-(defun parse-multiple-deffn (stream type name args)
+(defun parse-multiple-deffn (stream type name args anchors)
   (let ((definitions (parse-fnames stream)))
-    (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
+    (list* :deffn `(,type
+                    ,name
+                    :arglist ,(parse-arglist args)
+                    :definitions ,definitions
+                    ,@(if anchors (list :anchors anchors)))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
-(defun parse-defvr (stream type name args)
-  (list* :defvr (list type name (if args (parse-arglist args) nil) nil)
+(defun parse-defvr (stream type name args anchors)
+  (list* :defvr `(,type
+                  ,name
+                  :arglist ,(parse-arglist args)
+                  ,@(if anchors (list :anchors anchors)))
          (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
 
-(defun parse-multiple-defvr (stream type name args)
+(defun parse-multiple-defvr (stream type name args anchors)
   (let ((definitions (parse-fnames stream)))
-    (list* :deffn (list type name (if args (parse-arglist args) nil) definitions)
+    (list* :deffn `(,type
+                    ,name
+                    :arglist ,(parse-arglist args)
+                    :definitions ,definitions
+                    ,@(if anchors (list :anchors anchors)))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
 (defun parse-itemize (stream args)
@@ -541,11 +559,15 @@
 (defun parse-stream (stream &optional end-tag initial-content)
   (collectors:with-collector (info-collector)
     (let ((current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t))
-          (terminating-string nil))
+          (terminating-string nil)
+          (current-anchors nil))
       (labels ((collect-paragraph ()
                  (when (plusp (length current-paragraph))
                    (info-collector (parse-paragraph current-paragraph))
-                   (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))))
+                   (setq current-paragraph (make-array 0 :element-type 'character :adjustable t :fill-pointer t)))
+                 (prog1
+                     (sort current-anchors #'string<)
+                   (setq current-anchors nil))))
         (loop
           with injected-s = initial-content
           for line = (if injected-s
@@ -556,65 +578,106 @@
           until (or (null s)
                     (and end-tag
                          (cl-ppcre:scan end-tag s)))
-          do (cond ((cl-ppcre:scan "^@[a-z]+(?: |$)" s)
-                    (process-single-line-command s
-                      (("^@c ===beg(x?)===" args)
-                       (collect-paragraph)
-                       (info-collector (process-demo-code stream (not (equal (aref args 0) "")))))
-                      (("^@menu *$") (collect-paragraph) (info-collector (process-menu stream)))
-                      (("^@opencatbox *$") (collect-paragraph) (info-collector (process-opencatbox stream)))
+          do (process-single-line-command s
+               (("^@c ===beg(x?)===" args)
+                (collect-paragraph)
+                (info-collector (process-demo-code stream (not (equal (aref args 0) "")))))
 
-                      (("^@node +(.*)$" args)
-                       (collect-paragraph)
-                       (info-collector (cons :node (parse-node (aref args 0)))))
+               (("^@menu *$")
+                (collect-paragraph)
+                (info-collector (process-menu stream)))
 
-                      (("@section +(.*[^ ]) *$" name)
-                       (collect-paragraph)
-                       (info-collector (list :section (aref name 0))))
+               (("^@opencatbox *$")
+                (collect-paragraph)
+                (info-collector (process-opencatbox stream)))
 
-                      (("@subsection +(.*[^ ]) *$" name)
-                       (collect-paragraph)
-                       (info-collector (list :subsection (aref name 0))))
+               (("^@node +(.*)$" args)
+                (collect-paragraph)
+                (info-collector (cons :node (parse-node (aref args 0)))))
 
-                      (("^@c ") nil)
-                      (("^@ifhtml *$") (dolist (image (parse-ifhtml stream))
-                                         (info-collector image)))
-                      (("^@iftex *$") (skip-block stream "^@end iftex"))
+               (("@chapter +(.*[^ ]) *$" name)
+                (collect-paragraph)
+                (info-collector (list :chapter (aref name 0))))
 
-                      (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? +@ *$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-multiple-deffn stream (aref args 0) (aref args 1) (aref args 2))))
+               (("@section +(.*[^ ]) *$" name)
+                (collect-paragraph)
+                (info-collector (list :section (aref name 0))))
 
-                      (("^@deffn *{([^}]+)} +([^ ]+) +(.*[^ @]) *$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2))))
+               (("@subsection +(.*[^ ]) *$" name)
+                (collect-paragraph)
+                (info-collector (list :subsection (aref name 0))))
 
-                      (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? +@ *$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-multiple-defvr stream (aref args 0) (aref args 1) (aref args 2))))
+               (("@subheading +(.*[^ ]) *$" name)
+                (collect-paragraph)
+                (info-collector (list :subheading (aref name 0))))
 
-                      (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? *$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-defvr stream (aref args 0) (aref args 1) (aref args 2))))
+               (("^@c(?: |$)") nil)
 
-                      (("^@example *$")
-                       (collect-paragraph)
-                       (info-collector (cons :pre (remove-group-entries (skip-block stream "^@end example")))))
+               (("^@ifhtml *$")
+                (dolist (image (parse-ifhtml stream))
+                  (info-collector image)))
 
-                      (("^@itemize(?: +(.*))?$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-itemize stream (aref args 0))))
+               (("^@iftex *$")
+                (skip-block stream "^@end iftex"))
 
-                      (("^@table(?: +(.*))?$" args)
-                       (collect-paragraph)
-                       (info-collector (parse-table stream (aref args 0))))))
-                   ((cl-ppcre:scan "^ *$" s)
-                    (collect-paragraph))
-                   (t
-                    ;; This is normal content, so we'll collect it into the output string
-                    (when (plusp (length current-paragraph))
-                      (vector-push-extend #\Space current-paragraph))
-                    (loop for ch across s do (vector-push-extend ch current-paragraph)))))
+               (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? +@ *$" args)
+                (let ((anchors (collect-paragraph)))
+                  (info-collector (parse-multiple-deffn stream (aref args 0) (aref args 1) (aref args 2) anchors))))
+
+               (("^@deffn *{([^}]+)} +([^ ]+)(?: +(.*[^ @]))? *$" args)
+                (let ((anchors (collect-paragraph)))
+                  (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2) anchors))))
+
+               (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? +@ *$" args)
+                (let ((anchors (collect-paragraph)))
+                  (info-collector (parse-multiple-defvr stream (aref args 0) (aref args 1) (aref args 2) anchors))))
+
+               (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? *$" args)
+                (let ((anchors (collect-paragraph)))
+                  (info-collector (parse-defvr stream (aref args 0) (aref args 1) (aref args 2) anchors))))
+
+               (("^@deffnx")
+                ;; TODO: Currently this is being ignored, but it
+                ;; should render a function definition that is
+                ;; dependent on a variable.
+                nil)
+
+               (("^@defvrx")
+                ;; TODO: Currently this is being ignored, but it
+                ;; should render a function definition that is
+                ;; dependent on a variable.
+                nil)
+
+               (("^@vrindex +(.*[^ ]+) *$")
+                ;; TODO: Add vrindex to the output
+                nil)
+
+               (("^@example *$")
+                (collect-paragraph)
+                (info-collector (cons :pre (remove-group-entries (skip-block stream "^@end example")))))
+
+               (("^@itemize(?: +(.*))?$" args)
+                (collect-paragraph)
+                (info-collector (parse-itemize stream (aref args 0))))
+
+               (("^@table(?: +(.*))?$" args)
+                (collect-paragraph)
+                (info-collector (parse-table stream (aref args 0))))
+
+               (("^@anchor{([^}]+)} *$" args)
+                (push (aref args 0) current-anchors))
+
+               (("^ *$")
+                (collect-paragraph))
+
+               (("^@([a-z]+)(?: +(.*[^ ]))? *$" args)
+                (log:warn "Unknown tag: ~s, args: ~s" (aref args 0) (aref args 1)))
+
+               (t
+                ;; This is normal content, so we'll collect it into the output string
+                (when (plusp (length current-paragraph))
+                  (vector-push-extend #\Space current-paragraph))
+                (loop for ch across s do (vector-push-extend ch current-paragraph)))))
         (collect-paragraph)
         (values (info-collector) terminating-string)))))
 
