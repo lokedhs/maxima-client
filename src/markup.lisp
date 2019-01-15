@@ -324,6 +324,16 @@
           (word-wrap-draw-string stream (format nil "~c " #\BULLET)))
         (display-markup-list stream item :skip-first t)))))
 
+(defun render-enumerate (stream content)
+  (with-indent (stream 50)
+    (loop
+      for item in content
+      for i from 1
+      do (progn
+           (add-vspacing stream 18)
+           (word-wrap-draw-string stream (format nil "~a. " i))
+           (display-markup-list stream item :skip-first t)))))
+
 (defun render-table (stream args content)
   (let ((fix-p (member :code args)))
     (dolist (entry content)
@@ -425,6 +435,7 @@
              (:menu (render-menu stream (cdr content)))
              (:footnote nil)
              (:itemize (render-itemize stream (second content) (cddr content)))
+             (:enumerate (render-enumerate stream (cddr content)))
              (:table (render-table stream (second content) (cddr content)))
              (:ref (display (cdr content)))
              (:image (render-picture stream (second content)))

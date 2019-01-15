@@ -425,38 +425,50 @@
                     ,@(if anchors (list :anchors anchors)))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr")))))
 
+(defun collect-items (stream item-scanner end-tag-scanner)
+  (collectors:with-collector (coll)
+    (loop
+      with curr-item = nil
+      with curr-item-set = nil
+      while (multiple-value-bind (content terminating-string)
+                (parse-stream stream
+                              item-scanner
+                              (if curr-item (list curr-item) nil))
+              (multiple-value-bind (item-match item-strings)
+                  (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" terminating-string)
+                (labels ((collect-item ()
+                           (when curr-item-set
+                             (coll content))))
+                  (if item-match
+                      (progn
+                        (collect-item)
+                        (setq curr-item (aref item-strings 0))
+                        (setq curr-item-set t)
+                        t)
+                      ;; ELSE: Must be end of table, but let's ensure that's the case
+                      (if (cl-ppcre:scan end-tag-scanner terminating-string)
+                          ;; Found end of table, return nil to stop iterating
+                          (progn
+                            (collect-item)
+                            nil)
+                          ;; ELSE: The first regex should not allow anything through to this point
+                          (error "When parsing table, first regex suceeded, but the second failed: ~s" terminating-string)))))))
+    (coll)))
+
 (defun parse-itemize (stream args)
   (let ((flags (if (cl-ppcre:scan "@bullet" args)
                    '(:bullet)
-                   nil)))
-    (collectors:with-collector (coll)
-      (loop
-        with curr-item = nil
-        with curr-item-set = nil
-        while (multiple-value-bind (content terminating-string)
-                  (parse-stream stream
-                                (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end itemize)) *$"))
-                                (if curr-item (list curr-item) nil))
-                (multiple-value-bind (item-match item-strings)
-                    (cl-ppcre:scan-to-strings "^@item(?: +(.*[^ ]))? *$" terminating-string)
-                  (labels ((collect-item ()
-                             (when curr-item-set
-                               (coll content))))
-                    (if item-match
-                        (progn
-                          (collect-item)
-                          (setq curr-item (aref item-strings 0))
-                          (setq curr-item-set t)
-                          t)
-                        ;; ELSE: Must be end of table, but let's ensure that's the case
-                        (if (cl-ppcre:scan "^@end itemize *$" terminating-string)
-                            ;; Found end of table, return nil to stop iterating
-                            (progn
-                              (collect-item)
-                              nil)
-                            ;; ELSE: The first regex should not allow anything through to this point
-                            (error "When parsing table, first regex suceeded, but the second failed: ~s" terminating-string)))))))
-      (list* :itemize flags (coll)))))
+                   nil))
+        (items (collect-items stream
+                              (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end itemize)) *$"))
+                              (load-time-value (cl-ppcre:create-scanner "^@end itemize *$")))))
+    (list* :itemize flags items)))
+
+(defun parse-enumerate (stream)
+  (let ((items (collect-items stream
+                              (load-time-value (cl-ppcre:create-scanner "^@(?:(?:item(?: .*[^ ])?)|(?:end enumerate)) *$"))
+                              (load-time-value (cl-ppcre:create-scanner "^@end enumerate *$")))))
+    (list* :enumerate nil items)))
 
 (defun parse-table (stream args)
   (let ((flags (if (cl-ppcre:scan "@code" args)
@@ -622,6 +634,10 @@
                (("^@table(?: +(.*))?$" args)
                 (collect-paragraph)
                 (info-collector (parse-table stream (aref args 0))))
+
+               (("^@enumerate(?: |$)")
+                (collect-paragraph)
+                (info-collector (parse-enumerate stream)))
 
                (("^@anchor{([^}]+)} *$" args)
                 (push (aref args 0) current-anchors))
@@ -888,8 +904,11 @@ corresponding lisp files to the output directory."
     (uiop:copy-file file destination-name)))
 
 (defun convert-pdf-to-png (file destination-name)
+  #+use-gs
   (uiop:run-program (list "gs" "-sDEVICE=png16m" (format nil "-sOutputFile=~a" (namestring destination-name))
-                          "-dNOPAUSE" "-dBATCH" "-dQUIET" "-r85" (namestring file))))
+                          "-dNOPAUSE" "-dBATCH" "-dQUIET" "-r85" (namestring file)))
+  #-use-gs
+  (uiop:run-program (list "mutool" "draw" "-w" "800" "-o" (namestring destination-name) (namestring file))))
 
 (defun convert-figures ()
   (let ((destination-dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/figures/")))
