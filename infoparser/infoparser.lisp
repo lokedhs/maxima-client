@@ -135,7 +135,6 @@
     ("dfn" :dfn)
     ("url" :url)
     ("uref" :url)
-    ("figure" :figure)
     ("verb" :verb)
     ("dotless" :dotless)
     ("email" :email)
@@ -179,6 +178,7 @@
                ("mxrefdot" `((:mxref ,@(parse-mxref-arg args)) "."))
                ("mxrefparen" `((:mxref ,@(parse-mxref-arg args)) ")"))
                ("image" (list (parse-image (ensure-string-arg args))))
+               ("figure" `((:image ,(format nil "figures/~a" (ensure-string-arg args)))))
                ("w" nil)
                ("dots" '("…"))
                ("TeX" '("LaTeX"))
@@ -299,48 +299,7 @@
                     (return (values (compress-strings (coll)) len))))))))
 
 (defun parse-paragraph (s)
-  (cons :paragraph (parse-paragraph-content s 0 nil nil nil)
-        #+nil
-        (markup-from-regexp "@([a-z]+){([^}]+)}" s
-                            (lambda (reg-starts reg-ends)
-                              (let ((cmd (subseq s (aref reg-starts 0) (aref reg-ends 0)))
-                                    (content (subseq s (aref reg-starts 1) (aref reg-ends 1))))
-                                (list (string-case:string-case (cmd)
-                                        ("code" :code)
-                                        ("var" :var)
-                                        ("mref" :mref)
-                                        ("emph" :italic)
-                                        ("i" :italic)
-                                        ("strong" :bold)
-                                        ("b" :bold)
-                                        ("anchor" :anchor)
-                                        ("xref" :xref)
-                                        ("fname" :fname)
-                                        ("math" :math)
-                                        ("mrefcomma" :mrefcomma)
-                                        ("mrefdot" :mrefdot)
-                                        ("ref" :ref)
-                                        ("mxrefcomma" :mxrefcomma) ;; 2-arg
-                                        ("mxref" :mxref) ;; 2-arg
-                                        ("mxrefdot" :mxrefdot) ;; 2-arg
-                                        ("file" :file)
-                                        ("mrefparen" :mrefparen)
-                                        ("footnote" :footnote)
-                                        ("kbd" :kbd)
-                                        ("key" :key) ;; Same as kbd?
-                                        ("image" :image) ;; filename,size
-                                        ("dfn" :dfn)
-                                        ("url" :url)
-                                        ("uref" :url)
-                                        ("figure" :figure)
-                                        ("verb" :verb)
-                                        ("dotless" :dotless) ;; Only used to create a dotless i
-                                        ("email" :email)
-                                        ("pxref" :pxref)
-                                        (t (error "Unknown cmd: ~s" cmd)))
-                                      content)))
-                            (lambda (s)
-                              (list (cl-ppcre:regex-replace-all "@dots{}" s "…"))))))
+  (cons :paragraph (parse-paragraph-content s 0 nil nil nil)))
 
 (defun process-opencatbox (stream)
   (cons :catbox
@@ -667,8 +626,30 @@
                (("^@anchor{([^}]+)} *$" args)
                 (push (aref args 0) current-anchors))
 
+               (("^@verbatim *$")
+                (collect-paragraph)
+                (info-collector (cons :verbatim (skip-block stream "^@end verbatim"))))
+
                (("^ *$")
                 (collect-paragraph))
+
+               (("^@ifinfo *$")
+                (let ((content (parse-stream stream "^@end ifinfo")))
+                  (dolist (entry content)
+                    (info-collector entry))))
+
+               (("^@need +[0-9]+ *$")
+                nil)
+
+               (("^@iftex *$")
+                (skip-block stream "^@end iftex"))
+
+               (("^@tex *$")
+                (skip-block stream "^@end tex"))
+
+               (("^@noindent *$") nil)
+               (("^@ifnottex *$") nil)
+               (("^@end ifnottex *$"))
 
                (("^@([a-z]+)(?: +(.*[^ ]))? *$" args)
                 (log:warn "Unknown tag: ~s, args: ~s" (aref args 0) (aref args 1)))

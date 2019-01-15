@@ -301,6 +301,17 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
+(defun render-verbatim (stream content)
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream))
+  (with-word-wrap-record (stream)
+    (clim:with-text-family (stream :fix)
+      (loop
+        for line in content
+        do (format stream "~a~%" line))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream)))
+
 (defun render-itemize (stream args content)
   ;; For now, just render itemised blocks as a sequence of indented
   ;; paragraphs. This seems to be in line with what the HTML renderer
@@ -395,6 +406,7 @@
              (:italic (clim:with-text-face (stream :italic) (display (cdr content))))
              ((:code :math :file) (clim:with-text-family (stream :fix) (display (cdr content))))
              (:pre (render-preformatted stream (cdr content)))
+             (:verbatim (render-verbatim stream (cdr content)))
              ((:link :url) (word-wrap-draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
              ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
@@ -412,7 +424,6 @@
              (:node (render-node stream (cdr content)))
              (:menu (render-menu stream (cdr content)))
              (:footnote nil)
-             (:figure nil)
              (:itemize (render-itemize stream (second content) (cddr content)))
              (:table (render-table stream (second content) (cddr content)))
              (:ref (display (cdr content)))
