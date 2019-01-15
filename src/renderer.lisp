@@ -911,7 +911,6 @@ Each element should be an output record."
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
 (defun render-inference-result (stream title exprs displayed-rows)
-  (declare (ignore title))
   (let* ((margin 2)
          (expr-list (mlist-as-list exprs))
          (disp-rows-list (mlist-as-list displayed-rows))
@@ -924,8 +923,10 @@ Each element should be an output record."
                                    (dimension-bind (rec :width width)
                                      width))))
          (lrec (clim:with-output-to-output-record (stream)
+                 (clim:with-text-face (stream :bold)
+                   (clim:draw-text* stream title 0 0))
                  (loop
-                   with y = 0
+                   with y = (* (char-height stream) 1/2)
                    for rec in rec-list
                    do (dimension-bind (rec :width width :height height)
                         (set-rec-position rec (/ (- max-width width) 2) y)
