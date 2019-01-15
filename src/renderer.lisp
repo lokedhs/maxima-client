@@ -27,6 +27,12 @@
 
 (defparameter +listener-view+ (make-instance 'maxima-interactor-view))
 
+(defun mlist-as-list (mlist)
+  (unless (and (listp mlist)
+               (eq (caar mlist) 'maxima::mlist))
+    (error "Value is not an mlist: ~s" mlist))
+  (cdr mlist))
+
 (defun make-boxed-output-record (stream rec)
   (if *draw-boxes*
       (clim:with-output-to-output-record (stream)
@@ -904,6 +910,32 @@ Each element should be an output record."
       (clim:stream-add-output-record stream rec)
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
+(defun render-inference-result (stream title exprs displayed-rows)
+  (declare (ignore title))
+  (let* ((margin 2)
+         (expr-list (mlist-as-list exprs))
+         (disp-rows-list (mlist-as-list displayed-rows))
+         (rec-list (loop
+                     for i in disp-rows-list
+                     collect (clim:with-output-to-output-record (stream)
+                               (render-maxima-expression stream (nth (1- i) expr-list)))))
+         (max-width (reduce #'max rec-list
+                            :key (lambda (rec)
+                                   (dimension-bind (rec :width width)
+                                     width))))
+         (lrec (clim:with-output-to-output-record (stream)
+                 (loop
+                   with y = 0
+                   for rec in rec-list
+                   do (dimension-bind (rec :width width :height height)
+                        (set-rec-position rec (/ (- max-width width) 2) y)
+                        (clim:stream-add-output-record stream rec)
+                        (incf y (+ height (/ (char-height stream) 2))))))))
+    (move-rec lrec margin margin)
+    (dimension-bind-new (stream lrec :x x1 :y y1 :right x2 :bottom y2)
+      (clim:stream-add-output-record stream lrec)
+      (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
+
 (defun render-maxima-expression (stream expr &optional toplevel-p)
   (labels ((render-inner (fixed)
              (case (caar fixed)
@@ -940,6 +972,7 @@ Each element should be an output record."
                (maxima::bigfloat (render-bigfloat stream fixed))
                ((maxima::%$at maxima::%at) (render-at stream (second fixed) (third fixed)))
                (maxima::mbox (render-mbox stream (second fixed)))
+               (maxima::$inference_result (render-inference-result stream (second fixed) (third fixed) (fourth fixed)))
                (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))
            (render-with-presentation (fixed)
              (if (or toplevel-p *inhibit-presentations*)
