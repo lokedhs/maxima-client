@@ -5,16 +5,22 @@
        (alexandria:sequence-of-length-p expr 3)
        (eq (caar expr) 'maxima::mlabel)))
 
+(defun render-mlabel (stream tag obj)
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (clim:surrounding-output-with-border (stream :padding 10 :ink clim:+transparent-ink+)
+      (present-to-stream (make-instance 'labelled-expression
+                                        :tag tag
+                                        :expr obj)
+                         stream))))
+
 (wrap-function maxima::displa (expr)
   (log:info "displa = ~s" expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
     (if (mlabel-expression-p expr)
         (if (second expr)
-            (present-to-stream (make-instance 'labelled-expression
-                                              :tag (second expr)
-                                              :expr (make-instance 'maxima-native-expr :expr (third expr)))
-                               stream)
+            (let ((obj (make-instance 'maxima-native-expr :expr (third expr))))
+              (render-mlabel stream (second expr) obj))
             ;; ELSE: No label
             (progn
               ;; Are all mlabel entries without a label just plain strings?

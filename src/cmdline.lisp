@@ -293,7 +293,10 @@ terminated by ;.")
                                      ptype 'maxima-native-expr))))
                    (maxima-native-error (condition)
                      (return-from control-loop
-))))))))))
+                       (values (make-instance 'maxima-input-error
+                                              :command string
+                                              :message (maxima-expr-parse-error/message condition))
+                               'maxima-input-error)))))))))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream
@@ -459,12 +462,7 @@ terminated by ;.")
                              (setq maxima::$% result)
                              (setf (symbol-value d-tag) result)
                              (let ((obj (make-instance 'maxima-native-expr :expr result)))
-                               (clim:with-room-for-graphics (stream :first-quadrant nil)
-                                 (clim:surrounding-output-with-border (stream :padding 10 :ink clim:+transparent-ink+)
-                                   (present-to-stream (make-instance 'labelled-expression
-                                                                     :tag d-tag
-                                                                     :expr obj)
-                                                      stream))))))))))
+                               (render-mlabel stream d-tag obj))))))))
       #+nil
       (let ((content (maxima-stream-text maxima-stream)))
         (cond ((eq eval-ret 'maxima::maxima-error)
