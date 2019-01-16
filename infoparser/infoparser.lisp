@@ -18,12 +18,23 @@
                          (list (%process-single-line-command string (cdr clauses)))
                          nil))))))))
 
-(defun resolve-destination-dir ()
-  (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
-
 (defmacro process-single-line-command (string &body clauses)
   (alexandria:once-only (string)
     (%process-single-line-command string clauses)))
+
+(defun %skip-block (stream end-tag)
+  (loop
+    with r = (make-macro-reader stream)
+    for s = (funcall r)
+    until (cl-ppcre:scan end-tag s)
+    collect s))
+
+(defmacro skip-block (stream end-tag &environment env)
+  (alexandria:once-only (stream)
+    `(%skip-block ,stream
+                  ,(if (constantp end-tag env)
+                       `(load-time-value (cl-ppcre:create-scanner ,end-tag))
+                       `(cl-ppcre:create-scanner ,end-tag)))))
 
 (defvar *macro-handlers* (make-hash-table :test 'equal))
 
@@ -55,20 +66,6 @@
                    (setq found nil))))
              (when found
                (return s)))))))
-
-(defun %skip-block (stream end-tag)
-  (loop
-    with r = (make-macro-reader stream)
-    for s = (funcall r)
-    until (cl-ppcre:scan end-tag s)
-    collect s))
-
-(defmacro skip-block (stream end-tag &environment env)
-  (alexandria:once-only (stream)
-    `(%skip-block ,stream
-                  ,(if (constantp end-tag env)
-                       `(load-time-value (cl-ppcre:create-scanner ,end-tag))
-                       `(cl-ppcre:create-scanner ,end-tag)))))
 
 (defun %markup-from-regexp (regexp string callback &optional plain-string-markup-fn)
   (flet ((markup-string (s)
@@ -867,6 +864,9 @@ corresponding lisp files to the output directory."
               (eq (car v) :node))
       do (let ((name (second v)))
            (setf (gethash name nodes-hash) (list (cdr v) file)))))
+
+(defun resolve-destination-dir ()
+  (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/docs/"))
 
 (defun generate-index ()
   (let ((destination-dir (resolve-destination-dir))
