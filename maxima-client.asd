@@ -21,6 +21,7 @@
                                      (:file "wrap")
                                      (:file "markup")
                                      (:file "renderer")
+                                     (:file "disp")
                                      (:file "popup")
                                      (:file "output")
                                      (:file "queries")

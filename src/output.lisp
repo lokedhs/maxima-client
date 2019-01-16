@@ -5,12 +5,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass maxima-output (trivial-gray-streams:fundamental-character-output-stream)
-  ((stream          :initform (make-string-output-stream)
-                    :reader maxima-output/stream)
+  ((stream          :accessor maxima-output/stream)
    (update          :initform nil
                     :accessor maxima-output/update)
    (column-position :initform 0
                     :accessor maxima-output/column-position)))
+
+(defgeneric maxima-output/stream (stream))
 
 (defmethod trivial-gray-streams:stream-write-char ((stream maxima-output) char)
   (if (eql char #\Newline)
@@ -27,16 +28,6 @@
 
 (defun maxima-stream-text (stream)
   (get-output-stream-string (maxima-output/stream stream)))
-
-(defclass maxima-error ()
-  ((cmd     :initarg :cmd
-            :reader maxima-error/cmd)
-   (content :initarg :content
-            :reader maxima-error/content)))
-
-(clim:define-presentation-method clim:present (obj (type maxima-error) stream (view t) &key)
-  (clim:with-drawing-options (stream :ink clim:+red+)
-    (format stream "~a" (maxima-error/content obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; input
@@ -59,6 +50,12 @@
                 :accessor maxima-io/buffer)
    (pos         :initform 0
                 :accessor maxima-io/pos)))
+
+(defmethod initialize-instance :after ((obj maxima-io) &key)
+  (setf (maxima-output/stream obj) (maxima-io/clim-stream obj)))
+
+(defmethod maxima-output/stream ((stream maxima-io))
+  (maxima-io/clim-stream stream))
 
 (defun maxima-io-buffer-nonempty (stream)
   (< (maxima-io/pos stream) (length (maxima-io/buffer stream))))
@@ -103,3 +100,17 @@
                     do (princ ch s)))))
     (log:trace "result from stream-read-line: ~s" result)
     result))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; maxima-error
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass maxima-error ()
+  ((cmd     :initarg :cmd
+            :reader maxima-error/cmd)
+   (content :initarg :content
+            :reader maxima-error/content)))
+
+(clim:define-presentation-method clim:present (obj (type maxima-error) stream (view t) &key)
+  (clim:with-drawing-options (stream :ink clim:+red+)
+    (format stream "~a" (maxima-error/content obj))))

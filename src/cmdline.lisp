@@ -293,10 +293,7 @@ terminated by ;.")
                                      ptype 'maxima-native-expr))))
                    (maxima-native-error (condition)
                      (return-from control-loop
-                       (values (make-instance 'maxima-input-error
-                                              :command string
-                                              :message (maxima-expr-parse-error/message condition))
-                               'maxima-input-error)))))))))))
+))))))))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream
@@ -454,6 +451,7 @@ terminated by ;.")
                                                                    (throw 'eval-expr-error :lisp-error)))))
                                            (eval-maxima-expression (maxima-native-expr/expr cmd))))))
                            (log:debug "Result: ~s" result)
+                           #+nil
                            (let ((content (maxima-stream-text maxima-stream)))
                              (when content
                                (format stream "~a" content)))
@@ -467,6 +465,7 @@ terminated by ;.")
                                                                      :tag d-tag
                                                                      :expr obj)
                                                       stream))))))))))
+      #+nil
       (let ((content (maxima-stream-text maxima-stream)))
         (cond ((eq eval-ret 'maxima::maxima-error)
                (present-to-stream (make-instance 'maxima-error
@@ -480,7 +479,17 @@ terminated by ;.")
                                   stream))
               (t
                (when (plusp (length content))
-                 (log:info "Output from command: ~s" content))))))))
+                 (log:info "Output from command: ~s" content)))))
+      (cond ((eq eval-ret 'maxima::maxima-error)
+             (present-to-stream (make-instance 'maxima-error
+                                               :cmd cmd
+                                               :content "Error from maxima")
+                                stream))
+            ((eq eval-ret :lisp-error)
+             (present-to-stream (make-instance 'maxima-error
+                                               :cmd cmd
+                                               :content "Error from lisp")
+                                stream))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()

@@ -202,14 +202,14 @@
 (defmacro with-maxima-error-handler (handler &rest body)
   (alexandria:once-only (handler)
     (alexandria:with-gensyms (maxima-stream eval-ret result)
-      `(let* ((,maxima-stream (make-instance 'maxima-output))
+      `(let* ((,maxima-stream (make-string-output-stream))
               (,result nil)
               (,eval-ret (catch 'maxima::macsyma-quit
                            (setq ,result (let ((*standard-output* ,maxima-stream))
                                            (progn ,@body)))
                            nil)))
          (if ,eval-ret
-             (funcall ,handler ,eval-ret (maxima-stream-text ,maxima-stream))
+             (funcall ,handler ,eval-ret (get-output-stream-string ,maxima-stream))
              ,result)))))
 
 (defmacro wrap-function (name args &body body)
