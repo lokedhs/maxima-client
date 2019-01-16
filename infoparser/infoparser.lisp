@@ -25,9 +25,41 @@
   (alexandria:once-only (string)
     (%process-single-line-command string clauses)))
 
+(defvar *macro-handlers* (make-hash-table :test 'equal))
+
+(defmacro define-macro-handler ((tag sym) &body body)
+  (check-type tag string)
+  (check-type sym symbol)
+  `(setf (gethash ,tag *macro-handlers*)
+         (lambda (,sym)
+           (declare (ignorable ,sym))
+           ,@body)))
+
+(define-macro-handler ("ifhtml" in)
+  (log:info "Found ifhtml")
+  (skip-block in "^@end ifhtml"))
+
+(defun make-macro-reader (in)
+  (let ((in-function (etypecase in
+                       (function in)
+                       (stream (lambda () (read-line in))))))
+    (lambda ()
+      (loop
+        for s = (funcall in-function)
+        do (let ((found t))
+             (multiple-value-bind (match strings)
+                 (cl-ppcre:scan-to-strings "^@([a-z]+)(: |$)" s)
+               (when match
+                 (alexandria:when-let ((handler (gethash (aref strings 0) *macro-handlers*)))
+                   (funcall handler in-function)
+                   (setq found nil))))
+             (when found
+               (return s)))))))
+
 (defun %skip-block (stream end-tag)
   (loop
-    for s = (read-line stream)
+    with r = (make-macro-reader stream)
+    for s = (funcall r)
     until (cl-ppcre:scan end-tag s)
     collect s))
 
@@ -104,7 +136,8 @@
                                       (coll (list :menu-text parsed))))
                                   (setq prefix nil))))
                        (loop
-                         for s = (read-line stream)
+                         with in = (make-macro-reader stream)
+                         for s = (funcall in)
                          until (cl-ppcre:scan "^@end menu *$" s)
                          append (multiple-value-bind (match strings)
                                     (cl-ppcre:scan-to-strings "^ *\\* *([^ ]+(?: +[^ ]+)*) *:: *(.*[^ ])? *$" s)
@@ -926,7 +959,7 @@ corresponding lisp files to the output directory."
 
 (defun parse-toplevel-file (file destination-directory &key skip-example)
   (with-open-file (stream file :direction :input)
-    (skip-block stream "^@summarycontents *")
+    (skip-block stream "^@end titlepage *$")
     (let ((main-content (with-output-to-string (out-stream)
                           (loop
                             for s = (read-line stream)
