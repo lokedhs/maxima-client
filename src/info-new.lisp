@@ -139,7 +139,9 @@
                                           (clim:run-frame-top-level frame))))
         ;; ELSE: Frame was already created, just run the command
         (when command
-          (process-documentation-request *doc-frame* command)))))
+          (call-in-event-handler *doc-frame*
+                                 (lambda ()
+                                   (process-documentation-request *doc-frame* command :redisplay t)))))))
 
 (defmethod clim:frame-exit ((frame documentation-frame))
   (bordeaux-threads:with-lock-held (*doc-frame-lock*)

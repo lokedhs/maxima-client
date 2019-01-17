@@ -17,17 +17,15 @@
   (log:info "displa = ~s" expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
-    (if (mlabel-expression-p expr)
-        (if (second expr)
-            (let ((obj (make-instance 'maxima-native-expr :expr (third expr))))
-              (render-mlabel stream (second expr) obj))
-            ;; ELSE: No label
-            (progn
-              ;; Are all mlabel entries without a label just plain strings?
-              (assert (stringp (third expr)))
-              (format stream "~a" (third expr))))
-        ;; ELSE: Plain expression
-        (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream))))
+    (cond ((not (mlabel-expression-p expr))
+           (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream))
+          ((second expr)
+           (let ((obj (make-instance 'maxima-native-expr :expr (third expr))))
+             (render-mlabel stream (second expr) obj)))
+          ((stringp (third expr))
+           (format stream "~a" (third expr)))
+          (t
+           (present-to-stream (make-instance 'maxima-native-expr :expr (third expr)) stream)))))
 
 (wrap-function maxima::mread-synerr (fmt &rest args)
   (let ((stream (maxima-io/clim-stream *standard-output*))
