@@ -123,6 +123,7 @@
   (let ((frame (clim:make-application-frame 'documentation-frame
                                             :width 900
                                             :height 800)))
+    (load-index)
     (when command
       (process-documentation-request frame command))
     (clim:run-frame-top-level frame)))
@@ -135,6 +136,7 @@
                                                   :height 800)))
           (setq *doc-frame* frame)
           (process-documentation-request frame command)
+          (load-index)
           (bordeaux-threads:make-thread (lambda ()
                                           (clim:run-frame-top-level frame))))
         ;; ELSE: Frame was already created, just run the command
@@ -211,21 +213,29 @@
                            (eq (car v) :node))
                 collect v))))))
 
-(defun load-function (name)
-  (load-index)
+(defun find-index-entry-function (name)
   (let ((entry (find name *index-symbols* :key #'car :test #'equal)))
     (unless entry
       (error 'content-load-error :type :function :name name :message "function not found"))
+    entry))
+
+(defun load-function (name)
+  (load-index)
+  (let ((entry (let* ((definition (find-index-entry-function name))
+                      (v (cdr definition)))
+                 (if (eq (car v) :ref)
+                     (find-index-entry-function (cadr v))
+                     definition))))
     (with-doc-file-cache
       (loop
         for (type file description) in (cdr entry)
         collect (let ((file-content (load-doc-file file)))
                   (let ((found (find-if (lambda (definition)
                                           (and (eq (car definition) type)
-                                               (equal (second (second definition)) name)))
+                                               (equal (second (second definition)) (car entry))))
                                         file-content)))
                     (unless found
-                      (error "symbol found in index but not in file: ~s type: ~s" name type))
+                      (error "symbol found in index but not in file: ~s type: ~s" (car entry) type))
                     (list :paragraph found)))))))
 
 (defun load-category (name)
