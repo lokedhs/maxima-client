@@ -1,5 +1,7 @@
 (in-package :maxima-client)
 
+(defvar maxima::$font_size 14)
+
 (clim:define-command-table expression-commands)
 
 (clim:define-command-table maxima-commands
@@ -462,7 +464,8 @@ terminated by ;.")
                            (let ((d-tag (maxima::makelabel maxima::$outchar)))
                              (setq maxima::$% result)
                              (setf (symbol-value d-tag) result)
-                             (let ((obj (make-instance 'maxima-native-expr :expr result)))
+                             (let ((obj (make-instance 'maxima-native-expr :expr result))
+                                   (*font-size* maxima::$font_size))
                                (render-mlabel-content stream d-tag obj))))))))
       #+nil
       (let ((content (maxima-stream-text maxima-stream)))

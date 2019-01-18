@@ -1,7 +1,5 @@
 (in-package :maxima-client)
 
-(defvar maxima::$font_size 14)
-
 (defvar *font-roman* '("MathJax_Main" "Regular"))
 (defvar *font-roman-math* '("MathJax_Math" "Regular"))
 (defvar *font-italic* '("MathJax_Main" "Italic"))
@@ -1023,13 +1021,12 @@ Each element should be an output record."
 
 (defmacro make-rendered-output-record ((stream) &body body)
   (alexandria:with-gensyms (output-record)
-    `(let ((*font-size* maxima::$font_size))
-       (with-roman-text-style (stream)
-         (let ((,output-record (clim:with-output-to-output-record (,stream)
-                                 (with-paren-op
-                                   ,@body))))
-           (setf (clim:output-record-position ,output-record) (values 0 0))
-           ,output-record)))))
+    `(with-roman-text-style (stream)
+       (let ((,output-record (clim:with-output-to-output-record (,stream)
+                               (with-paren-op
+                                 ,@body))))
+         (setf (clim:output-record-position ,output-record) (values 0 0))
+         ,output-record))))
 
 (defun make-expression-output-record (stream expr)
   (log:trace "Making output record for expr: ~s" expr)

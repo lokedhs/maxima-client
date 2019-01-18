@@ -31,19 +31,9 @@
   (log:info "displa = ~s" expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
-    (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream))
-  #+nil
-  (let ((stream (maxima-io/clim-stream *standard-output*)))
-    (format stream "~&")
-    (cond ((not (mlabel-expression-p expr))
-           (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream))
-          ((second expr)
-           (let ((obj (make-instance 'maxima-native-expr :expr (third expr))))
-             (render-mlabel stream (second expr) obj)))
-          ((stringp (third expr))
-           (format stream "~a" (third expr)))
-          (t
-           (present-to-stream (make-instance 'maxima-native-expr :expr (third expr)) stream)))))
+    (clim:with-room-for-graphics (stream :first-quadrant nil)
+      (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream))
+    (setf (maxima-output/inhibit-next-terpri-p *standard-output*) t)))
 
 (wrap-function maxima::mread-synerr (fmt &rest args)
   (let ((stream (maxima-io/clim-stream *standard-output*))

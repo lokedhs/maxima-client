@@ -2,7 +2,7 @@
 
 (defvar *aligned-rendering-pos*)
 (defvar *aligned-rendering-stream*)
-(defvar *font-size*)
+(defvar *font-size* 14)
 
 (clim:define-presentation-type plain-text ()
   :inherit-from 'string)

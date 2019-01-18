@@ -5,20 +5,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass maxima-output (trivial-gray-streams:fundamental-character-output-stream)
-  ((stream          :accessor maxima-output/stream)
-   (update          :initform nil
-                    :accessor maxima-output/update)
-   (column-position :initform 0
-                    :accessor maxima-output/column-position)))
+  ((stream                :accessor maxima-output/stream)
+   (update                :initform nil
+                          :accessor maxima-output/update)
+   (column-position       :initform 0
+                          :accessor maxima-output/column-position)
+   (inhibit-next-terpri-p :initform nil
+                          :accessor maxima-output/inhibit-next-terpri-p)))
 
 (defgeneric maxima-output/stream (stream))
 
 (defmethod trivial-gray-streams:stream-write-char ((stream maxima-output) char)
-  (if (eql char #\Newline)
-      (setf (maxima-output/column-position stream) 0)
-      (incf (maxima-output/column-position stream)))
-  (setf (maxima-output/update stream) t)
-  (write-char char (maxima-output/stream stream)))
+  (if (maxima-output/inhibit-next-terpri-p stream)
+      (setf (maxima-output/inhibit-next-terpri-p stream) nil)
+      ;; ELSE: Output the character normally
+      (progn
+        (if (eql char #\Newline)
+            (setf (maxima-output/column-position stream) 0)
+            (incf (maxima-output/column-position stream)))
+        (setf (maxima-output/update stream) t)
+        (log:info "Writing: ~s" char)
+        (write-char char (maxima-output/stream stream)))))
 
 (defmethod trivial-gray-streams:stream-line-column ((stream maxima-output))
   (maxima-output/column-position stream))

@@ -57,7 +57,8 @@
            #:*info-directory*
            #:xdimension-bind
            #:dimension-bind-new
-           #:print-unreadable-safely))
+           #:print-unreadable-safely
+           #:maxima-output/inhibit-next-terpri-p))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
