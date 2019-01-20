@@ -25,6 +25,20 @@ terminated by ;.")
 
 (defparameter +maxima-pointer-documentation-view+ (make-instance 'maxima-pointer-documentation-view))
 
+(defclass maxima-input-expression ()
+  ((expr :initarg :expr
+         :reader maxima-input-expression/expr)))
+
+(defun ensure-expression-finished (string)
+  (let ((is-completed (cl-ppcre:scan "[;$] *$" string)))
+    (format nil "~a~a~%" string (if is-completed "" ";"))))
+
+(defun string-to-input-expression (string)
+  (log:info "parsing: ~s" (ensure-expression-finished string))
+  (with-input-from-string (in (format nil "~a~%" (ensure-expression-finished string)))
+    (let ((result (maxima::dbm-read in)))
+      (make-instance 'maxima-input-expression :expr result))))
+
 (clim:define-application-frame maxima-main-frame ()
 
   ((info-app :initform nil
@@ -203,11 +217,10 @@ terminated by ;.")
     (or (alexandria:ends-with-subseq ";" trimmed)
         (alexandria:ends-with-subseq "$" trimmed))))
 
-(clim:define-presentation-method clim:accept
-    ((type maxima-native-expr)
-     (stream drei:drei-input-editing-mixin)
-     (view clim:textual-view)
-     &key)
+(clim:define-presentation-method clim:accept ((type maxima-input-expression)
+                                              (stream drei:drei-input-editing-mixin)
+                                              (view clim:textual-view)
+                                              &key)
   (drei:with-drei-options ((drei:drei-instance stream)
                            :syntax "Maxima"
                            :keep-syntax t)
@@ -278,7 +291,7 @@ terminated by ;.")
                (clim:unread-gesture gesture :stream stream)
                (let ((string (cleanup-input current-command)))
                  (handler-case
-                     (let* ((object (string-to-native-expr string)
+                     (let* ((object (string-to-input-expression string)
                                     #+nil
                                     (handler-case
                                         (string-to-native-expr (cleanup-input current-command))
@@ -292,8 +305,8 @@ terminated by ;.")
                             (ptype (clim:presentation-type-of object)))
                        (return-from control-loop
                          (values object
-                                 (if (clim:presentation-subtypep ptype 'maxima-native-expr)
-                                     ptype 'maxima-native-expr))))
+                                 (if (clim:presentation-subtypep ptype 'maxima-input-expression)
+                                     ptype 'maxima-input-expression-expr))))
                    (maxima-native-error (condition)
                      (return-from control-loop
                        (values (make-instance 'maxima-input-error
@@ -340,11 +353,11 @@ terminated by ;.")
 		    (clim:read-gesture :stream stream)
                     (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
 	          (progn
-                    (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
-                                                     :history 'maxima-expression-or-command :replace-input t))))
+                    (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
+                                                          :history 'maxima-expression-or-command :replace-input t))))
           (maxima-native-expr
            (log:trace "a native expr was found: obj=~s type=~s ev=~s options=~s"
-                     inner-object inner-type inner-event inner-options)
+                      inner-object inner-type inner-event inner-options)
            (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
                                             :history 'maxima-expression-or-command :replace-input t
                                             :default inner-object :insert-default t)))
@@ -382,26 +395,47 @@ terminated by ;.")
   (log:trace "Converting to string: ~s" object)
   (format-sym-name object))
 
+(wrap-function maxima::dbm-read (&optional (stream *standard-input*) (eof-error-p t)
+		                           (eof-value nil) repeat-if-newline)
+  (typecase stream
+    (maxima-io
+     (let ((pane (maxima-io/clim-stream stream))
+           (mprompt maxima::*mread-prompt*)
+           (maxima::*mread-prompt* ""))
+       (declare (ignore mprompt))
+       (multiple-value-bind (object type)
+           (let ((clim:*command-dispatchers* '(#\:)))
+             (clim:with-text-style (pane (clim:make-text-style :fix :roman :normal))
+               (clim:accept 'maxima-expression-or-command :stream pane :prompt nil
+                                                          :default nil :default-type 'maxima-empty-input
+                                                          :history 'maxima-expression-or-command
+                                                          :replace-input t)))
+         (log:trace "Got input: object=~s, type=~s" object type)
+         (cond
+           ((null object)
+            nil)
+           ((eq type 'maxima-input-expression)
+            (maxima-input-expression/expr object))
+           ((eq type 'maxima-input-error)
+            (let ((size (clim:text-style-size (clim:medium-text-style pane))))
+              (clim:with-drawing-options (pane :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
+                (format pane "~a" (maxima-input-error/message object))))
+            nil)
+           ((and (listp type) (eq (car type) 'clim:command))
+            (clim:execute-frame-command clim:*application-frame* object)
+            nil)))))
+    (t
+     (funcall *old-fn-dbm-read* stream eof-error-p eof-value repeat-if-newline))))
+
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
-  (multiple-value-bind (object type)
-      (let ((clim:*command-dispatchers* '(#\:)))
-        (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'maxima-expression-or-command :stream stream :prompt nil
-                                                     :default nil :default-type 'maxima-empty-input
-                                                     :history 'maxima-expression-or-command
-                                                     :replace-input t)))
-    (log:trace "Got input: object=~s, type=~s" object type)
-    (cond
-      ((null object)
-       nil)
-      ((eq type 'maxima-native-expr)
-       `(maxima-eval ,object))
-      ((eq type 'maxima-input-error)
-       (let ((size (clim:text-style-size (clim:medium-text-style stream))))
-         (clim:with-drawing-options (stream :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
-           (format stream "~a" (maxima-input-error/message object)))))
-      ((and (listp type) (eq (car type) 'clim:command))
-       object))))
+  (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
+         (*current-stream* stream)
+         (*standard-output* maxima-stream)
+         (*standard-input* maxima-stream)
+         (*use-clim-retrieve* t))
+    (unwind-protect
+         (maxima::continue :stream maxima-stream :one-shot t)
+      (log:trace "After continue"))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -467,21 +501,6 @@ terminated by ;.")
                              (let ((obj (make-instance 'maxima-native-expr :expr result))
                                    (*font-size* maxima::$font_size))
                                (render-mlabel-content stream d-tag obj))))))))
-      #+nil
-      (let ((content (maxima-stream-text maxima-stream)))
-        (cond ((eq eval-ret 'maxima::maxima-error)
-               (present-to-stream (make-instance 'maxima-error
-                                                 :cmd cmd
-                                                 :content content)
-                                  stream))
-              ((eq eval-ret :lisp-error)
-               (present-to-stream (make-instance 'maxima-error
-                                                 :cmd cmd
-                                                 :content content)
-                                  stream))
-              (t
-               (when (plusp (length content))
-                 (log:info "Output from command: ~s" content)))))
       (cond ((eq eval-ret 'maxima::maxima-error)
              (present-to-stream (make-instance 'maxima-error
                                                :cmd cmd
