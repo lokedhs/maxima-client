@@ -27,7 +27,9 @@ terminated by ;.")
 
 (defclass maxima-input-expression ()
   ((expr :initarg :expr
-         :reader maxima-input-expression/expr)))
+         :reader maxima-input-expression/expr)
+   (src  :initarg :src
+         :reader maxima-input-expression/src)))
 
 (defun ensure-expression-finished (string)
   (let ((is-completed (cl-ppcre:scan "[;$] *$" string)))
@@ -37,7 +39,8 @@ terminated by ;.")
   (log:info "parsing: ~s" (ensure-expression-finished string))
   (with-input-from-string (in (format nil "~a~%" (ensure-expression-finished string)))
     (let ((result (maxima::dbm-read in)))
-      (make-instance 'maxima-input-expression :expr result))))
+      (log:info "parse result = ~s" result)
+      (make-instance 'maxima-input-expression :expr result :src string))))
 
 (clim:define-application-frame maxima-main-frame ()
 
@@ -193,6 +196,17 @@ terminated by ;.")
          (append (if buffer-start-p (list :buffer-start buffer-start) nil)
                  (if rescan-p (list :rescan rescan) nil))))
 
+(defmethod clim:presentation-replace-input ((stream drei:drei-input-editing-mixin) (obj maxima-input-expression) type view
+                                            &key (buffer-start nil buffer-start-p) (rescan nil rescan-p)
+                                              query-identifier
+                                              for-context-type)
+  #+nil (declare (ignore query-identifier for-context-type))
+  (log:trace "Replacing input for ~s, bs=~s, bs-p=~s, rescan=~s, rsp=~s, qi=~s fct=~s"
+             obj buffer-start buffer-start-p rescan rescan-p query-identifier for-context-type)
+  (apply #'clim:presentation-replace-input stream (maxima-input-expression/src obj) 'plain-text view
+         (append (if buffer-start-p (list :buffer-start buffer-start) nil)
+                 (if rescan-p (list :rescan rescan) nil))))
+
 (defun cleanup-input (string)
   "Removes final ; in the string, if it exists"
   (loop
@@ -313,6 +327,20 @@ terminated by ;.")
                                               :command string
                                               :message (maxima-expr-parse-error/message condition))
                                'maxima-input-error)))))))))))
+
+(clim:define-presentation-method clim:accept ((type maxima-native-expr)
+                                              (stream drei:drei-input-editing-mixin)
+                                              (view clim:textual-view)
+                                              &key)
+  (let ((result (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil)))
+    (log:info "RES = ~s" result)
+    (when (typep result 'maxima-input-expression)
+      (log:info "expr = ~s, src = ~s"
+                (maxima-input-expression/expr result)
+                (maxima-input-expression/src result)))
+    (make-instance 'maxima-native-expr
+                   :expr (third (maxima-input-expression/expr result))
+                   :src (maxima-input-expression/src result))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream
@@ -461,7 +489,7 @@ terminated by ;.")
     (maxima::initialize-runtime-globals))
   (setq *debugger-hook* nil)
   ;; Set up default plot options
-  (setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
+  ;(setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
   ;;
   (let ((frame (clim:make-application-frame 'maxima-main-frame
                                             :width 900
@@ -469,48 +497,6 @@ terminated by ;.")
     (clim:run-frame-top-level frame)))
 
 (defvar *catch-errors* t)
-
-(defun handle-lisp-error (condition)
-  (format t "Maxima encountered a Lisp error:~%    ~a" condition))
-
-(clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
-    ((cmd 'maxima-native-expr :prompt "expression"))
-  (let ((stream (find-interactor-pane))
-        (c-tag (maxima::makelabel maxima::$inchar)))
-    (setf (symbol-value c-tag) (maxima-native-expr/expr cmd))
-    (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
-           (eval-ret (catch 'maxima::macsyma-quit
-                       (catch 'eval-expr-error
-                         (let ((result (let ((*use-clim-retrieve* t)
-                                             (*current-stream* stream)
-                                             (*standard-output* maxima-stream)
-                                             (*standard-input* maxima-stream))
-                                         (handler-bind ((error (lambda (condition)
-                                                                 (when *catch-errors*
-                                                                   (handle-lisp-error condition)
-                                                                   (throw 'eval-expr-error :lisp-error)))))
-                                           (eval-maxima-expression (maxima-native-expr/expr cmd))))))
-                           (log:debug "Result: ~s" result)
-                           #+nil
-                           (let ((content (maxima-stream-text maxima-stream)))
-                             (when content
-                               (format stream "~a" content)))
-                           (let ((d-tag (maxima::makelabel maxima::$outchar)))
-                             (setq maxima::$% result)
-                             (setf (symbol-value d-tag) result)
-                             (let ((obj (make-instance 'maxima-native-expr :expr result))
-                                   (*font-size* maxima::$font_size))
-                               (render-mlabel-content stream d-tag obj))))))))
-      (cond ((eq eval-ret 'maxima::maxima-error)
-             (present-to-stream (make-instance 'maxima-error
-                                               :cmd cmd
-                                               :content "Error from maxima")
-                                stream))
-            ((eq eval-ret :lisp-error)
-             (present-to-stream (make-instance 'maxima-error
-                                               :cmd cmd
-                                               :content "Error from lisp")
-                                stream))))))
 
 (clim:define-command (maxima-quit :name "Quit" :menu t :command-table maxima-commands)
     ()

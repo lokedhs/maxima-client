@@ -24,7 +24,6 @@
             (setf (maxima-output/column-position stream) 0)
             (incf (maxima-output/column-position stream)))
         (setf (maxima-output/update stream) t)
-        (log:info "Writing: ~s" char)
         (write-char char (maxima-output/stream stream)))))
 
 (defmethod trivial-gray-streams:stream-line-column ((stream maxima-output))

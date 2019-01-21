@@ -28,7 +28,6 @@
              (present-to-stream maxima-expr stream))))))
 
 (wrap-function maxima::displa (expr)
-  (log:info "displa = ~s" expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
     (clim:with-room-for-graphics (stream :first-quadrant nil)
