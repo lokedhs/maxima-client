@@ -135,7 +135,10 @@
                                                   :width 900
                                                   :height 800)))
           (setq *doc-frame* frame)
-          (process-documentation-request frame command)
+          (handler-case
+              (process-documentation-request frame command)
+            (content-load-error (condition)
+              (log:error "Error loading content: ~a" condition)))
           (load-index)
           (bordeaux-threads:make-thread (lambda ()
                                           (clim:run-frame-top-level frame))))
