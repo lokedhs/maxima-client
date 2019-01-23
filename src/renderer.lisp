@@ -279,14 +279,25 @@
                               base-y))
         (clim:stream-add-output-record stream (make-boxed-output-record stream exp))))))
 
+(defun render-simple-fraction (stream a b)
+  "Renders a fraction with both arguments separated by a slash instead of the regular style."
+  (clim:draw-text* stream (format nil "~a/~a" a b) 0 0))
+
 (defun render-expt (stream a b)
   (%render-expt stream
                 (lambda (stream)
                   (let ((*rop* 'maxima::mexpt))
                     (render-maxima-expression stream a)))
                 (lambda (stream)
-                  (let ((*lop* 'maxima::mexpt))
-                    (render-maxima-expression stream b)))))
+                  (if (and (listp b)
+                           (eq (caar b) 'maxima::rat)
+                           (integerp (second b))
+                           (integerp (third b)))
+                      ;; This is a simple fraction, render with a slash
+                      (render-simple-fraction stream (second b) (third b))
+                      ;; ELSE: All other exponents are rendered normally
+                      (let ((*lop* 'maxima::mexpt))
+                        (render-maxima-expression stream b))))))
 
 (defun render-op-list (stream maxima-sym displayed-sym exprs)
   (with-aligned-rendering (stream)
@@ -956,7 +967,7 @@ Each element should be an output record."
 
 
 
-(defun render-maxima-expression (stream expr &optional toplevel-p)
+(defun render-maxima-expression (stream expr &key toplevel-p)
   (labels ((render-inner (fixed)
              (alexandria:if-let ((handler-fn (gethash (caar fixed) *render-functions*)))
                (funcall handler-fn stream (cdr fixed))
@@ -1031,7 +1042,7 @@ Each element should be an output record."
 (defun make-expression-output-record (stream expr)
   (log:trace "Making output record for expr: ~s" expr)
   (make-rendered-output-record (stream)
-    (render-maxima-expression stream expr t)))
+    (render-maxima-expression stream expr :toplevel-p t)))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view maxima-renderer-view) &key)
   (let* ((expr (maxima-native-expr/expr obj))
