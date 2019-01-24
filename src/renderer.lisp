@@ -19,7 +19,7 @@
 
 (defvar *render-functions* (make-hash-table))
 
-(defmacro define-render-function ((name symbol stream-sym args-sym) &body body)
+(defmacro define-render-function ((name symbol stream-sym args-sym &key inhibit-presentation) &body body)
   (check-type name symbol)
   (check-type stream-sym symbol)
   (check-type args-sym symbol)
@@ -33,7 +33,7 @@
        (defun ,name (,stream-sym ,args-sym)
          ,@body)
        ,@(mapcar (lambda (v)
-                   `(setf (gethash ',v *render-functions*) ',name))
+                   `(setf (gethash ',v *render-functions*) (list ',name ,(if inhibit-presentation t nil))))
                  symbol-list))))
 
 (defclass maxima-renderer-view (maxima-client.markup:markup-text-view)
@@ -965,12 +965,17 @@ Each element should be an output record."
       (clim:stream-add-output-record stream lrec)
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
-
+(defun inhibit-presentation-p (fixed)
+  (log:info "checking ~s" fixed)
+  (and (listp fixed)
+       (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
+         (second handler-info)
+         nil)))
 
 (defun render-maxima-expression (stream expr &key toplevel-p)
   (labels ((render-inner (fixed)
-             (alexandria:if-let ((handler-fn (gethash (caar fixed) *render-functions*)))
-               (funcall handler-fn stream (cdr fixed))
+             (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
+               (funcall (first handler-info) stream (cdr fixed))
                ;; ELSE: Explicit check
                (case (caar fixed)
                  (maxima::mlist (render-mlist stream (cdr fixed)))
@@ -1009,7 +1014,7 @@ Each element should be an output record."
                  (maxima::$inference_result (render-inference-result stream (second fixed) (third fixed) (fourth fixed)))
                  (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed))))))
            (render-with-presentation (fixed)
-             (if (or toplevel-p *inhibit-presentations*)
+             (if (or toplevel-p *inhibit-presentations* (inhibit-presentation-p fixed))
                  (render-inner fixed)
                  (clim:with-output-as-presentation (stream (make-instance 'maxima-native-expr :expr fixed)
                                                            'maxima-native-expr

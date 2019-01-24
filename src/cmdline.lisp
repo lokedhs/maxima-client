@@ -308,7 +308,7 @@ terminated by ;.")
                      (let* ((object (string-to-input-expression string)
                                     #+nil
                                     (handler-case
-                                        (string-to-native-expr (cleanup-input current-command))
+                                        (string-to-input-expression string)
                                       (maxima-expr-parse-error (condition)
                                         ;; Move point to the problematic form
                                         ;; and signal a rescan.

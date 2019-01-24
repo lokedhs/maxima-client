@@ -242,7 +242,7 @@
   (with-maxima-error-handler
       (lambda (type text)
         (declare (ignore type))
-        ;; Copied from MAXIMA:MREAD-SYERR
+        ;; Copied from MAXIMA:MREAD-SYNERR
         (flet ((column ()
                  (let ((n (get 'maxima::*parse-window* 'maxima::length))
 	               ch some)
@@ -254,7 +254,7 @@
 	           some)))
           (error 'maxima-expr-parse-error :src string :message text :pos (min (length string) (- (length (column)) 2)))))
     (with-input-from-string (s (format nil "~a;" string))
-      (let ((form (maxima::dbm-read s nil nil)))
+      (let ((form (maxima::mread-raw s)))
         (assert (and (listp form)
                      (= (length form) 3)
                      (or (equal (first form) '(maxima::displayinput))

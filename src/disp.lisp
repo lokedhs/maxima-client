@@ -13,7 +13,7 @@
                                         :expr obj)
                          stream))))
 
-(define-render-function (render-mlabel maxima::mlabel stream args)
+(define-render-function (render-mlabel maxima::mlabel stream args :inhibit-presentation t)
   (destructuring-bind (tag expr)
       args
     (let ((maxima-expr (make-instance 'maxima-native-expr :expr expr)))
@@ -32,12 +32,23 @@
     (format stream "~&")
     (clim:with-room-for-graphics (stream :first-quadrant nil)
       (let ((*font-size* maxima::$font_size))
-       (present-to-stream (make-instance 'maxima-native-expr :expr expr) stream)))
+        (let ((rec (make-expression-output-record stream expr)))
+          (clim:stream-add-output-record stream rec))))
     (setf (maxima-output/inhibit-next-terpri-p *standard-output*) t)))
 
 (wrap-function maxima::mread-synerr (fmt &rest args)
-  (let ((stream (maxima-io/clim-stream *standard-output*))
-        (string (apply #'format nil fmt args)))
-    (break)
-    (clim:with-drawing-options (stream :ink clim:+red+)
-      (format stream "~%~a" string))))
+  (flet ((column ()
+           (let ((n (get 'maxima::*parse-window* 'maxima::length))
+	         ch some)
+	     (loop for i from (1- n) downto (- n 20)
+	     	   while (setq ch (nth i maxima::*parse-window*))
+		   do (cond ((char= ch #\newline)
+			     (return-from column some))
+			    (t (push ch some))))
+	     some)))
+    (error 'maxima-expr-parse-error :src "source not available"
+                                    :message (apply #'format nil fmt args)
+                                    :pos (- (length (column)) 2)))
+  #+nil
+  (clim:with-drawing-options (stream :ink clim:+red+)
+    (format stream "~%~a" string)))
