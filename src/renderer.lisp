@@ -1019,7 +1019,8 @@ Each element should be an output record."
                  (clim:with-output-as-presentation (stream (make-instance 'maxima-native-expr :expr fixed)
                                                            'maxima-native-expr
                                                            :view (clim:stream-default-view stream)
-                                                           :allow-sensitive-inferiors t)
+                                                           :allow-sensitive-inferiors t
+                                                           :single-box t)
                    (render-inner fixed)))))
     (log:trace "before nformat-check: ~s" expr)
     (let ((fixed (maxima::nformat-check expr)))
