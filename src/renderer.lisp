@@ -192,7 +192,8 @@
     (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
     (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
     (maxima::%gamma (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_GAMMA))
-    (t ;; Check if the symbol should be rendered using subscript. The
+    (t
+     ;; Check if the symbol should be rendered using subscript. The
      ;; rule is: If the name contains a single underscore, and one
      ;; of the parts is a single letter, then the latter part should
      ;; be subscripted.
@@ -966,7 +967,6 @@ Each element should be an output record."
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
 (defun inhibit-presentation-p (fixed)
-  (log:info "checking ~s" fixed)
   (and (listp fixed)
        (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
          (second handler-info)

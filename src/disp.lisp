@@ -27,6 +27,16 @@
             (t
              (present-to-stream maxima-expr stream))))))
 
+(define-render-function (render-mtext maxima::mtext stream args :inhibit-presentation t)
+  (with-aligned-rendering (stream)
+    (dolist (element args)
+      (etypecase element
+        (list (cond ((eq (caar element) 'maxima::text-string)
+                     (clim:with-text-family (stream :sans-serif)
+                       (render-aligned-string "~a" (coerce (cdr element) 'string))))
+                    (t
+                     (render-aligned () (render-maxima-expression stream element)))))))))
+
 (wrap-function maxima::displa (expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
