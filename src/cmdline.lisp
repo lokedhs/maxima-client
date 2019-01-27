@@ -224,7 +224,7 @@ terminated by ;.")
   (let ((view (clim:view drei)))
     (when (drei:point-mark-view-p view)
       (setf (drei-buffer:offset (drei:point view))
-            (maxima-expr-parse-error/pos condition)))))
+            (1+ (maxima-expr-parse-error/pos condition))))))
 
 (defun submit-command-p (command)
   (let ((trimmed (string-trim " " command)))
