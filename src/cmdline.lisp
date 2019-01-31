@@ -36,10 +36,10 @@ terminated by ;.")
     (format nil "~a~a~%" string (if is-completed "" ";"))))
 
 (defun string-to-input-expression (string)
-  (log:info "parsing: ~s" (ensure-expression-finished string))
+  (log:trace "parsing: ~s" (ensure-expression-finished string))
   (with-input-from-string (in (format nil "~a~%" (ensure-expression-finished string)))
     (let ((result (maxima::dbm-read in)))
-      (log:info "parse result = ~s" result)
+      (log:trace "parse result = ~s" result)
       (make-instance 'maxima-input-expression :expr result :src string))))
 
 (clim:define-application-frame maxima-main-frame ()
@@ -114,7 +114,7 @@ terminated by ;.")
           (clim:with-text-family (stream :sans-serif)
             (format stream "(~a)" name)))
         (clim:formatting-cell (stream :align-y :center)
-          (present-to-stream (labelled-expression/expr obj) stream))))))
+          (render-maxima-native-expr-toplevel stream (labelled-expression/expr obj)))))))
 
 (defclass maxima-input-error ()
   ((command :initarg :command

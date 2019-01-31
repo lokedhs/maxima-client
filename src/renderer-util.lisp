@@ -15,6 +15,9 @@
     ()
   :inherit-from t)
 
+(defclass maxima-native-expr-record (clim:standard-presentation)
+  ())
+
 (defun %aligned-render-and-move (stream pos fn)
   (let ((output-record (clim:with-output-to-output-record (stream)
                          (funcall fn))))

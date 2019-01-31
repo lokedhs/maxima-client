@@ -967,12 +967,29 @@ Each element should be an output record."
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
 (defun inhibit-presentation-p (fixed)
-  (and (listp fixed)
-       (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
-         (second handler-info)
-         nil)))
+  (or *inhibit-presentations*
+      (and (listp fixed)
+           (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
+             (second handler-info)
+             nil))))
 
-(defun render-maxima-expression (stream expr &key toplevel-p)
+(defmacro with-maxima-presentation ((stream expr) &body body)
+  (check-type stream symbol)
+  (alexandria:once-only (expr)
+    (alexandria:with-gensyms (render)
+      `(flet ((,render ()
+                ,@body))
+         (if (inhibit-presentation-p expr)
+             (,render)
+             (clim:with-output-as-presentation (,stream (make-instance 'maxima-native-expr :expr ,expr)
+                                                        'maxima-native-expr
+                                                        :view (clim:stream-default-view stream)
+                                                        :allow-sensitive-inferiors t
+                                                        :single-box t
+                                                        :record-type 'maxima-native-expr-record)
+               (,render)))))))
+
+(defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
                (funcall (first handler-info) stream (cdr fixed))
@@ -1012,28 +1029,21 @@ Each element should be an output record."
                  ((maxima::%$at maxima::%at) (render-at stream (second fixed) (third fixed)))
                  (maxima::mbox (render-mbox stream (second fixed)))
                  (maxima::$inference_result (render-inference-result stream (second fixed) (third fixed) (fourth fixed)))
-                 (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed))))))
-           (render-with-presentation (fixed)
-             (if (or toplevel-p *inhibit-presentations* (inhibit-presentation-p fixed))
-                 (render-inner fixed)
-                 (clim:with-output-as-presentation (stream (make-instance 'maxima-native-expr :expr fixed)
-                                                           'maxima-native-expr
-                                                           :view (clim:stream-default-view stream)
-                                                           :allow-sensitive-inferiors t
-                                                           :single-box t)
-                   (render-inner fixed)))))
+                 (t (render-function-or-array-ref stream (member 'maxima::array (car fixed)) nil (caar fixed) (cdr fixed)))))))
     (log:trace "before nformat-check: ~s" expr)
     (let ((fixed (maxima::nformat-check expr)))
       (log:trace "Calling render expression on: ~s (lop=~a rop=~a)" fixed *lop* *rop*)
       (etypecase fixed
-        (number (render-number stream fixed))
-        (symbol (render-symbol stream fixed))
-        (string (render-string stream fixed))
+        (number (with-maxima-presentation (stream fixed) (render-number stream fixed)))
+        (symbol (with-maxima-presentation (stream fixed) (render-symbol stream fixed)))
+        (string (with-maxima-presentation (stream fixed) (render-string stream fixed)))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
                   (with-wrapped-parens (stream)
-                    (render-with-presentation fixed))
-                  (render-with-presentation fixed)))
+                    (with-maxima-presentation (stream fixed)
+                      (render-inner fixed)))
+                  (with-maxima-presentation (stream fixed)
+                    (render-inner fixed))))
         (array (render-lisp-array stream fixed))))))
 
 (defmacro make-rendered-output-record ((stream) &body body)
@@ -1048,7 +1058,13 @@ Each element should be an output record."
 (defun make-expression-output-record (stream expr)
   (log:trace "Making output record for expr: ~s" expr)
   (make-rendered-output-record (stream)
-    (render-maxima-expression stream expr :toplevel-p t)))
+    (render-maxima-expression stream expr)))
+
+(defun render-maxima-native-expr-toplevel (stream expr)
+  (check-type expr maxima-native-expr)
+  (with-roman-text-style (stream)
+    (with-paren-op
+      (render-maxima-expression stream (maxima-native-expr/expr expr)))))
 
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream (view maxima-renderer-view) &key)
   (let* ((expr (maxima-native-expr/expr obj))
