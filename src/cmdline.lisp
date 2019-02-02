@@ -31,6 +31,10 @@ terminated by ;.")
    (src  :initarg :src
          :reader maxima-input-expression/src)))
 
+(defmethod print-object ((obj maxima-input-expression) stream)
+  (print-unreadable-safely (expr src) obj stream
+    (format stream "EXPR ~s SRC ~s" expr src)))
+
 (defun ensure-expression-finished (string)
   (let ((is-completed (cl-ppcre:scan "[;$] *$" string)))
     (format nil "~a~a~%" string (if is-completed "" ";"))))
@@ -373,7 +377,7 @@ terminated by ;.")
         ;;
         ;; Arguably this should be the default behaviour, and if that
         ;; is fixed, this hack should no longer be needed.
-        (clim:with-input-context ('maxima-native-expr :override nil)
+        (clim:with-input-context ('(or maxima-native-expr maxima-input-expression) :override nil)
             (inner-object inner-type inner-event inner-options)
             (let ((initial-char (clim:read-gesture :stream stream :peek-p t)))
 	      (if (member initial-char clim:*command-dispatchers*)
@@ -384,11 +388,14 @@ terminated by ;.")
                     (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
                                                           :history 'maxima-expression-or-command :replace-input t))))
           (maxima-native-expr
-           (log:trace "a native expr was found: obj=~s type=~s ev=~s options=~s"
-                      inner-object inner-type inner-event inner-options)
            (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
                                             :history 'maxima-expression-or-command :replace-input t
-                                            :default inner-object :insert-default t)))
+                                            :default inner-object :insert-default t))
+          (maxima-input-expression
+           (log:info "input expr: ~s" inner-object)
+           (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
+                                                 :history 'maxima-expression-or-command :replace-input t
+                                                 :default inner-object :insert-default t)))
       (t
        (log:trace "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
        (funcall (cdar clim:*input-context*) object type event options)))))
