@@ -84,6 +84,11 @@
       (clim:bounding-rectangle* rec)
     (values x y)))
 
+(defmacro with-sans-serif-font ((stream) &body body)
+  (check-type stream symbol)
+  `(clim:with-text-style (stream (clim:make-text-style :sans-serif :roman :normal))
+     ,@body))
+
 (defun text-style-font-ascent (stream)
   (climb:text-style-ascent (clim:medium-text-style stream) stream))
 

@@ -22,7 +22,7 @@
             ((stringp expr)
              ;; Labelled strings are treated differently, as they should not be displayed with quotes
              (clim:with-room-for-graphics (stream :first-quadrant nil)
-               (clim:with-text-family (stream :sans-serif)
+               (with-sans-serif-font (stream)
                  (clim:draw-text* stream expr 0 0))))
             (t
              (present-to-stream maxima-expr stream))))))
@@ -32,12 +32,13 @@
     (dolist (element args)
       (cond ((and (listp element)
                   (eq (caar element) 'maxima::text-string))
-             (clim:with-text-family (stream :sans-serif)
+             (with-sans-serif-font (stream)
                (render-aligned-string "~a" (coerce (cdr element) 'string))))
             (t
              (render-aligned () (render-maxima-expression stream element)))))))
 
 (wrap-function maxima::displa (expr)
+  (log:info "DISPLA: ~s" expr)
   (let ((stream (maxima-io/clim-stream *standard-output*)))
     (format stream "~&")
     (clim:with-room-for-graphics (stream :first-quadrant nil)
