@@ -613,7 +613,7 @@ terminated by ;.")
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands
-                        :echo nil :documentation "Copy expression as Maxima command")
+                        :echo nil :documentation "Copy expression as text")
     (obj)
   (list obj))
 
@@ -623,22 +623,22 @@ terminated by ;.")
     (obj)
   (list obj))
 
+#+nil
 (clim:define-presentation-to-command-translator select-maxima-expression-notes
     (maxima-native-expr copy-maxima-expr-to-notes-command maxima-commands
                         :echo nil :documentation "Add expression to current notes")
     (obj)
   (list obj))
 
-#+nil
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-native-expr/src expr)))
+  (clim-extensions:copy-to-clipboard (find-interactor-pane) (maxima-native-expr/src expr)))
 
-#+nil
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (maxima-client.clipboard:bind-clipboard (find-interactor-pane) (maxima-expr-to-latex (maxima-native-expr/expr expr))))
+  (clim-extensions:copy-to-clipboard (find-interactor-pane) (maxima-expr-to-latex (maxima-native-expr/expr expr))))
 
+#+nil
 (clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (let ((notes-panel (clim:find-pane-named clim:*application-frame* 'notes)))
