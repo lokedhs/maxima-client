@@ -559,24 +559,25 @@ Each element should be an output record."
                   (clim:stream-add-output-record stream right-bracket))))))
 
 (defun render-mlist (stream exprs)
-  ;; If the entie list can't be rendered on a single line, we render
+  ;; If the entire list can't be rendered on a single line, we render
   ;; each element on its own line. We call one of two different
   ;; functions to do this.
-  (let ((pane-width (clim:rectangle-width (clim:pane-viewport-region stream)))
-        (rec-list (mapcar (lambda (v)
-                            (clim:with-output-to-output-record (stream)
-                              (render-maxima-expression stream v)))
-                          exprs)))
-    (let ((width (reduce #'+ (mapcar (lambda (rec)
-                                       (dimension-bind (rec :width w)
-                                         w))
-                                     rec-list))))
-      (if (or (= (length rec-list) 1)
-               (<= width pane-width))
-          ;; Single-element lists, or narrow lists are rendered on a single line
-          (render-mlist-one-line stream rec-list)
-          ;; ELSE: The line is too wide, call the multi line renderer
-          (render-mlist-multi-line stream rec-list)))))
+  (with-paren-op
+    (let ((pane-width (clim:rectangle-width (clim:pane-viewport-region stream)))
+          (rec-list (mapcar (lambda (v)
+                              (clim:with-output-to-output-record (stream)
+                                (render-maxima-expression stream v)))
+                            exprs)))
+      (let ((width (reduce #'+ (mapcar (lambda (rec)
+                                         (dimension-bind (rec :width w)
+                                           w))
+                                       rec-list))))
+        (if (or (= (length rec-list) 1)
+                (<= width pane-width))
+            ;; Single-element lists, or narrow lists are rendered on a single line
+            (render-mlist-one-line stream rec-list)
+            ;; ELSE: The line is too wide, call the multi line renderer
+            (render-mlist-multi-line stream rec-list))))))
 
 (defun render-string (stream string)
   (with-fix-text-style (stream)
@@ -988,6 +989,18 @@ Each element should be an output record."
                                                         :single-box t
                                                         :record-type 'maxima-native-expr-record)
                (,render)))))))
+
+(define-render-function (render-marrow maxima::marrow stream args)
+  (destructuring-bind (expr1 expr2)
+      args
+    (with-aligned-rendering (stream)
+      (render-aligned () (render-maxima-expression stream expr1))
+      (aligned-spacing 0.4)
+      (let ((*rop* 'maxima::marrow))
+        (render-aligned-string "~c" #\RIGHTWARDS_ARROW))
+      (aligned-spacing 0.4)
+      (let ((*lop* 'maxima::marrow))
+        (render-aligned () (render-maxima-expression stream expr2))))))
 
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
