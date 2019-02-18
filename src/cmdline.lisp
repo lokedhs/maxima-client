@@ -138,6 +138,10 @@ terminated by ;.")
 (clim:define-presentation-method clim:present (obj (type plain-text) (stream string-stream) (view t) &key)
   (format stream "~a" obj))
 
+(clim:define-presentation-method clim:present (obj (type maxima-input-expression) stream
+                                                   (view maxima-pointer-documentation-view) &key)
+  (format stream "~a" (maxima-input-expression/src obj)))
+
 (clim:define-presentation-method clim:present (obj (type maxima-native-expr) stream
                                                    (view maxima-pointer-documentation-view) &key)
   (format stream "~a" (maxima-native-expr/src obj)))
