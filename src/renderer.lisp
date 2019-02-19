@@ -967,6 +967,10 @@ Each element should be an output record."
       (clim:stream-add-output-record stream lrec)
       (clim:draw-rectangle* stream (- x1 margin) (- y1 margin) (+ x2 margin) (+ y2 margin) :filled nil))))
 
+(defun render-pathname (stream pathname)
+  (with-aligned-rendering (stream)
+    (render-aligned-string "~a" (namestring pathname))))
+
 (defun inhibit-presentation-p (fixed)
   (or *inhibit-presentations*
       (and (listp fixed)
@@ -1050,6 +1054,7 @@ Each element should be an output record."
         (number (with-maxima-presentation (stream fixed) (render-number stream fixed)))
         (symbol (with-maxima-presentation (stream fixed) (render-symbol stream fixed)))
         (string (with-maxima-presentation (stream fixed) (render-string stream fixed)))
+        (pathname (render-pathname stream fixed))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
                   (with-wrapped-parens (stream)
