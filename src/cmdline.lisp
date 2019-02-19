@@ -341,11 +341,6 @@ terminated by ;.")
                                               (view clim:textual-view)
                                               &key)
   (let ((result (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil)))
-    (log:info "RES = ~s" result)
-    (when (typep result 'maxima-input-expression)
-      (log:info "expr = ~s, src = ~s"
-                (maxima-input-expression/expr result)
-                (maxima-input-expression/src result)))
     (make-instance 'maxima-native-expr
                    :expr (third (maxima-input-expression/expr result))
                    :src (maxima-input-expression/src result))))
@@ -396,7 +391,6 @@ terminated by ;.")
                                             :history 'maxima-expression-or-command :replace-input t
                                             :default inner-object :insert-default t))
           (maxima-input-expression
-           (log:info "input expr: ~s" inner-object)
            (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
                                                  :history 'maxima-expression-or-command :replace-input t
                                                  :default inner-object :insert-default t)))
@@ -481,12 +475,13 @@ terminated by ;.")
                                                 (when *catch-errors*
                                                   (handle-lisp-error condition)
                                                   (throw 'eval-expr-error :lisp-error)))))
-                          (maxima::continue :stream maxima-stream :one-shot t)))))))
+                          (with-maxima-package
+                            (maxima::continue :stream maxima-stream :one-shot t))))))))
     (cond ((eq eval-ret 'maxima::maxima-error)
            #+nil(present-to-stream (make-instance 'maxima-error
-                                             :cmd cmd
-                                             :content "Error from maxima")
-                              stream)
+                                                  :cmd cmd
+                                                  :content "Error from maxima")
+                                   stream)
            (format stream "ERROR from maxima!!~%"))
           ((eq eval-ret :lisp-error)
            #+nil
@@ -586,7 +581,6 @@ terminated by ;.")
 
 (clim:define-command (info-command :name "Info" :menu "Info" :command-table maxima-commands)
     ((name '(or maxima-client.doc-new:maxima-function-name  maxima-native-symbol) :prompt "Name"))
-  (log:info "type: ~s" name)
   (let ((string (etypecase name
                   (string name)
                   (symbol (format-sym-name name)))))
