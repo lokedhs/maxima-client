@@ -1006,6 +1006,27 @@ Each element should be an output record."
       (let ((*lop* 'maxima::marrow))
         (render-aligned () (render-maxima-expression stream expr2))))))
 
+(defun render-labelled-table (stream &rest content)
+  (clim:formatting-table (stream :x-spacing (char-width stream))
+    (loop
+      for (label value) on content by #'cddr
+      do (clim:formatting-row (stream)
+           (clim:formatting-cell (stream :align-x :left)
+             (clim:with-text-face (stream :bold)
+               (format stream "~a" label)))
+           (clim:formatting-cell (stream :align-x :left)
+             (format stream "~a" value))))))
+
+(define-render-function (render-build-info maxima::%build_info stream args :inhibit-presentation t)
+  (destructuring-bind (version build-date host impl-type impl-version)
+      args
+    (render-labelled-table stream
+                           "Maxima version:" version
+                           "Maxima build date:" build-date
+                           "Host type:" host
+                           "Lisp implementation type:" impl-type
+                           "Lisp implementation version:" impl-version)))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
