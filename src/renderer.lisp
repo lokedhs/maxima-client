@@ -1027,6 +1027,38 @@ Each element should be an output record."
                            "Lisp implementation type:" impl-type
                            "Lisp implementation version:" impl-version)))
 
+(define-render-function (render-mcond maxima::mcond stream args)
+  (flet ((render-with-label (label expr)
+           (clim:with-output-to-output-record (stream)
+             (let ((rec (clim:with-output-to-output-record (stream)
+                          (render-maxima-expression stream expr)))
+                   (label-rec (clim:with-output-to-output-record (stream)
+                                (with-sans-serif-font (stream)
+                                  (clim:draw-text* stream label 0 0)))))
+               (dimension-bind (rec :height rec-height)
+                 (dimension-bind (label-rec :y label-y :height label-height :right label-right)
+                   (clim:stream-add-output-record stream label-rec)
+                   (set-rec-position rec
+                                     (+ label-right (char-width stream))
+                                     (- (+ label-y (/ label-height 2))
+                                        (/ rec-height 2)))
+                   (clim:stream-add-output-record stream rec)))))))
+    (loop
+      with y = 0
+      for (if-clause then-clause) on args by #'cddr
+      for first = t then nil
+      unless (eq if-clause t)
+        do (let ((rec (render-with-label (if first "if" "elseif") if-clause)))
+             (set-rec-position rec 0 y)
+             (dimension-bind (rec :height height)
+               (incf y (+ height (/ (char-height stream) 2))))
+             (clim:stream-add-output-record stream rec))
+      do (let ((rec (render-with-label (if (eq if-clause t) "else" "then") then-clause)))
+           (set-rec-position rec (* (char-width stream) 1) y)
+           (dimension-bind (rec :height height)
+             (incf y (+ height (/ (char-height stream) 2))))
+           (clim:stream-add-output-record stream rec)))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
