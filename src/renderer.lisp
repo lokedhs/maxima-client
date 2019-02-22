@@ -309,22 +309,45 @@
         (aligned-spacing 0.2))
       (render-aligned () (render-maxima-expression stream expr)))))
 
-(defun render-plain (stream fun a b &key (spacing 0.4))
-  (let ((symbol (ecase fun
-                  (maxima::mgreaterp #\>)
-                  (maxima::mlessp #\<)
-                  (maxima::mleqp #\LESS-THAN_OR_EQUAL_TO)
-                  (maxima::mgeqp #\GREATER-THAN_OR_EQUAL_TO)
-                  (maxima::mnotequal #\NOT_EQUAL_TO)
-                  (maxima::mequal #\=))))
-    (with-aligned-rendering (stream)
-      (render-aligned () (let ((*rop* fun))
-                           (render-maxima-expression stream a)))
-      (aligned-spacing spacing)
-      (render-aligned-string "~c" symbol)
-      (aligned-spacing spacing)
-      (render-aligned () (let ((*lop* fun))
-                           (render-maxima-expression stream b))))))
+(defun render-plain (stream fun symbol a b &key (spacing 0.4))
+  (with-aligned-rendering (stream)
+    (render-aligned () (let ((*rop* fun))
+                         (render-maxima-expression stream a)))
+    (aligned-spacing spacing)
+    (render-aligned-string "~c" symbol)
+    (aligned-spacing spacing)
+    (render-aligned () (let ((*lop* fun))
+                         (render-maxima-expression stream b)))))
+
+(define-render-function (render-mgreaterp maxima::mgreaterp stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mgreaterp #\> a b)))
+
+(define-render-function (render-mlessp maxima::mlessp stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mlessp #\< a b)))
+
+(define-render-function (render-mleqp maxima::mleqp stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mleqp #\LESS-THAN_OR_EQUAL_TO a b)))
+
+(define-render-function (render-mgeqp maxima::mgeqp stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mgeqp #\GREATER-THAN_OR_EQUAL_TO a b)))
+
+(define-render-function (render-mnotequal maxima::mnotequal stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mnotequal #\NOT_EQUAL_TO a b)))
+
+(define-render-function (render-mequal maxima::mequal stream args)
+  (destructuring-bind (a b)
+      args
+    (render-plain stream 'maxima::mequal #\= a b)))
 
 (defun wrap-with-parens (stream output-record
                          &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
@@ -1093,8 +1116,6 @@ Each element should be an output record."
                  (maxima::mnot (render-mnot stream (second fixed)))
                  (maxima::mfactorial (render-factorial stream (second fixed)))
                  (maxima::%lsum (render-lsum stream (second fixed) (third fixed) (fourth fixed)))
-                 ((maxima::mgreaterp maxima::mlessp maxima::mleqp maxima::mgeqp maxima::mnotequal maxima::mequal)
-                  (render-plain stream (caar fixed) (second fixed) (third fixed)))
                  (maxima::bigfloat (render-bigfloat stream fixed))
                  ((maxima::%$at maxima::%at) (render-at stream (second fixed) (third fixed)))
                  (maxima::mbox (render-mbox stream (second fixed)))
