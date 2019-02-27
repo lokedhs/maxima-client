@@ -105,12 +105,49 @@
 ;;; Markup rendering
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun display-markup-list (stream content &key skip-first)
-  (log:trace "displaying markup list: ~s" content)
-  (loop
-    for v in content
-    for first = t then nil
-    do (display-markup-int stream (if (and skip-first first (paragraph-item-p v)) (cdr v) v))))
+(defun font-ascent (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-ascent style stream)))
+
+(defun font-descent (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-descent style stream)))
+
+(defun font-height (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (+ (climb:text-style-ascent style stream)
+       (climb:text-style-descent style stream))))
+
+(defun font-char-width (stream)
+  (let ((style (clim:medium-text-style stream)))
+    (climb:text-style-character-width style stream #\m)))
+
+(defun word-wrap-draw-record (stream rec)
+  (clim:stream-add-output-record stream rec))
+
+(defmacro with-word-wrap-record ((stream) &body body)
+  (alexandria:once-only (stream)
+    (alexandria:with-gensyms (rec bottom)
+      `(let ((,rec (clim:with-output-to-output-record (,stream)
+                     (clim:with-identity-transformation (,stream)
+                       ,@body))))
+         (dimension-bind-new (,stream ,rec :bottom ,bottom)
+           (move-rec ,rec 0 (- ,bottom)))
+         (word-wrap-draw-record ,stream ,rec)))))
+
+(defun word-wrap-draw-presentation (stream obj &key presentation-type)
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (clim:with-identity-transformation (stream)
+                   (clim:stream-present stream obj (or presentation-type (clim:presentation-type-of obj)))))))
+      (word-wrap-draw-record stream rec))))
+
+(defun draw-current-line-and-reset (stream)
+  (format stream "~&"))
+
+(defun add-vspacing (stream n)
+  (format stream "~&")
+  (clim:stream-increment-cursor-position stream 0 n))
 
 (defun keyword->key-label (key)
   (ecase key
@@ -139,15 +176,18 @@
 
 (defun call-with-spanned-box (stream fn)
   (let ((margin 50)
-        (padding 5))
+        (padding 5)
+        (right-margin (clim:stream-text-margin stream)))
     (let ((rec (clim:with-output-to-output-record (stream)
+                 #+nil
                  (with-adjusted-margin (0 (+ padding margin))
-                   (funcall fn stream)))))
+                   (funcall fn stream))
+                 (funcall fn stream))))
       (move-rec rec (+ padding margin) (+ padding margin))
       (dimension-bind-new (stream rec :height height)
         (let ((x1 margin)
               (y1 margin)
-              (x2 (- *word-wrap-right-margin* margin))
+              (x2 (- right-margin margin))
               (y2 (+ (* padding 2) margin height)))
           (clim:draw-rectangle* stream x1 y1 x2 y2
                                 :ink (clim:make-rgb-color 0.8 1 1)
@@ -160,6 +200,12 @@
 (defmacro with-spanned-box ((stream) &body body)
   (check-type stream symbol)
   `(call-with-spanned-box ,stream (lambda (,stream) ,@body)))
+
+(defmacro with-indent ((stream indent) &body body)
+  (check-type stream symbol)
+  (alexandria:once-only (indent)
+    `(clim:indenting-output (,stream ,indent)
+       ,@body)))
 
 (defun render-key-command (stream key-seq)
   (let ((rec (clim:with-output-to-output-record (stream)
@@ -181,15 +227,10 @@
                           (clim:draw-text* stream string 0 0))))))))
     (word-wrap-draw-record stream rec)))
 
-(defun paragraph-item-p (item)
-  (and (listp item)
-       (or (eq (car item) :p)
-           (eq (car item) :paragraph))))
-
 (defun render-catbox (stream categories)
   (draw-current-line-and-reset stream)
   (add-vspacing stream 5)
-  (with-word-wrap-record (stream)
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
     (clim:surrounding-output-with-border (stream :ink clim:+black+)
       (loop
         with pos = 0
@@ -203,62 +244,18 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream 10))
 
-(defmacro with-indent ((stream indent) &body body)
-  (alexandria:once-only (stream indent)
-    `(with-adjusted-margin (,indent (- ,indent))
-       (draw-current-line-and-reset ,stream)
-       ,@body
-       (draw-current-line-and-reset ,stream))))
-
-(defun render-example (stream content)
-  (let ((res (assoc :demo-result content)))
-    (if (null res)
-        (render-preformatted stream (cdr (assoc :example-info content)))
-        ;; ELSE: We have results, use nice rendering
-        (let ((results (cdr res)))
-          (if (eq (car results) :error)
-              ;; Check for error output, this shouldn't be needed
-              (render-preformatted stream (cdr (assoc :example-info content)))
-              ;; ELSE: No error            
-              (let ((code (cdr (assoc :demo-source content))))
-                (draw-current-line-and-reset stream)
-                (add-vspacing stream (font-height stream))
-                (clim:with-identity-transformation (stream)
-                  (with-word-wrap-record (stream)
-                    (with-spanned-box (stream)
-                      (loop
-                        for code-line in code
-                        for res in results
-                        for i from 1
-                        do (progn
-                             (clim:with-text-face (stream :bold)
-                               (format stream "~&(%i~a) " i))
-                             (clim:with-text-family (stream :fix)
-                               (format stream "~a~%" code-line))
-                             (when (eq (car res) :result)
-                               (clim:formatting-table (stream)
-                                 (clim:formatting-row (stream)
-                                   (clim:formatting-cell (stream :align-y :center :min-width 75)
-                                     (format stream "(%o~a)" i))
-                                   (clim:formatting-cell (stream :align-y :center)
-                                     (clim:with-identity-transformation (stream)
-                                       (present-to-stream (make-instance 'maxima-native-expr :expr (cdr res)) stream))))))))))))))))
-  (draw-current-line-and-reset stream)
-  (add-vspacing stream (font-height stream)))
-
 (defun render-definition (stream type name primary-args secondary-args content)
-  (draw-current-line-and-reset stream)
-  (word-wrap-draw-string stream (format nil "~a: " type))
+  (format stream "~&~a: " type)
   (clim:with-text-face (stream :bold)
-    (word-wrap-draw-string stream name))
+    (format stream "~a" name))
   (when primary-args
     (display-markup-int stream primary-args))
-  (draw-current-line-and-reset stream)
   (dolist (args-descriptor secondary-args)
+    (format stream "~&")
     (destructuring-bind (name args)
         args-descriptor
       (with-indent (stream 10)
-        (word-wrap-draw-string stream (format nil "~a " name))
+        (format stream "~a " name)
         (display-markup-int stream args))
       (draw-current-line-and-reset stream)))
   (with-indent (stream 30)
@@ -276,6 +273,43 @@
     (declare (ignore anchors))
     (render-definition stream type name arglist definitions content)))
 
+(defun render-example (stream content)
+  (let ((res (assoc :demo-result content)))
+    (if (null res)
+        (render-preformatted stream (cdr (assoc :example-info content)))
+        ;; ELSE: We have results, use nice rendering
+        (let ((results (cdr res)))
+          (if (eq (car results) :error)
+              ;; Check for error output, this shouldn't be needed
+              (render-preformatted stream (cdr (assoc :example-info content)))
+              ;; ELSE: No error            
+              (let ((code (cdr (assoc :demo-source content))))
+                (draw-current-line-and-reset stream)
+                (add-vspacing stream (font-height stream))
+                (clim:with-room-for-graphics (stream :first-quadrant nil)
+                  (clim:with-identity-transformation (stream)
+                    (with-word-wrap-record (stream)
+                      (with-spanned-box (stream)
+                        (loop
+                          for code-line in code
+                          for res in results
+                          for i from 1
+                          do (progn
+                               (clim:with-text-face (stream :bold)
+                                 (format stream "~&(%i~a) " i))
+                               (clim:with-text-family (stream :fix)
+                                 (format stream "~a~%" code-line))
+                               (when (eq (car res) :result)
+                                 (clim:formatting-table (stream)
+                                   (clim:formatting-row (stream)
+                                     (clim:formatting-cell (stream :align-y :center :min-width 75)
+                                       (format stream "(%o~a)" i))
+                                     (clim:formatting-cell (stream :align-y :center)
+                                       (clim:with-identity-transformation (stream)
+                                         (present-to-stream (make-instance 'maxima-native-expr :expr (cdr res)) stream)))))))))))))))))
+  (draw-current-line-and-reset stream)
+  (add-vspacing stream (font-height stream)))
+
 (defun render-section (stream content)
   (draw-current-line-and-reset stream)
   (add-vspacing stream (/ (font-height stream) 2))
@@ -291,6 +325,7 @@
 (defun render-preformatted (stream content)
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream))
+  #+nil
   (with-word-wrap-record (stream)
     (clim:with-identity-transformation (stream)
       (with-spanned-box (stream)
@@ -298,6 +333,11 @@
           (loop
             for line in content
             do (format stream "~a~%" line))))))
+  #-nil
+  (clim:with-text-family (stream :fix)
+          (loop
+            for line in content
+            do (format stream "~a~%" line)))
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
@@ -312,6 +352,18 @@
   (draw-current-line-and-reset stream)
   (add-vspacing stream (font-height stream)))
 
+(defun paragraph-item-p (item)
+  (and (listp item)
+       (or (eq (car item) :p)
+           (eq (car item) :paragraph))))
+
+(defun display-markup-list (stream content &key skip-first)
+  (log:trace "displaying markup list: ~s" content)
+  (loop
+    for v in content
+    for first = t then nil
+    do (display-markup-int stream (if (and skip-first first (paragraph-item-p v)) (cdr v) v))))
+
 (defun render-itemize (stream args content)
   ;; For now, just render itemised blocks as a sequence of indented
   ;; paragraphs. This seems to be in line with what the HTML renderer
@@ -321,7 +373,7 @@
       (dolist (item content)
         (add-vspacing stream 18)
         (when bullet-p
-          (word-wrap-draw-string stream (format nil "~c " #\BULLET)))
+          (format stream "~c " #\BULLET))
         (display-markup-list stream item :skip-first t)))))
 
 (defun render-enumerate (stream content)
@@ -331,7 +383,7 @@
       for i from 1
       do (progn
            (add-vspacing stream 18)
-           (word-wrap-draw-string stream (format nil "~a. " i))
+           (format stream "~a. " i)
            (display-markup-list stream item :skip-first t)))))
 
 (defun render-table (stream args content)
@@ -345,8 +397,8 @@
           (with-indent (stream 10)
             (if fix-p
                 (clim:with-text-family (stream :fix)
-                  (word-wrap-draw-string stream label))
-                (word-wrap-draw-string stream label))
+                  (format stream "~a" label))
+                (format stream "~a" label))
             (draw-current-line-and-reset stream))
           (add-vspacing stream 10)
           (with-indent (stream 50)
@@ -371,16 +423,15 @@
         (next (second content))
         (prev (third content))
         (up (fourth content)))
-    (word-wrap-draw-string stream (format nil "Title: ~a" title))
-    (draw-current-line-and-reset stream)
+    (format stream "Title: ~a~%" title)
     (when next
-      (word-wrap-draw-string stream "Next: ")
+      (format stream "Next: ")
       (word-wrap-draw-presentation stream (make-instance 'node-reference :destination next))
       (when prev
-        (word-wrap-draw-string stream " Previous: ")
+        (format stream " Previous: ")
         (word-wrap-draw-presentation stream (make-instance 'node-reference :destination prev))
         (when up
-          (word-wrap-draw-string stream " Up: ")
+          (format stream " Up: ")
           (word-wrap-draw-presentation stream (make-instance 'node-reference :destination up))))
       (draw-current-line-and-reset stream))))
 
@@ -397,8 +448,10 @@
          (:menu-entry
           (word-wrap-draw-presentation stream (make-instance 'node-reference :destination (second e)))
           (alexandria:when-let ((description (third e)))
+            (log:warn "Should add spacing")
+            #+nil
             (word-wrap-add-absolute-spacing (* (font-char-width stream) 10))
-            (word-wrap-draw-string stream description))
+            (format stream "~a" description))
           (draw-current-line-and-reset stream)))))
 
 (defun make-mref-link (link &optional name)
@@ -419,8 +472,8 @@
              (:verbatim (render-verbatim stream (cdr content)))
              ((:link :url) (word-wrap-draw-presentation stream (make-text-link-from-markup (cdr content))))
              (:key (render-key-command stream (cdr content)))
-             ((:p :paragraph) (draw-current-line-and-reset stream) (add-vspacing stream 18) (display (cdr content)))
-             (:newline (draw-newline stream))
+             ((:p :paragraph) (format stream "~&~%") (display (cdr content)))
+             (:newline (format stream "~%"))
              (:section (render-section stream (cdr content)))
              (:subsection (render-subsection stream (cdr content)))
              ((:var) (clim:with-text-family (stream :fix) (display (cdr content))))
@@ -439,20 +492,25 @@
              (:table (render-table stream (second content) (cddr content)))
              (:ref (display (cdr content)))
              (:image (render-picture stream (second content)))
-             (:chapter nil)))
+             (:chapter nil))
+           #+nil(ecase (car content)
+             (:var (clim:with-text-family (stream :fix) (display (cdr content))))
+             (:catbox (render-catbox stream (cdr content)))
+             (:deffn (render-deffn stream (second content) (cddr content)))
+             ((:p :paragraph) (format stream "~&~%") (display (cdr content)))))
           ((listp content)
            (display-markup-list stream content)))))
 
 (defun display-markup-int (stream content)
   (etypecase content
-    (string (word-wrap-draw-string stream content))
+    (string (format stream "~a" content))
     (list (display-possibly-tagged-list stream content))))
 
 (defun display-markup (stream content)
-  (maxima-client.markup:with-word-wrap (stream)
-    (display-markup-int stream content)))
+  (display-markup-int stream content))
 
 (clim:define-presentation-type markup ())
 
 (clim:define-presentation-method clim:present (obj (type markup) stream view &key)
-  (maxima-client.markup:display-markup stream obj))
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (maxima-client.markup:display-markup stream obj)))
