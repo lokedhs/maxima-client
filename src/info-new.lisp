@@ -66,7 +66,8 @@
                   :accessor documentation-frame/curr-command))
   (:panes (info-content (clim:make-pane 'info-content-panel
                                         :display-function 'display-text-content
-                                        :default-view +info-content-panel-view+))
+                                        :default-view +info-content-panel-view+
+                                        :end-of-line-action :wrap*))
           (interaction-pane :interactor)
           (prev-button (clim:make-pane 'clim:push-button-pane
                                        :label "Back"

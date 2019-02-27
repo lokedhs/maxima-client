@@ -139,6 +139,8 @@
       more-parts)))
 
 (defun word-wrap-draw-record (stream rec)
+  (clim:stream-add-output-record stream rec)
+  #+nil
   (let ((start *word-wrap-x*)
         (right-margin *word-wrap-right-margin*))
     (move-rec rec start 0)
