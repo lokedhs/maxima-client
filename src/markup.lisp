@@ -219,7 +219,7 @@
           (if (eq (car results) :error)
               ;; Check for error output, this shouldn't be needed
               (render-preformatted stream (cdr (assoc :example-info content)))
-              ;; ELSE: No error            
+              ;; ELSE: No error
               (let ((code (cdr (assoc :demo-source content))))
                 (draw-current-line-and-reset stream)
                 (add-vspacing stream (font-height stream))
