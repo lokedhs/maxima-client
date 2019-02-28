@@ -455,4 +455,5 @@
 (clim:define-presentation-type markup ())
 
 (clim:define-presentation-method clim:present (obj (type markup) stream view &key)
-  (maxima-client.markup:display-markup stream obj))
+  (clim:with-room-for-graphics (stream :first-quadrant nil)
+    (maxima-client.markup:display-markup stream obj)))
