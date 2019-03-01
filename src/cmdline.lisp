@@ -461,7 +461,8 @@ terminated by ;.")
      (funcall *old-fn-dbm-read* stream eof-error-p eof-value repeat-if-newline))))
 
 (defun handle-lisp-error (condition)
-  (format t "Maxima encountered a Lisp error:~%~a~%" condition))
+  (log:warn "error: ~a, p=~s" condition (find-interactor-pane))
+  (format (find-interactor-pane) "Maxima encountered a Lisp error:~%~a~%" condition))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (let ((eval-ret (catch 'maxima::macsyma-quit
