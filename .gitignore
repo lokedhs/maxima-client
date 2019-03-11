@@ -1,3 +1,5 @@
 *~
 *.fasl
 fonts/*/.uuid
+infoparser/docs/*.lisp
+infoparser/figures/*.png
