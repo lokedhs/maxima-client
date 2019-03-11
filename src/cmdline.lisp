@@ -631,11 +631,13 @@ terminated by ;.")
 
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (clim-extensions:copy-to-clipboard (find-interactor-pane) (maxima-native-expr/src expr)))
+  (let ((pane (find-interactor-pane)))
+    (clim-extensions:copy-to-clipboard (clim:port pane) pane (maxima-native-expr/src expr))))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
-  (clim-extensions:copy-to-clipboard (find-interactor-pane) (maxima-expr-to-latex (maxima-native-expr/expr expr))))
+  (let ((pane (find-interactor-pane)))
+    (clim-extensions:copy-to-clipboard (clim:port pane) pane (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
 
 #+nil
 (clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
