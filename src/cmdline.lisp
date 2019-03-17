@@ -1,6 +1,6 @@
 (in-package :maxima-client)
 
-(defvar maxima::$font_size 14)
+(defvar maxima::$font_size 16)
 
 (clim:define-command-table expression-commands)
 
@@ -54,20 +54,14 @@ terminated by ;.")
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+
                                                     :display-function 'display-cmdline-content
-                                                    :incremental-redisplay t))
-          #+nil (notes (clim:make-pane 'maxima-client.notes:notes-pane))
-          #+nil (info-panel (maxima-client.doc:make-info-panel))
+                                                    :incremental-redisplay t
+                                                    :text-margins '(:left (:absolute 2)
+                                                                    :right (:relative 2))))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       #+nil (maxima-client.workbench:make-workbench :name 'workbench :root-pane text-content
-                                                               :panels `((,notes :title "Notes"
-                                                                                 :image ,(load-image "outline-notes-32.png")
-                                                                                 :select-fn ,#'maxima-client.notes:focus-notes-pane)
-                                                                         (,info-panel :title "Info"
-                                                                                      :image ,(load-image "outline-info-32.png"))))
                        text-content
                        doc))))
 
