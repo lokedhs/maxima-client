@@ -43,8 +43,7 @@
     (clim:with-room-for-graphics (stream :first-quadrant nil)
       (let ((*font-size* maxima::$font_size))
         (let ((rec (make-expression-output-record stream expr)))
-          (clim:stream-add-output-record stream rec))))
-    (setf (maxima-output/inhibit-next-terpri-p *standard-output*) t)))
+          (clim:stream-add-output-record stream rec))))))
 
 (wrap-function maxima::mread-synerr (fmt &rest args)
   (flet ((column ()
