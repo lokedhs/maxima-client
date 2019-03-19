@@ -454,9 +454,8 @@ terminated by ;.")
     (t
      (funcall *old-fn-dbm-read* stream eof-error-p eof-value repeat-if-newline))))
 
-(defun handle-lisp-error (condition)
-  (log:warn "error: ~a, p=~s" condition (find-interactor-pane))
-  (format (find-interactor-pane) "Maxima encountered a Lisp error:~%~a~%" condition))
+(defun handle-lisp-error (stream condition)
+  (format stream "Maxima encountered a Lisp error:~%~a~%" condition))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (let ((eval-ret (catch 'maxima::macsyma-quit
@@ -469,8 +468,7 @@ terminated by ;.")
                              (*use-clim-retrieve* t))
                         (handler-bind ((error (lambda (condition)
                                                 (when *catch-errors*
-                                                  (handle-lisp-error condition)
-                                                  (throw 'eval-expr-error :lisp-error)))))
+                                                  (throw 'eval-expr-error (list :lisp-error condition))))))
                           (with-maxima-package
                             (maxima::continue :stream maxima-stream :one-shot t))))))))
     (cond ((eq eval-ret 'maxima::maxima-error)
@@ -479,13 +477,14 @@ terminated by ;.")
                                                   :content "Error from maxima")
                                    stream)
            (format stream "Error from maxima~%"))
-          ((eq eval-ret :lisp-error)
+          ((and (listp eval-ret)
+                (eq (car eval-ret) :lisp-error))
            #+nil
            (present-to-stream (make-instance 'maxima-error
                                              :cmd cmd
                                              :content "Error from lisp")
                               stream)
-           (format stream "Error from Lisp~%")))))
+           (format stream "Error from Lisp: ~a" (cadr eval-ret))))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -550,7 +549,7 @@ terminated by ;.")
                                              (*standard-input* maxima-stream))
                                          (handler-bind ((error (lambda (condition)
                                                                  (when *catch-errors*
-                                                                   (handle-lisp-error condition)
+                                                                   (handle-lisp-error maxima-stream condition)
                                                                    (throw 'eval-expr-error :lisp-error)))))
                                            (eval-maxima-expression (maxima-native-expr/expr cmd))))))
                            (log:debug "Result: ~s" result)
