@@ -535,6 +535,10 @@ terminated by ;.")
 (defun maxima-eval-lisp-expr (expr)
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
 
+(clim:define-command (maxima-lisp-repl :name "To Lisp" :menu "To Lisp" :command-table maxima-commands)
+    ()
+  (clim-listener:run-listener :package "MAXIMA" :new-process t))
+
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
   (let ((stream (find-interactor-pane))
@@ -661,7 +665,8 @@ terminated by ;.")
 
 (clim:make-command-table 'maxima-lisp-command-table
                          :errorp nil
-                         :menu '(("Eval Lisp Form" :command maxima-eval-lisp-expression)))
+                         :menu '(("Eval Lisp Form" :command maxima-eval-lisp-expression)
+                                 ("To Lisp" :command maxima-lisp-repl)))
 
 (clim:make-command-table 'font-size-command-table
                          :errorp nil

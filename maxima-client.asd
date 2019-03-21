@@ -10,6 +10,7 @@
                :trivial-arguments
                :lambda-fiddle
                :cl-ppcre
+               :clim-listener
                :maxima)
   :components ((:module src
                         :serial t
