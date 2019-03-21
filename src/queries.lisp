@@ -25,7 +25,7 @@
           (setq val (clim:accept `(clim:completion ,buttons)
                                  :stream stream
                                  :view climi::+pop-up-menu-view+
-                                 :prompt "Select category:"
+                                 :prompt "Select category"
                                  :default val)))
         (setq maxima::sign (ecase val
                              (:positive 'maxima::$pos)
