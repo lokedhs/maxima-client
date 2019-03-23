@@ -48,8 +48,12 @@ terminated by ;.")
 
 (clim:define-application-frame maxima-main-frame ()
 
-  ((info-app :initform nil
-             :accessor maxima-main-frame/info-app))
+  ((info-app    :initform nil
+                :accessor maxima-main-frame/info-app)
+   (history     :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
+                :reader maxima-main-frame/history)
+   (history-pos :initform 0
+                :accessor maxima-main-frame/history-pos))
   (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                                                     :name 'maxima-interactor
                                                     :default-view +listener-view+
@@ -376,17 +380,16 @@ terminated by ;.")
 	      (if (member initial-char clim:*command-dispatchers*)
 	          (progn
 		    (clim:read-gesture :stream stream)
-                    (clim:accept command-ptype :stream stream :view view :prompt nil :history 'clim:command))
+                    (clim:accept command-ptype :stream stream :view view :prompt nil :history nil))
 	          (progn
-                    (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
-                                                          :history 'maxima-expression-or-command :replace-input t))))
+                    (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil :history nil :replace-input t))))
           (maxima-native-expr
            (clim:accept 'maxima-native-expr :stream stream :view view :prompt nil
-                                            :history 'maxima-expression-or-command :replace-input t
+                                            :history nil :replace-input t
                                             :default inner-object :insert-default t))
           (maxima-input-expression
            (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil
-                                                 :history 'maxima-expression-or-command :replace-input t
+                                                 :history nil :replace-input t
                                                  :default inner-object :insert-default t)))
       (t
        (log:trace "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
@@ -422,6 +425,13 @@ terminated by ;.")
   (log:trace "Converting to string: ~s" object)
   (format-sym-name object))
 
+(defun push-command-to-history (frame command)
+  (let ((history (maxima-main-frame/history frame)))
+   (unless (and (plusp (length history))
+                (equal (aref history (1- (length history))) command))
+     (vector-push-extend command history)
+     (setf (maxima-main-frame/history-pos frame) (length history)))))
+
 (wrap-function maxima::dbm-read (&optional (stream *standard-input*) (eof-error-p t)
 		                           (eof-value nil) repeat-if-newline)
   (typecase stream
@@ -435,15 +445,17 @@ terminated by ;.")
              (clim:with-text-style (pane (clim:make-text-style :fix :roman :normal))
                (clim:accept 'maxima-expression-or-command :stream pane :prompt nil
                                                           :default nil :default-type 'maxima-empty-input
-                                                          :history 'maxima-expression-or-command
+                                                          :history nil
                                                           :replace-input t)))
          (log:trace "Got input: object=~s, type=~s" object type)
          (cond
            ((null object)
             nil)
            ((eq type 'maxima-input-expression)
+            (push-command-to-history clim:*application-frame* (maxima-input-expression/src object))
             (maxima-input-expression/expr object))
            ((eq type 'maxima-input-error)
+            (push-command-to-history clim:*application-frame* (maxima-input-error/command object))
             (let ((size (clim:text-style-size (clim:medium-text-style pane))))
               (clim:with-drawing-options (pane :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
                 (format pane "~a" (maxima-input-error/message object))))

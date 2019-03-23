@@ -33,6 +33,7 @@
                                      (:file "character-picker")
                                      (:file "notes")
                                      (:file "cmdline")
+                                     (:file "maxima-history")
                                      (:file "maxima-plot")
                                      (:file "plot2d")
                                      (:file "algebra-cmd")
