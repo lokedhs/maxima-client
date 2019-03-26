@@ -101,10 +101,6 @@
                      (content-load-error/message condition)))))
 
 (defun process-documentation-request (frame command &key inhibit-history redisplay)
-  (when (and (not inhibit-history)
-             (documentation-frame/curr-command frame))
-    (push (documentation-frame/curr-command frame) (documentation-frame/prev-commands frame)))
-  (setf (documentation-frame/curr-command frame) command)
   (destructuring-bind (type name)
       command
     (let ((content (ecase type
@@ -112,6 +108,10 @@
                      (:node (cons 'maxima-client.markup:markup (load-node name)))
                      (:file (cons 'maxima-client.markup:markup (load-doc-file name)))
                      (:category (cons 'category (load-category name))))))
+      (when (and (not inhibit-history)
+                 (documentation-frame/curr-command frame))
+        (push (documentation-frame/curr-command frame) (documentation-frame/prev-commands frame)))
+      (setf (documentation-frame/curr-command frame) command)
       (setf (documentation-frame/content frame) content)
       (when redisplay
         (let ((info-content-panel (clim:find-pane-named clim:*application-frame* 'info-content)))
