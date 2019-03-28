@@ -57,7 +57,4 @@
 	     some)))
     (error 'maxima-expr-parse-error :src "source not available"
                                     :message (apply #'format nil fmt args)
-                                    :pos (- (length (column)) 2)))
-  #+nil
-  (clim:with-drawing-options (stream :ink clim:+red+)
-    (format stream "~%~a" string)))
+                                    :pos (- (length (column)) 2))))
