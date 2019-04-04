@@ -4,7 +4,8 @@
   (ecase sign
     (maxima::$pos "positive")
     (maxima::$neg "negative")
-    (maxima::$zero "zero")))
+    (maxima::$zero "zero")
+    (maxima::$nonzero "nonzero")))
 
 (wrap-function maxima::ensure-sign (expr &optional domain squared)
   (block ensure-sign-wrapped-function
@@ -30,7 +31,8 @@
         (setq maxima::sign (ecase val
                              (:positive 'maxima::$pos)
                              (:negative 'maxima::$neg)
-                             (:zero 'maxima::$zero)))
+                             (:zero 'maxima::$zero)
+                             (:nonzero 'maxima::$nonzero)))
         (let ((prev-sign maxima::sign)
               (v (maxima::match-sign maxima::sign domain expr squared)))
           (unless v
