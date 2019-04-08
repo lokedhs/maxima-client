@@ -32,7 +32,7 @@ libfreetype6-dev libfontconfig1-dev libharfbuzz-dev
 ```
 
 To enable the Freetype renderer, add the following line to
-`$HOME/.sbclrl`:
+`$HOME/.sbclrc`:
 
 ```
 (pushnew :mcclim-ffi-freetype *features*)
