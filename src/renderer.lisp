@@ -19,6 +19,47 @@
 
 (defvar *render-functions* (make-hash-table))
 
+;;; margin output records
+
+(defclass margin-output-record (clim:standard-sequence-output-record)
+  ((top-margin    :initform 0
+                  :accessor margin-output-record/top-margin)
+   (bottom-margin :initform 0
+                  :accessor margin-output-record/bottom-margin)))
+
+(defun update-record-margins (record &key (top 0) (bottom 0))
+  (dimension-bind (record :y y1 :bottom y2)
+    (setf (margin-output-record/top-margin record) (- top y1))
+    (setf (margin-output-record/bottom-margin record) (- bottom y2))))
+
+(defgeneric output-record-margins (record))
+
+(defmethod output-record-margins (record)
+  (dimension-bind (record :x x1 :y y1 :right x2 :bottom y2)
+    (list x1 y1 x2 y2)))
+
+(defmethod output-record-margins ((record clim:standard-sequence-output-record))
+  (let ((min-x nil)
+        (max-x nil)
+        (min-y nil)
+        (max-y nil))
+    (clim:map-over-output-records (lambda (rec)
+                                    (destructuring-bind (x1 y1 x2 y2)
+                                        (output-record-margins rec)
+                                      (setf min-x (if min-x (min x1 min-x) x1))
+                                      (setf max-x (if max-x (max x2 max-x) x2))
+                                      (setf min-y (if min-y (min y1 min-y) y1))
+                                      (setf max-y (if max-y (max y2 max-y) y2))))
+                                  record)
+    (list min-x min-y max-x max-y)))
+
+(defmethod output-record-margins ((record margin-output-record))
+  (dimension-bind (record :x x1 :y y1 :right x2 :bottom y2)
+    (list x1 (+ y1 (margin-output-record/top-margin record))
+          x2 (+ y2 (margin-output-record/bottom-margin record)))))
+
+;;; render function
+
 (defmacro define-render-function ((name symbol stream-sym args-sym &key inhibit-presentation) &body body)
   (check-type name symbol)
   (check-type stream-sym symbol)
@@ -36,6 +77,8 @@
                    `(setf (gethash ',v *render-functions*) (list ',name ,(if inhibit-presentation t nil))))
                  symbol-list))))
 
+;;; view definitions
+
 (defclass maxima-renderer-view (maxima-client.markup:markup-text-view)
   ())
 
@@ -43,6 +86,8 @@
   ())
 
 (defparameter +listener-view+ (make-instance 'maxima-interactor-view))
+
+;;; renderer stuff
 
 (defun mlist-as-list (mlist)
   (unless (and (listp mlist)
@@ -223,7 +268,10 @@
     (maxima::$test_cc (render-sqrt-test stream))
     (t
      (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
-       (render-symbol-inner stream sym roman-font)))))
+       (let ((rec (clim:with-output-to-output-record (stream 'margin-output-record)
+                    (render-symbol-inner stream sym roman-font))))
+         (update-record-margins rec :top (- (m-ascent stream)) :bottom 0)
+         (clim:stream-add-output-record stream rec))))))
 
 (defun %render-negation (stream fn &optional (spacing 0.2))
   (with-aligned-rendering (stream)
@@ -349,7 +397,60 @@
       args
     (render-plain stream 'maxima::mequal #\= a b)))
 
-(defun wrap-with-parens (stream output-record
+(defun wrap-with-plain-paren (stream output-record style paren-font paren-font-scale left-spacing right-spacing)
+  (destructuring-bind (x1 y1 x2 y2)
+      (output-record-margins output-record)
+    (let ((width (- x2 x1))
+          (height (- y2 y1)))
+      ;; MKREC generates the output record for a left or right paren
+      (flet ((mkrec (paren-char square-char)
+               (clim:with-output-to-output-record (stream)
+                 (with-font (stream paren-font (* height paren-font-scale))
+                   (clim:draw-text* stream (ecase style
+                                             (:paren paren-char)
+                                             (:square square-char))
+                                    0 0)))))
+        ;;
+        (let ((left-paren (mkrec "(" "[")))
+          (dimension-bind (left-paren :right left-paren-x2 :y left-paren-y1 :bottom left-paren-y2)
+            (let* ((centre (+ (/ height 2) y1))
+                   (p-centre (/ (+ left-paren-y1 left-paren-y2) 2))
+                   (p-offset (- centre p-centre))
+                   (new-rec-x (+ left-paren-x2 left-spacing)))
+              (move-rec left-paren x1 p-offset)
+              (clim:stream-add-output-record stream left-paren)
+              ;;
+              (move-rec output-record new-rec-x 0)
+              (clim:stream-add-output-record stream output-record)
+              ;;
+              (let ((right-paren (mkrec ")" "]")))
+                (move-rec right-paren (+ x1 new-rec-x width right-spacing) p-offset)
+                (clim:stream-add-output-record stream right-paren)))))))))
+
+(defun wrap-with-split-paren (stream output-record)
+  (declare (ignore stream output-record))
+  ;; TODO: Implement this
+  (break))
+
+(defun wrap-with-parens (stream output-record &key (style :paren) (left-spacing 0) (right-spacing 0))
+  ;; Three use-cases:
+  ;;   - standard size
+  ;;   - narrow plain paren
+  ;;   - multi-segment paren
+  ;;
+  (let ((char-height (char-height stream)))
+    (dimension-bind (output-record :height height)
+      (cond ((> height (* char-height 10))
+             ;; Height is very large, need to render by splitting
+             (wrap-with-split-paren stream output-record))
+            ((> height (* char-height 2))
+             ;; Use thin paren
+             (wrap-with-plain-paren stream output-record style *font-paren-size4* 0.35 left-spacing right-spacing))
+            (t
+             ;; Use standad paren
+             (wrap-with-plain-paren stream output-record style *font-roman* 1 left-spacing right-spacing))))))
+
+(defun DISABLED%wrap-with-parens (stream output-record
                          &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
   (let ((ch (char-height stream)))
     (dimension-bind (output-record :x x :y y :width width :height height)
@@ -376,13 +477,13 @@
                 (move-rec right-paren (+ x left-paren-width left-paren-x-offset width left-spacing right-spacing) p-offset)
                 (clim:stream-add-output-record stream right-paren)))))))))
 
-(defmacro with-wrapped-parens ((stream &key (left-paren "(") (right-paren ")")) &body body)
-  (alexandria:once-only (stream left-paren right-paren)
+(defmacro with-wrapped-parens ((stream &key (style :paren)) &body body)
+  (alexandria:once-only (stream style)
     (alexandria:with-gensyms (rec)
       `(let ((,rec (clim:with-output-to-output-record (,stream)
                      (with-paren-op
                        ,@body))))
-         (wrap-with-parens ,stream ,rec :left-paren ,left-paren :right-paren ,right-paren)))))
+         (wrap-with-parens ,stream ,rec :style ,style)))))
 
 (defmacro with-wrapped-optional-parens ((stream enabled-p) &body body)
   (alexandria:once-only (stream enabled-p)
@@ -671,8 +772,7 @@ Each element should be an output record."
                           do (clim:formatting-cell (stream :align-y :center :align-x :center)
                                (with-paren-op
                                  (render-maxima-expression stream col))))))))))
-    (wrap-with-parens stream rec :left-paren "[" :right-paren "]"
-                                 :left-spacing (char-width stream) :right-spacing (char-width stream))))
+    (wrap-with-parens stream rec :style :square :left-spacing (char-width stream) :right-spacing (char-width stream))))
 
 (defun render-msetq (stream a b)
   (with-aligned-rendering (stream)
@@ -734,17 +834,20 @@ Each element should be an output record."
   (let ((rec (clim:with-output-to-output-record (stream)
                (funcall name-fn stream))))
     (clim:stream-add-output-record stream rec)
-    (dimension-bind (rec :y y :right right :bottom bottom :height height)
-      (with-font-size-change (stream 0.8)
-        (let ((args-rec (clim:with-output-to-output-record (stream)
-                          (funcall args-fn stream))))
-          (dimension-bind (args-rec :x args-x :y args-y :bottom args-bottom :height args-height)
-            (move-rec args-rec (- right args-x)
-                      (if (>= args-height (/ height 2))
-                          (- (+ y (/ height 2)) args-y)
-                          (let ((args-centre (/ (+ args-y args-bottom) 2)))
-                            (- bottom args-centre))))
-            (clim:stream-add-output-record stream args-rec)))))))
+    (destructuring-bind (x1 y1 x2 y2)
+        (output-record-margins rec)
+      (declare (ignore x1))
+      (let ((height (- y2 y1)))
+        (with-font-size-change (stream 0.8)
+          (let ((args-rec (clim:with-output-to-output-record (stream)
+                            (funcall args-fn stream))))
+            (dimension-bind (args-rec :x args-x :y args-y :bottom args-bottom :height args-height)
+              (move-rec args-rec (- x2 args-x)
+                        (if (>= args-height (/ height 2))
+                            (- (+ y1 (/ height 2)) args-y)
+                            (let ((args-centre (/ (+ args-y args-bottom) 2)))
+                              (- y2 args-centre))))
+              (clim:stream-add-output-record stream args-rec))))))))
 
 (defun render-array-reference (stream expr args &key paren-p)
   (unless args
@@ -831,12 +934,12 @@ Each element should be an output record."
     (draw *font-paren-size4* 240 0.3)))
 
 (defun render-paren-test (stream)
-  (flet ((render-iterate (x left-paren right-paren)
+  (flet ((render-iterate (x style)
            (loop
              with y = 20
              for i from 1 to 8
              do (let ((rec (clim:with-output-to-output-record (stream)
-                             (with-wrapped-parens (stream :left-paren left-paren :right-paren right-paren)
+                             (with-wrapped-parens (stream :style style)
                                (loop
                                  with h = (char-height stream)
                                  for n from 0 below i
@@ -845,8 +948,8 @@ Each element should be an output record."
                   (clim:stream-add-output-record stream rec)
                   (dimension-bind (rec :height h)
                     (incf y h))))))
-    (render-iterate 0 "(" ")")
-    (render-iterate 80 "[" "]")))
+    (render-iterate 0 :paren)
+    (render-iterate 80 :square)))
 
 (defun render-sqrt-test (stream)
   (loop

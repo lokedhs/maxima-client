@@ -58,6 +58,15 @@
     (declare (ignore height))
     width))
 
+(defvar *m-ascent-cache* (make-hash-table :test 'equal))
+
+(defun m-ascent (stream)
+  (alexandria:ensure-gethash (clim:medium-text-style stream) *m-ascent-cache*
+                             (let ((rec (clim:with-output-to-output-record (stream)
+                                          (clim:draw-text* stream "M" 0 0))))
+                               (dimension-bind (rec :y y)
+                                 (- y)))))
+
 (defclass single-dimension-text-rec (clim:standard-rectangle clim:output-record)
   ((parent :initarg :parent
            :initform nil
