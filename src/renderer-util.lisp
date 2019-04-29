@@ -67,32 +67,6 @@
                                (dimension-bind (rec :y y)
                                  (- y)))))
 
-(defclass single-dimension-text-rec (clim:standard-rectangle clim:output-record)
-  ((parent :initarg :parent
-           :initform nil
-           :accessor clim:output-record-parent)
-   (rec :initform nil
-        :accessor single-dimension-text-rec/output-record)))
-
-(defmethod clim:add-output-record (child (parent single-dimension-text-rec))
-  (when (single-dimension-text-rec/output-record parent)
-    (error "single-dimension-text-rec can only have a single child"))
-  (setf (single-dimension-text-rec/output-record parent) child))
-
-(defmethod clim:replay-output-record ((record single-dimension-text-rec) stream &optional region x-offset y-offset)
-  (let ((inner (single-dimension-text-rec/output-record record)))
-    (unless inner
-      (error "single-dimension-text-rec does not contain a child record"))
-    (clim:replay-output-record inner stream region x-offset y-offset)))
-
-(defmethod clim:bounding-rectangle* ((rec single-dimension-text-rec))
-  (clim:rectangle-edges* rec))
-
-(defmethod clim:output-record-position ((rec single-dimension-text-rec))
-  (multiple-value-bind (x y)
-      (clim:bounding-rectangle* rec)
-    (values x y)))
-
 (defmacro with-sans-serif-font ((stream) &body body)
   (check-type stream symbol)
   `(clim:with-text-style (stream (clim:make-text-style :sans-serif :roman :normal))

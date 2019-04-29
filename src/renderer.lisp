@@ -58,6 +58,20 @@
     (list x1 (+ y1 (margin-output-record/top-margin record))
           x2 (+ y2 (margin-output-record/bottom-margin record)))))
 
+(defmacro with-record-margins ((stream &key top bottom) &body body)
+  (check-type stream symbol)
+  (alexandria:once-only (top bottom)
+    (alexandria:with-gensyms (rec)
+      `(let ((,rec (clim:with-output-to-output-record (,stream 'margin-output-record)
+                     ,@body)))
+         (update-record-margins ,rec :top ,top :bottom ,bottom)
+         (clim:stream-add-output-record ,stream ,rec)))))
+
+(defmacro with-char-margins ((stream) &body body)
+  (check-type stream symbol)
+  `(with-record-margins (,stream :top (- (m-ascent ,stream)) :bottom 0)
+     ,@body))
+
 ;;; render function
 
 (defmacro define-render-function ((name symbol stream-sym args-sym &key inhibit-presentation) &body body)
@@ -213,10 +227,12 @@
                       (render-maxima-expression stream bottom-expr))))
 
 (defun render-number (stream n)
-  (render-formatted stream "~a" n))
+  (with-char-margins (stream)
+    (render-formatted stream "~a" n)))
 
 (defun render-inf (stream)
-  (render-formatted stream "~c" #\INFINITY))
+  (with-char-margins (stream)
+    (render-formatted stream "~c" #\INFINITY)))
 
 (defun render-symbol-name-inner (stream formatted roman-font)
   (labels ((render ()
@@ -234,9 +250,14 @@
   (case sym
     (maxima::$inf (render-inf stream))
     (maxima::$minf (%render-negation stream (lambda (stream) (render-inf stream))))
-    (maxima::$%pi (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI)))
-    (maxima::$%lambda (with-font (stream *font-roman-math*) (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA)))
-    (maxima::%gamma (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_GAMMA))
+    (maxima::$%pi (with-font (stream *font-roman-math*)
+                    (with-char-margins (stream)
+                      (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))))
+    (maxima::$%lambda (with-font (stream *font-roman-math*)
+                        (with-char-margins (stream)
+                          (render-formatted stream "~c" #\GREEK_SMALL_LETTER_LAMDA))))
+    (maxima::%gamma (with-char-margins (stream)
+                      (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_GAMMA)))
     (t
      ;; Check if the symbol should be rendered using subscript. The
      ;; rule is: If the name contains a single underscore, and one
@@ -268,10 +289,8 @@
     (maxima::$test_cc (render-sqrt-test stream))
     (t
      (clim:with-output-as-presentation (stream sym 'maxima-native-symbol :view (clim:stream-default-view stream))
-       (let ((rec (clim:with-output-to-output-record (stream 'margin-output-record)
-                    (render-symbol-inner stream sym roman-font))))
-         (update-record-margins rec :top (- (m-ascent stream)) :bottom 0)
-         (clim:stream-add-output-record stream rec))))))
+       (with-char-margins (stream)
+         (render-symbol-inner stream sym roman-font))))))
 
 (defun %render-negation (stream fn &optional (spacing 0.2))
   (with-aligned-rendering (stream)
@@ -406,10 +425,11 @@
       (flet ((mkrec (paren-char square-char)
                (clim:with-output-to-output-record (stream)
                  (with-font (stream paren-font (* height paren-font-scale))
-                   (clim:draw-text* stream (ecase style
-                                             (:paren paren-char)
-                                             (:square square-char))
-                                    0 0)))))
+                   (with-record-margins (stream :top y1 :bottom y2)
+                     (clim:draw-text* stream (ecase style
+                                               (:paren paren-char)
+                                               (:square square-char))
+                                      0 0))))))
         ;;
         (let ((left-paren (mkrec "(" "[")))
           (dimension-bind (left-paren :right left-paren-x2 :y left-paren-y1 :bottom left-paren-y2)
@@ -521,7 +541,7 @@
                      :prefix-renderer (lambda (stream)
                                         (with-wrapped-optional-parens (stream paren-p)
                                           ;; An array reference can be a function call. Here we simply call
-                                          ;; the normal rendering function, but with the name not rendered in italics
+                                          ;; the normal rendering function, but with the name not rendered in
                                           ;; italics. If so, a special function is needed to render this properly.
                                           ;; Also, the function will be wrapped in parens, which is different
                                           ;; from what normal Maxima does. We'll just accept this since the
