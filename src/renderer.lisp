@@ -447,10 +447,53 @@
                 (move-rec right-paren (+ x1 new-rec-x width right-spacing) p-offset)
                 (clim:stream-add-output-record stream right-paren)))))))))
 
-(defun wrap-with-split-paren (stream output-record)
-  (declare (ignore stream output-record))
-  ;; TODO: Implement this
-  (break))
+(defun draw-vertical-paren (stream height top-char bottom-char ext-char)
+  (with-font (stream *font-paren-size4*)
+    (flet ((make-vertical-bar ()
+             (clim:with-output-to-output-record (stream)
+               (clim:draw-text* stream (string ext-char) 0 0))))
+      ;;
+      (let ((top (clim:with-output-to-output-record (stream)
+                   (clim:draw-text* stream (string top-char) 0 0)))
+            (bottom (clim:with-output-to-output-record (stream)
+                      (clim:draw-text* stream (string bottom-char) 0 0))))
+        (clim:stream-add-output-record stream top)
+        (dimension-bind (top :height top-height :bottom top-y2)
+          (dimension-bind (bottom :height bottom-height)
+            (let ((extra-h (- height top-height bottom-height))
+                  (pos (1- top-y2)))
+              (when (plusp extra-h)
+                (loop
+                  while (< pos (- height bottom-height))
+                  do (let ((rec (make-vertical-bar)))
+                       (set-rec-position rec nil pos)
+                       (clim:stream-add-output-record stream rec)
+                       (dimension-bind (rec :bottom bottom)
+                         (setq pos bottom)))))
+              (set-rec-position bottom nil pos)
+              (clim:stream-add-output-record stream bottom))))))))
+
+(defun wrap-with-split-paren (stream output-record style)
+  (dimension-bind (output-record :height rec-height :y rec-y1 :right rec-x2)
+    (let ((left (clim:with-output-to-output-record (stream)
+                  (apply #'draw-vertical-paren stream rec-height
+                         (ecase style
+                           (:paren (list #\LEFT_PARENTHESIS_UPPER_HOOK #\LEFT_PARENTHESIS_LOWER_HOOK #\LEFT_PARENTHESIS_EXTENSION))
+                           (:square (list #\LEFT_SQUARE_BRACKET_UPPER_CORNER #\LEFT_SQUARE_BRACKET_LOWER_CORNER #\LEFT_SQUARE_BRACKET_EXTENSION))))))
+          (right (clim:with-output-to-output-record (stream)
+                   (apply #'draw-vertical-paren stream rec-height
+                          (ecase style
+                            (:paren (list #\RIGHT_PARENTHESIS_UPPER_HOOK #\RIGHT_PARENTHESIS_LOWER_HOOK #\RIGHT_PARENTHESIS_EXTENSION))
+                            (:square (list #\RIGHT_SQUARE_BRACKET_UPPER_CORNER #\RIGHT_SQUARE_BRACKET_LOWER_CORNER #\RIGHT_SQUARE_BRACKET_EXTENSION)))))))
+      (dimension-bind (left :height paren-height :right left-x2)
+        (let ((paren-top-pos (- (+ rec-y1 (/ rec-height 2))
+                                (/ paren-height 2))))
+          (set-rec-position left nil paren-top-pos)
+          (clim:stream-add-output-record stream left)
+          (move-rec output-record left-x2 0)
+          (clim:stream-add-output-record stream output-record)
+          (set-rec-position right (+ left-x2 rec-x2) paren-top-pos)
+          (clim:stream-add-output-record stream right))))))
 
 (defun wrap-with-parens (stream output-record &key (style :paren) (left-spacing 0) (right-spacing 0))
   ;; Three use-cases:
@@ -460,9 +503,9 @@
   ;;
   (let ((char-height (char-height stream)))
     (dimension-bind (output-record :height height)
-      (cond ((> height (* char-height 10))
+      (cond ((> height (* char-height 5))
              ;; Height is very large, need to render by splitting
-             (wrap-with-split-paren stream output-record))
+             (wrap-with-split-paren stream output-record style))
             ((> height (* char-height 2))
              ;; Use thin paren
              (wrap-with-plain-paren stream output-record style *font-paren-size4* 0.35 left-spacing right-spacing))
