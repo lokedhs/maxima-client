@@ -305,7 +305,7 @@
                       (render-maxima-expression stream expr))
                     spacing))
 
-(defun render-plus (stream exprs)
+(defun render-plus (stream exprs truncated-p)
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
       (unless first
@@ -319,7 +319,16 @@
              (unless first
                (render-aligned-string "+")
                (aligned-spacing 0.2))
-             (render-aligned () (render-maxima-expression stream expr)))))))
+             (render-aligned () (render-maxima-expression stream expr)))))
+    ;; If this is a truncated expression, render the ... part
+    (when truncated-p
+      (aligned-spacing 0.2)
+      (render-aligned-string "+")
+      (loop
+        repeat 3
+        do (progn
+             (aligned-spacing 0.2)
+             (render-aligned-string "."))))))
 
 (defun render-times (stream exprs)
   (with-aligned-rendering (stream)
@@ -460,16 +469,14 @@
         (clim:stream-add-output-record stream top)
         (dimension-bind (top :height top-height :bottom top-y2)
           (dimension-bind (bottom :height bottom-height)
-            (let ((extra-h (- height top-height bottom-height))
-                  (pos (1- top-y2)))
-              (when (plusp extra-h)
-                (loop
-                  while (< pos (- height bottom-height))
-                  do (let ((rec (make-vertical-bar)))
-                       (set-rec-position rec nil pos)
-                       (clim:stream-add-output-record stream rec)
-                       (dimension-bind (rec :bottom bottom)
-                         (setq pos bottom)))))
+            (let ((pos (1- top-y2)))
+              (loop
+                while (< pos (+ top-y2 (- height top-height bottom-height)))
+                do (let ((rec (make-vertical-bar)))
+                     (set-rec-position rec nil pos)
+                     (clim:stream-add-output-record stream rec)
+                     (dimension-bind (rec :bottom bottom)
+                       (setq pos (1- bottom)))))
               (set-rec-position bottom nil pos)
               (clim:stream-add-output-record stream bottom))))))))
 
@@ -1257,7 +1264,7 @@ Each element should be an output record."
                  (maxima::mlist (render-mlist stream (cdr fixed)))
                  (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
                  (maxima::rat (render-quotient stream (second fixed) (third fixed)))
-                 (maxima::mplus (render-plus stream (cdr fixed)))
+                 (maxima::mplus (render-plus stream (cdr fixed) (member 'maxima::trunc (cdar fixed))))
                  (maxima::mminus (render-negation stream (second fixed)))
                  (maxima::mtimes (render-times stream (cdr fixed)))
                  (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
