@@ -278,7 +278,7 @@ terminated by ;.")
                                        (end (drei::size buffer)))
                                   (drei::buffer-substring buffer start end))
 
-          ;; True if `gesture' was freshly read from the user, and not
+          ;; True if gesture was freshly read from the user, and not
           ;; just retrieved from the buffer during a rescan.
           for freshly-inserted = (and (plusp (clim:stream-scan-pointer stream))
                                       (not (equal (drei::buffer-object
