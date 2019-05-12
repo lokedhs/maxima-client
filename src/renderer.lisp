@@ -520,33 +520,6 @@
              ;; Use standad paren
              (wrap-with-plain-paren stream output-record style *font-roman* 1 left-spacing right-spacing))))))
 
-(defun DISABLED%wrap-with-parens (stream output-record
-                         &key (left-paren "(") (right-paren ")") (left-spacing 0) (right-spacing 0))
-  (let ((ch (char-height stream)))
-    (dimension-bind (output-record :x x :y y :width width :height height)
-      (destructuring-bind (paren-font paren-size left-paren-x-offset left-paren-y-offset)
-          (find-paren-font stream (max (+ height (/ ch 4)) ch))
-        (declare (ignore left-paren-y-offset))
-        (multiple-value-bind (left-paren left-paren-ascent left-paren-descent)
-            (with-font (stream paren-font paren-size)
-              (render-and-measure-string stream left-paren))
-          (let ((right-paren (clim:with-output-to-output-record (stream)
-                               (with-font (stream paren-font paren-size)
-                                 (clim:draw-text* stream right-paren 0 0)))))
-            (dimension-bind (left-paren :width left-paren-width)
-              (let* ((centre (+ (/ height 2) y))
-                     (p-centre (- left-paren-descent
-                                  (/ (+ left-paren-ascent left-paren-descent) 2)))
-                     (p-offset (- centre p-centre)))
-                (move-rec left-paren x p-offset)
-                (clim:stream-add-output-record stream left-paren)
-                ;;
-                (move-rec output-record (+ left-paren-width left-paren-x-offset left-spacing) 0)
-                (clim:stream-add-output-record stream output-record)
-                ;;
-                (move-rec right-paren (+ x left-paren-width left-paren-x-offset width left-spacing right-spacing) p-offset)
-                (clim:stream-add-output-record stream right-paren)))))))))
-
 (defmacro with-wrapped-parens ((stream &key (style :paren)) &body body)
   (alexandria:once-only (stream style)
     (alexandria:with-gensyms (rec)
