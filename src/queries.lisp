@@ -48,3 +48,10 @@
                                 (render-aligned-string "assumed to be ~a" (name-from-sign prev-sign))))))))
               (clim:stream-add-output-record stream rec)))
           v)))))
+
+(wrap-function maxima::format-prompt (destination control-string &rest arguments)
+  (cond ((or (eq destination t)
+             (typep destination 'maxima-output))
+         (apply #'maxima::mformat destination control-string arguments))
+        (t
+         (apply *old-fn-format-prompt* destination control-string arguments))))
