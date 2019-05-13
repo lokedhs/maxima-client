@@ -34,6 +34,9 @@
                   (eq (caar element) 'maxima::text-string))
              (with-sans-serif-font (stream)
                (render-aligned-string "~a" (coerce (cdr element) 'string))))
+            ((stringp element)
+             (with-sans-serif-font (stream)
+               (render-aligned-string "~a" element)))
             (t
              (render-aligned () (render-maxima-expression stream element)))))))
 
