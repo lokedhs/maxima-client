@@ -8,7 +8,7 @@
   (clim:define-presentation-type maxima-function-name ()
     :description "The name of a maxima function in the documentation"))
 
-(defparameter *maxima-toplvel-filename* #p"include-maxima.lisp")
+(defparameter *maxima-toplevel-filename* #p"include-maxima.lisp")
 
 (clim:define-command-table info-commands
   :inherit-from (maxima-client.markup:text-commands))
@@ -325,7 +325,7 @@
 
 (define-documentation-frame-command (cmd-doc-maxima-manual :name "Manual")
     ()
-  (process-doc-command-and-redisplay clim:*application-frame* :file (pathname-name *maxima-toplvel-filename*)))
+  (process-doc-command-and-redisplay clim:*application-frame* :file (pathname-name *maxima-toplevel-filename*)))
 
 (clim:define-presentation-translator text-to-maxima-function-reference (string maxima-client.markup:maxima-function-reference info-commands)
     (object)

@@ -992,7 +992,7 @@ corresponding lisp files to the output directory."
                  (push s current-prefix))))
       (let ((parsed (with-input-from-string (instring main-content)
                       (parse-stream instring))))
-        (write-parsed-content-to-file parsed (merge-pathnames maxima-client.doc-new:*maxima-toplvel-filename*
+        (write-parsed-content-to-file parsed (merge-pathnames maxima-client.doc-new:*maxima-toplevel-filename*
                                                               destination-directory))))))
 
 (defun generate-doc-directory (&key skip-example skip-figures)

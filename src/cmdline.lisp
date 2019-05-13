@@ -61,11 +61,15 @@ terminated by ;.")
                                                     :incremental-redisplay t
                                                     :text-margins '(:left (:absolute 2)
                                                                     :right (:relative 2))))
+          (canvas :application)
+          (bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
+                       canvas
+                       bottom-adjuster
                        text-content
                        doc))))
 
@@ -618,7 +622,7 @@ terminated by ;.")
 
 (clim:define-command (cmd-show-maxima-manual :name "Maxima Documentation" :menu t :command-table maxima-commands)
     ()
-  (maxima-client.doc-new:open-documentation-frame `(:file ,(pathname-name maxima-client.doc-new:*maxima-toplvel-filename*))))
+  (maxima-client.doc-new:open-documentation-frame `(:file ,(pathname-name maxima-client.doc-new:*maxima-toplevel-filename*))))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands

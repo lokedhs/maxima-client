@@ -121,5 +121,5 @@
   (:export
    #:open-documentation-frame
    #:display-function-help
-   #:*maxima-toplvel-filename*
+   #:*maxima-toplevel-filename*
    #:maxima-function-name))
