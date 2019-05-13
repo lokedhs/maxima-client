@@ -32,6 +32,7 @@
                                      (:file "maxima-syntax")
                                      (:file "character-picker")
                                      (:file "notes")
+                                     (:file "canvas")
                                      (:file "cmdline")
                                      (:file "maxima-history")
                                      (:file "maxima-plot")

@@ -61,7 +61,7 @@ terminated by ;.")
                                                     :incremental-redisplay t
                                                     :text-margins '(:left (:absolute 2)
                                                                     :right (:relative 2))))
-          (canvas (maxima-client.canvas:make-canvas-pane))
+          (canvas (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))
           (bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
@@ -72,6 +72,14 @@ terminated by ;.")
                        bottom-adjuster
                        text-content
                        doc))))
+
+(defun find-canvas-pane ()
+  (unless clim:*application-frame*
+    (maxima::merror "No active Climaxima frame"))
+  (let ((pane (clim:find-pane-named clim:*application-frame* 'canvas-app-pane)))
+    (unless pane
+      (maxima::merror "Frame does not contain an acive canvas"))
+    pane))
 
 (defun display-cmdline-content (frame stream)
   (declare (ignore frame))
@@ -652,11 +660,6 @@ terminated by ;.")
     ((expr maxima-native-expr :prompt "Expression"))
   (let ((pane (find-interactor-pane)))
     (clim-extensions:copy-to-clipboard (clim:port pane) pane (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
-
-(clim:define-command (foo :name "Foo" :menu y :command-table expression-commands)
-    ()
-  (let ((pane (clim:find-pane-named clim:*application-frame* 'canvas)))
-    (maxima-client.canvas::repaint-canvas pane)))
 
 #+nil
 (clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
