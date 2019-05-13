@@ -123,3 +123,9 @@
    #:display-function-help
    #:*maxima-toplevel-filename*
    #:maxima-function-name))
+
+(defpackage :maxima-client.canvas
+  (:use :cl :maxima-client.common)
+  (:export #:canvas
+           #:make-canvas-pane
+           #:canvas-pane))
