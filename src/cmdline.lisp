@@ -452,6 +452,11 @@ terminated by ;.")
            (mprompt maxima::*mread-prompt*)
            (maxima::*mread-prompt* ""))
        (declare (ignore mprompt))
+       ;; Before reading a new expression, update the canvas if it's active
+       (alexandria:when-let ((canvas (find-canvas-pane)))
+         (setf (clim:pane-needs-redisplay canvas) t)
+         (clim:redisplay-frame-pane (clim:pane-frame canvas) canvas))
+       ;; Read the maxima command
        (multiple-value-bind (object type)
            (let ((clim:*command-dispatchers* '(#\:)))
              (clim:with-text-style (pane (clim:make-text-style :fix :roman :normal))

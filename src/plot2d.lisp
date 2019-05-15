@@ -313,7 +313,7 @@ With ybounds:
     (maxima::$gray (clim:make-rgb-color 0.74 0.74 0.74))
     (maxima::$black (clim:make-rgb-color 0 0 0))
     (maxima::$white (clim:make-rgb-color 1 1 1))
-    ((t) (clim:make-rgb-color 0 0 0))))
+    (t (clim:make-rgb-color 0 0 0))))
 
 (defun nicenum (x round)
   (let* ((exp (floor (log x 10)))

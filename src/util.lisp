@@ -281,6 +281,21 @@
   (with-maxima-package
     (maxima::meval* expr)))
 
+(defun eval-maxima-expression-to-float (expr)
+  (with-maxima-package
+    (let ((maxima::$ratprint nil)
+          (maxima::$numer t)
+          (maxima::*nounsflag* t)
+          (maxima::errorsw t)
+          (maxima::errcatch t))
+      (declare (special maxima::errcatch))
+      (let ((result (handler-case
+                        (catch 'maxima::errorsw
+                          (maxima::$float (maxima::maybe-realpart (maxima::meval* expr))))
+                      (maxima::arithmetic-error () t)
+                      (maxima::maxima-$error () t))))
+        result))))
+
 (defun maxima-list-to-list (expr)
   (unless (maxima::$listp expr)
     (error "Argument is not a maxima list: ~s" expr))
