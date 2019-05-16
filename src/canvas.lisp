@@ -54,7 +54,7 @@
 (defun parse-colour-definition (name)
   (labels ((parse-value (s)
              (let ((result (parse-integer s :radix 16)))
-               (/ result (/ 256d0)))))
+               (/ result 256d0))))
    (multiple-value-bind (match strings)
        (cl-ppcre:scan-to-strings "^([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$" name)
      (if match
@@ -87,19 +87,22 @@
   (unless (and (listp obj)
                (eq (caar obj) 'maxima::mlist))
     (error "Canvas object is not a list"))
-  (multiple-value-bind (x y colour)
-      (loop
-        with x = nil
-        with y = nil
-        with colour = 'maxima::$black
-        for (key val) on (cdr obj) by #'cddr
-        do (case key
-             (maxima::$x (setq x (eval-maxima-expression-to-float val)))
-             (maxima::$y (setq y (eval-maxima-expression-to-float val)))
-             (maxima::$colour (setq colour (eval-maxima-expression val))))
-        finally (return (values x y colour)))
+  (let ((x nil)
+        (y nil)
+        (colour 'maxima::$black)
+        (size 5)
+        (filled nil))
+    (loop
+      for (key val) on (cdr obj) by #'cddr
+      do (case key
+           (maxima::$x (setq x (eval-maxima-expression-to-float val)))
+           (maxima::$y (setq y (eval-maxima-expression-to-float val)))
+           (maxima::$colour (setq colour (eval-maxima-expression val)))
+           (maxima::$size (setq size (eval-maxima-expression-to-float val 5)))
+           (maxima::$filled (setq filled (if (eval-maxima-expression val) t nil))))
+      finally (return (values x y colour)))
     (when (and (realp x) (realp y))
-      (clim:draw-circle* pane x y 5 :filled nil :ink (convert-maxima-colour colour)))))
+      (clim:draw-circle* pane x y (max size 1) :filled filled :ink (convert-maxima-colour colour)))))
 
 (defclass canvas-pane (clim:application-pane)
   ((content :initarg :content

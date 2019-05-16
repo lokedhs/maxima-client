@@ -281,7 +281,7 @@
   (with-maxima-package
     (maxima::meval* expr)))
 
-(defun eval-maxima-expression-to-float (expr)
+(defun eval-maxima-expression-to-float (expr &optional default)
   (with-maxima-package
     (let ((maxima::$ratprint nil)
           (maxima::$numer t)
@@ -294,7 +294,9 @@
                           (maxima::$float (maxima::maybe-realpart (maxima::meval* expr))))
                       (maxima::arithmetic-error () t)
                       (maxima::maxima-$error () t))))
-        result))))
+        (if (numberp result)
+            result
+            default)))))
 
 (defun maxima-list-to-list (expr)
   (unless (maxima::$listp expr)
