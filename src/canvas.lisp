@@ -128,13 +128,13 @@
 
 (defun make-canvas-pane (name)
   (clim:vertically ()
-    (clim:make-clim-stream-pane :type 'canvas-pane
-                                :content 'maxima::$canvas
-                                :name name
-                                :default-view +canvas-view+
-                                :display-function 'repaint-canvas
-                                :incremental-redisplay nil
-                                :display-time t)
+    (:fill (clim:make-clim-stream-pane :type 'canvas-pane
+                                       :content 'maxima::$canvas
+                                       :name name
+                                       :default-view +canvas-view+
+                                       :display-function 'repaint-canvas
+                                       :incremental-redisplay nil
+                                       :display-time t))
     (clim:horizontally ()
       (clim:make-pane 'clim:push-button :label "Reset")
       (clim:make-pane 'clim:push-button :label "Forward" :activate-callback (canvas-button-callback name #'canvas-step)))))
