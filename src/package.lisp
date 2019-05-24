@@ -103,7 +103,8 @@
 (defpackage :maxima-client.workbench
   (:use :cl)
   (:export #:make-workbench
-           #:workbench-commands))
+           #:workbench-commands
+           #:add-top-pane))
 
 (defpackage :maxima-client.notes
   (:use :cl :maxima-client.common)

@@ -46,28 +46,28 @@ terminated by ;.")
       (log:trace "parse result = ~s" result)
       (make-instance 'maxima-input-expression :expr result :src string))))
 
-(defun make-middle-pane ()
-  (clim:make-pane 'clim:vrack-pane
-                  :name 'work-area-pane
-                  :contents (list (clim:make-clim-stream-pane :type 'maxima-interactor-pane
-                                                              :name 'maxima-interactor
-                                                              :default-view +listener-view+
-                                                              :display-function 'display-cmdline-content
-                                                              :incremental-redisplay t
-                                                              :text-margins '(:left (:absolute 2)
-                                                                              :right (:relative 2))))))
-
 (defun show-canvas-pane ()
   (unless (find-canvas-pane :error-p nil)
-    (let ((work-area-pane (clim:find-pane-named clim:*application-frame* 'work-area-pane)))
-      (clim:add-pan))))
+    (let ((workbench-pane (clim:find-pane-named clim:*application-frame* 'workbench-pane)))
+      (unless workbench-pane
+        (error "Can't find workbench pane"))
+      (maxima-client.workbench:add-top-pane workbench-pane (maxima-client.canvas:make-canvas-pane 'canvas-app-pane)))))
+
+(defun create-interactor ()
+  (clim:make-clim-stream-pane :type 'maxima-interactor-pane
+                              :name 'maxima-interactor
+                              :default-view +listener-view+
+                              :display-function 'display-cmdline-content
+                              :incremental-redisplay t
+                              :text-margins '(:left (:absolute 2)
+                                              :right (:relative 2))))
 
 (clim:define-application-frame maxima-main-frame ()
   ((history     :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
                 :reader maxima-main-frame/history)
    (history-pos :initform 0
                 :accessor maxima-main-frame/history-pos))
-  (:panes (middle-pane (make-middle-pane))
+  (:panes (workbench-pane (maxima-client.workbench:make-workbench (create-interactor)))
           #+nil(canvas (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))
           #+nil(bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
@@ -75,7 +75,7 @@ terminated by ;.")
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       middle-pane
+                       workbench-pane
                        doc))))
 
 (defun find-canvas-pane (&key (error-p t))
