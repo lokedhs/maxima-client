@@ -3,3 +3,4 @@
 fonts/*/.uuid
 infoparser/docs/*.lisp
 infoparser/figures/*.png
+infoparser/maxima-parser.bin
