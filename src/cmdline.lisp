@@ -46,38 +46,43 @@ terminated by ;.")
       (log:trace "parse result = ~s" result)
       (make-instance 'maxima-input-expression :expr result :src string))))
 
-(clim:define-application-frame maxima-main-frame ()
+(defun make-middle-pane ()
+  (clim:make-pane 'clim:vrack-pane
+                  :name 'work-area-pane
+                  :contents (list (clim:make-clim-stream-pane :type 'maxima-interactor-pane
+                                                              :name 'maxima-interactor
+                                                              :default-view +listener-view+
+                                                              :display-function 'display-cmdline-content
+                                                              :incremental-redisplay t
+                                                              :text-margins '(:left (:absolute 2)
+                                                                              :right (:relative 2))))))
 
-  ((info-app    :initform nil
-                :accessor maxima-main-frame/info-app)
-   (history     :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
+(defun show-canvas-pane ()
+  (unless (find-canvas-pane :error-p nil)
+    (let ((work-area-pane (clim:find-pane-named clim:*application-frame* 'work-area-pane)))
+      (clim:add-pan))))
+
+(clim:define-application-frame maxima-main-frame ()
+  ((history     :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
                 :reader maxima-main-frame/history)
    (history-pos :initform 0
                 :accessor maxima-main-frame/history-pos))
-  (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
-                                                    :name 'maxima-interactor
-                                                    :default-view +listener-view+
-                                                    :display-function 'display-cmdline-content
-                                                    :incremental-redisplay t
-                                                    :text-margins '(:left (:absolute 2)
-                                                                    :right (:relative 2))))
-          (canvas (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))
-          (bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
+  (:panes (middle-pane (make-middle-pane))
+          #+nil(canvas (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))
+          #+nil(bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
           (doc :pointer-documentation :default-view +maxima-pointer-documentation-view+))
   (:menu-bar maxima-menubar-command-table)
   (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
   (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
   (:layouts (default (clim:vertically ()
-                       canvas
-                       bottom-adjuster
-                       text-content
+                       middle-pane
                        doc))))
 
-(defun find-canvas-pane ()
+(defun find-canvas-pane (&key (error-p t))
   (unless clim:*application-frame*
     (maxima::merror "No active Climaxima frame"))
   (let ((pane (clim:find-pane-named clim:*application-frame* 'canvas-app-pane)))
-    (unless pane
+    (when (and error-p (null pane))
       (maxima::merror "Frame does not contain an acive canvas"))
     pane))
 
@@ -453,7 +458,7 @@ terminated by ;.")
            (maxima::*mread-prompt* ""))
        (declare (ignore mprompt))
        ;; Before reading a new expression, update the canvas if it's active
-       (alexandria:when-let ((canvas (find-canvas-pane)))
+       (alexandria:when-let ((canvas (find-canvas-pane :error-p nil)))
          (setf (clim:pane-needs-redisplay canvas) t)
          (clim:redisplay-frame-pane (clim:pane-frame canvas) canvas))
        ;; Read the maxima command
@@ -564,9 +569,13 @@ terminated by ;.")
 (defun maxima-eval-lisp-expr (expr)
   (maxima-eval (make-instance 'maxima-native-expr :expr expr)))
 
-(clim:define-command (maxima-lisp-repl :name "To Lisp" :menu "To Lisp" :command-table maxima-commands)
+(clim:define-command (maxima-lisp-repl :name "To Lisp" :menu t :command-table maxima-commands)
     ()
   (clim-listener:run-listener :package "MAXIMA" :new-process t))
+
+(clim:define-command (show-canvas-command :name "Show Canvas" :menu t :command-table maxima-commands)
+    ()
+  (show-canvas-pane))
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
