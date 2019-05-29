@@ -17,6 +17,4 @@
     (let ((adjuster (clim:make-pane 'clime:box-adjuster-gadget)))
       (clim:sheet-adopt-child workbench-pane adjuster)
       (clim:sheet-adopt-child workbench-pane pane)
-      (clim:reorder-sheets workbench-pane (list root-pane adjuster pane))
-      (clim:change-space-requirements workbench-pane)
-      (clim:change-space-requirements root-pane))))
+      (clim:reorder-sheets workbench-pane (list root-pane adjuster pane)))))
