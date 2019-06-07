@@ -31,6 +31,7 @@
                                      (:file "reflect")
                                      (:file "maxima-syntax")
                                      (:file "character-picker")
+                                     (:file "watcher")
                                      (:file "notes")
                                      (:file "canvas")
                                      (:file "cmdline")

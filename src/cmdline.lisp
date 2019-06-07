@@ -46,12 +46,15 @@ terminated by ;.")
       (log:trace "parse result = ~s" result)
       (make-instance 'maxima-input-expression :expr result :src string))))
 
+(defun find-workbench-pane ()
+  (let ((workbench-pane (clim:find-pane-named clim:*application-frame* 'workbench-pane)))
+    (unless workbench-pane
+      (error "Can't find workbench pane"))
+    workbench-pane))
+
 (defun show-canvas-pane ()
   (unless (find-canvas-pane :error-p nil)
-    (let ((workbench-pane (clim:find-pane-named clim:*application-frame* 'workbench-pane)))
-      (unless workbench-pane
-        (error "Can't find workbench pane"))
-      (maxima-client.workbench:add-top-pane workbench-pane (maxima-client.canvas:make-canvas-pane 'canvas-app-pane)))))
+    (maxima-client.workbench:add-top-pane (find-workbench-pane) (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))))
 
 (defun create-interactor ()
   (clim:make-clim-stream-pane :type 'maxima-interactor-pane
@@ -645,6 +648,10 @@ terminated by ;.")
 (clim:define-command (cmd-show-maxima-manual :name "Maxima Documentation" :menu t :command-table maxima-commands)
     ()
   (maxima-client.doc-new:open-documentation-frame `(:file ,(pathname-name maxima-client.doc-new:*maxima-toplevel-filename*))))
+
+(clim:define-command (cmd-show-watcher :name "Show Watcher" :menu t :command-table maxima-commands)
+    ()
+  (maxima-client.workbench:add-right-pane (find-workbench-pane) (make-watcher-pane)))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands

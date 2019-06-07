@@ -104,7 +104,8 @@
   (:use :cl)
   (:export #:make-workbench
            #:workbench-commands
-           #:add-top-pane))
+           #:add-top-pane
+           #:add-right-pane))
 
 (defpackage :maxima-client.notes
   (:use :cl :maxima-client.common)
