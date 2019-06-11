@@ -58,7 +58,8 @@
            #:xdimension-bind
            #:dimension-bind-new
            #:print-unreadable-safely
-           #:eval-maxima-expression-to-float))
+           #:eval-maxima-expression-to-float
+           #:find-subpane-named))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
@@ -105,7 +106,10 @@
   (:export #:make-workbench
            #:workbench-commands
            #:add-top-pane
-           #:add-right-pane))
+           #:add-right-pane
+           #:pane-visible-p
+           #:show-top-pane
+           #:show-right-pane))
 
 (defpackage :maxima-client.notes
   (:use :cl :maxima-client.common)

@@ -398,3 +398,12 @@
 
 (defun find-interactor-pane ()
   (clim:find-pane-named clim:*application-frame* 'maxima-client::maxima-interactor))
+
+(defun find-subpane-named (pane name)
+  (if (eq (clim:pane-name pane) name)
+      pane
+      (clim:map-over-sheets (lambda (inner)
+                              (log:info "Checking: :~s: ~s" (clim:pane-name inner) inner)
+                              (when (eq (clim:pane-name inner) name)
+                                (return-from find-subpane-named inner)))
+                            (list pane))))

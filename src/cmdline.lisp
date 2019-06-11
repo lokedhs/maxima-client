@@ -5,7 +5,10 @@
 (clim:define-command-table expression-commands)
 
 (clim:define-command-table maxima-commands
-  :inherit-from (maxima-client.markup:text-commands expression-commands maxima-client.workbench:workbench-commands))
+  :inherit-from (maxima-client.markup:text-commands
+                 expression-commands
+                 maxima-client.workbench:workbench-commands
+                 watcher-commands))
 
 #+nil
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
@@ -52,10 +55,6 @@ terminated by ;.")
       (error "Can't find workbench pane"))
     workbench-pane))
 
-(defun show-canvas-pane ()
-  (unless (find-canvas-pane :error-p nil)
-    (maxima-client.workbench:add-top-pane (find-workbench-pane) (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))))
-
 (defun create-interactor ()
   (clim:make-clim-stream-pane :type 'maxima-interactor-pane
                               :name 'maxima-interactor
@@ -66,10 +65,14 @@ terminated by ;.")
                                               :right (:relative 2))))
 
 (clim:define-application-frame maxima-main-frame ()
-  ((history     :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
-                :reader maxima-main-frame/history)
-   (history-pos :initform 0
-                :accessor maxima-main-frame/history-pos))
+  ((history      :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
+                 :reader maxima-main-frame/history)
+   (history-pos  :initform 0
+                 :accessor maxima-main-frame/history-pos)
+   (canvas-pane  :initform nil
+                 :accessor maxima-main-frame/canvas-pane)
+   (watcher-pane :initform nil
+                 :accessor maxima-main-frame/watcher-pane))
   (:panes (workbench-pane (maxima-client.workbench:make-workbench (create-interactor)))
           #+nil(canvas (maxima-client.canvas:make-canvas-pane 'canvas-app-pane))
           #+nil(bottom-adjuster (clim:make-pane 'clime:box-adjuster-gadget))
@@ -81,13 +84,56 @@ terminated by ;.")
                        workbench-pane
                        doc))))
 
-(defun find-canvas-pane (&key (error-p t))
+(defun init-canvas-pane ()
+  (let ((frame clim:*application-frame*))
+    (unless (maxima-main-frame/canvas-pane frame)
+      (let ((w (find-workbench-pane)))
+        (multiple-value-bind (outer inner)
+            (maxima-client.canvas:make-canvas-pane 'canvas-pane)
+          (setf (maxima-main-frame/canvas-pane frame) inner)
+          (maxima-client.workbench:add-top-pane w outer inner))))))
+
+(defun init-watcher-pane ()
+  (let ((frame clim:*application-frame*))
+    (unless (maxima-main-frame/watcher-pane frame)
+      (let ((w (find-workbench-pane)))
+        (multiple-value-bind (outer inner)
+            (make-watcher-pane)
+          (setf (maxima-main-frame/watcher-pane frame) inner)
+          (maxima-client.workbench:add-right-pane w outer inner))))))
+
+(defmethod clim:note-frame-enabled (fm (frame maxima-main-frame))
+  (let ((w (find-workbench-pane)))
+    ;;
+    (multiple-value-bind (outer inner)
+        (maxima-client.canvas:make-canvas-pane 'canvas-pane)
+      (setf (maxima-main-frame/canvas-pane w) inner)
+      (maxima-client.workbench:add-top-pane w outer inner))
+    ;;
+    (multiple-value-bind (outer inner)
+        (make-watcher-pane)
+      (setf (maxima-main-frame/watcher-pane w) inner)
+      (maxima-client.workbench:add-right-pane w outer inner))))
+
+(defun find-pane-in-application-frame (name error-p)
   (unless clim:*application-frame*
     (maxima::merror "No active Climaxima frame"))
-  (let ((pane (clim:find-pane-named clim:*application-frame* 'canvas-app-pane)))
+  (let ((pane (clim:find-pane-named clim:*application-frame* name)))
     (when (and error-p (null pane))
-      (maxima::merror "Frame does not contain an acive canvas"))
+      (maxima::merror "Frame does not contain requested pane"))
     pane))
+
+(defun find-canvas-pane (&key (error-p t))
+  (find-pane-in-application-frame 'canvas-app-pane error-p))
+
+(defun find-or-create-watcher-pane ()
+  (let ((watcher-pane (maxima-main-frame/watcher-pane clim:*application-frame*)))
+    (or watcher-pane
+        (multiple-value-bind (root inner)
+            (make-watcher-pane)
+          (maxima-client.workbench:add-right-pane (find-workbench-pane) root nil)
+          (setf (maxima-main-frame/watcher-pane clim:*application-frame*) inner)
+          inner))))
 
 (defun display-cmdline-content (frame stream)
   (declare (ignore frame))
@@ -132,7 +178,7 @@ terminated by ;.")
   (let* ((name (format-sym-name (labelled-expression/tag obj))))
     (clim:formatting-table (stream)
       (clim:formatting-row (stream)
-        (clim:formatting-cell (stream :align-y :center :min-width 75)
+        (clim:formatting-cell (stream :align-y :center :min-width (* maxima::$font_size 5))
           (clim:with-text-style (stream (clim:make-text-style :sans-serif :roman :normal))
             (format stream "(~a)" name)))
         (clim:formatting-cell (stream :align-y :center)
@@ -461,9 +507,15 @@ terminated by ;.")
            (maxima::*mread-prompt* ""))
        (declare (ignore mprompt))
        ;; Before reading a new expression, update the canvas if it's active
-       (alexandria:when-let ((canvas (find-canvas-pane :error-p nil)))
-         (setf (clim:pane-needs-redisplay canvas) t)
-         (clim:redisplay-frame-pane (clim:pane-frame canvas) canvas))
+       (let ((canvas-pane (maxima-main-frame/canvas-pane clim:*application-frame*)))
+         (when (and canvas-pane (maxima-client.workbench:pane-visible-p (find-workbench-pane) canvas-pane))
+           (setf (clim:pane-needs-redisplay canvas-pane) t)
+           (clim:redisplay-frame-pane (clim:pane-frame canvas-pane) canvas-pane)))
+       ;; Also repaint the watchers if needed
+       (let ((watcher-pane (maxima-main-frame/watcher-pane clim:*application-frame*)))
+         (when (and watcher-pane (maxima-client.workbench:pane-visible-p (find-workbench-pane) watcher-pane))
+           (setf (clim:pane-needs-redisplay watcher-pane) t)
+           (clim:redisplay-frame-pane (clim:pane-frame watcher-pane) watcher-pane)))
        ;; Read the maxima command
        (multiple-value-bind (object type)
            (let ((clim:*command-dispatchers* '(#\:)))
@@ -547,8 +599,11 @@ terminated by ;.")
     (maxima::initialize-runtime-globals))
   (setq *debugger-hook* nil)
   ;; Set up default plot options
-  ;(setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
+  ;;(setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
   ;;
+  (let ((s (getf climi::+font-sizes+ :normal)))
+    (setq maxima::$font_size s)
+    (setq *font-size* s))
   (let ((frame (clim:make-application-frame 'maxima-main-frame
                                             :width 900
                                             :height 600)))
@@ -576,9 +631,21 @@ terminated by ;.")
     ()
   (clim-listener:run-listener :package "MAXIMA" :new-process t))
 
-(clim:define-command (show-canvas-command :name "Show Canvas" :menu t :command-table maxima-commands)
+(clim:define-command (cmd-show-canvas :name "Show Canvas" :menu t :command-table maxima-commands)
     ()
-  (show-canvas-pane))
+  (init-canvas-pane)
+  (maxima-client.workbench:show-top-pane (find-workbench-pane) t))
+
+(clim:define-command (cmd-hide-canvas :name "Hide Canvas" :menu t :command-table maxima-commands)
+    ()
+  (maxima-client.workbench:show-top-pane (find-workbench-pane) nil))
+
+(clim:define-command (cmd-toggle-canvas :name "Toggle Canvas" :menu t :command-table maxima-commands)
+    ()
+  (init-canvas-pane)
+  (if (maxima-client.workbench:pane-visible-p (find-workbench-pane) (maxima-main-frame/canvas-pane clim:*application-frame*))
+      (cmd-hide-canvas)
+      (cmd-show-canvas)))
 
 (clim:define-command (maxima-eval :name "Eval expression" :menu t :command-table maxima-commands)
     ((cmd 'maxima-native-expr :prompt "expression"))
@@ -651,7 +718,19 @@ terminated by ;.")
 
 (clim:define-command (cmd-show-watcher :name "Show Watcher" :menu t :command-table maxima-commands)
     ()
-  (maxima-client.workbench:add-right-pane (find-workbench-pane) (make-watcher-pane)))
+  (init-watcher-pane)
+  (maxima-client.workbench:show-right-pane (find-workbench-pane) t))
+
+(clim:define-command (cmd-hide-watcher :name "Hide Watcher" :menu t :command-table maxima-commands)
+    ()
+  (maxima-client.workbench:show-right-pane (find-workbench-pane) nil))
+
+(clim:define-command (cmd-toggle-watcher :name "Toggle Watcher" :menu t :command-table maxima-commands)
+    ()
+  (init-watcher-pane)
+  (if (maxima-client.workbench:pane-visible-p (find-workbench-pane) (maxima-main-frame/watcher-pane clim:*application-frame*))
+      (cmd-hide-watcher)
+      (cmd-show-watcher)))
 
 (clim:define-presentation-to-command-translator select-maxima-expression-maxima-command
     (maxima-native-expr copy-expression-as-maxima-command expression-commands
@@ -696,6 +775,7 @@ terminated by ;.")
                                  ("Plot" :menu maxima-plot-command-table)
                                  ("Lisp" :menu maxima-lisp-command-table)
                                  ("Display" :menu maxima-interaction-command-table)
+                                 ("Watcher" :menu maxima-watcher-command-table)
                                  ("Help" :menu maxima-help-command-table)))
 
 (clim:make-command-table 'maxima-file-command-table
@@ -729,6 +809,11 @@ terminated by ;.")
                          :errorp nil
                          :menu '(("Font size" :menu font-size-command-table)
                                  ("Submit style" :menu submit-options-command-table)))
+
+(clim:make-command-table 'maxima-watcher-command-table
+                         :errorp nil
+                         :menu '(("Toggle Watcher" :command cmd-toggle-watcher)
+                                 ("Watch Variable" :command cmd-watch-variable)))
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil

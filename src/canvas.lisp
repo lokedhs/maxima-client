@@ -104,10 +104,10 @@
     (when (and (realp x) (realp y))
       (clim:draw-circle* pane x y (max size 1) :filled filled :ink (convert-maxima-colour colour)))))
 
-(defclass canvas-pane (clim:application-pane)
+(defclass canvas-pane (clim:clim-stream-pane)
   ((content :initarg :content
-                     :reader canvas-pane/content
-                     :documentation "A maxima variable holding the canvas data")))
+            :reader canvas-pane/content
+            :documentation "A maxima variable holding the canvas data")))
 
 (defun canvas-button-callback (name fn)
   (lambda (button)
@@ -127,17 +127,22 @@
       (clim:redisplay-frame-pane (clim:pane-frame pane) pane))))
 
 (defun make-canvas-pane (name)
-  (clim:vertically ()
-    (:fill (clim:make-clim-stream-pane :type 'canvas-pane
-                                       :content 'maxima::$canvas
-                                       :name name
-                                       :default-view +canvas-view+
-                                       :display-function 'repaint-canvas
-                                       :incremental-redisplay nil
-                                       :display-time t))
-    (clim:horizontally ()
-      (clim:make-pane 'clim:push-button :label "Reset")
-      (clim:make-pane 'clim:push-button :label "Forward" :activate-callback (canvas-button-callback name #'canvas-step)))))
+  (multiple-value-bind (outer inner)
+      (clim:make-clim-stream-pane :type 'canvas-pane
+                                  :content 'maxima::$canvas
+                                  :name name
+                                  :default-view +canvas-view+
+                                  :display-function 'repaint-canvas
+                                  :incremental-redisplay nil
+                                  :display-time t
+                                  :borders t)
+    (values (clim:vertically ()
+              (:fill outer)
+              (clim:horizontally ()
+                (clim:make-pane 'clim:push-button :label "Reset")
+                (clim:make-pane 'clim:push-button :label "Forward"
+                                                  :activate-callback (canvas-button-callback name #'canvas-step))))
+            inner)))
 
 (defun maxima-array-p (ary)
   (or (maxima::mget ary 'maxima::hashar)
