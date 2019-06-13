@@ -303,6 +303,15 @@ terminated by ;.")
     (or (alexandria:ends-with-subseq ";" trimmed)
         (alexandria:ends-with-subseq "$" trimmed))))
 
+(defmacro logexec (name &body body)
+  (alexandria:with-gensyms (result)
+    `(progn
+       (log:info ,(format nil "ENTER: ~a" name))
+       (let ((,result :nonlocal-exit))
+         (unwind-protect
+              (setq ,result (progn ,@body))
+           (log:info ,(format nil "LEAVE: ~a (result: ~~s)" name) ,result))))))
+
 (clim:define-presentation-method clim:accept ((type maxima-input-expression)
                                               (stream drei:drei-input-editing-mixin)
                                               (view clim:textual-view)
@@ -591,6 +600,21 @@ terminated by ;.")
     (incf maxima::$linenum))
   (format stream "~a " (maxima::main-prompt)))
 
+
+(defun compute-font-dpi ()
+  (let* ((display (clim-clx:clx-port-display (clim:find-port)))
+         (db (xlib:root-resources (xlib:display-default-screen display)))
+         (res (xlib:get-resource db :|dpi| :|Dpi| '(:xft) '(:|Xft|)))
+         (default-sizes '(:normal 14 :tiny 8 :very-small 10 :small 12 :large 18 :very-large 20 :huge 24)))
+    (when res
+      (alexandria:when-let ((font-size (parse-integer res :junk-allowed t)))
+        (let* ((default-dpi 96)
+               (font-scale (/ font-size default-dpi)))
+          (setq climi::+font-sizes+
+                (loop
+                  for (type size) on default-sizes by #'cddr
+                  append (list type (* size 1.5)))))))))
+
 (defun maxima-client ()
   (let ((fonts-location (or *font-directory*
                             (merge-pathnames #p"fonts/tex/" (asdf:component-pathname (asdf:find-system :maxima-client))))))
@@ -600,6 +624,8 @@ terminated by ;.")
   (setq *debugger-hook* nil)
   ;; Set up default plot options
   ;;(setf (getf maxima::*plot-options* :plot_format) 'maxima::$clim)
+  ;;
+  (compute-font-dpi)
   ;;
   (let ((s (getf climi::+font-sizes+ :normal)))
     (setq maxima::$font_size s)
@@ -754,12 +780,12 @@ terminated by ;.")
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (let ((pane (find-interactor-pane)))
-    (clim-extensions:copy-to-clipboard (clim:port pane) pane (maxima-native-expr/src expr))))
+    (clim-extensions:publish-selection pane :clipboard (maxima-native-expr/src expr) 'string)))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
     ((expr maxima-native-expr :prompt "Expression"))
   (let ((pane (find-interactor-pane)))
-    (clim-extensions:copy-to-clipboard (clim:port pane) pane (maxima-expr-to-latex (maxima-native-expr/expr expr)))))
+    (clim-extensions:publish-selection pane :clipboard (maxima-expr-to-latex (maxima-native-expr/expr expr)) 'string)))
 
 #+nil
 (clim:define-command (copy-maxima-expr-to-notes-command :name "Copy expression to notes" :menu t :command-table maxima-commands)
