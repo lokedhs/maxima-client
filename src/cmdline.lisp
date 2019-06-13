@@ -613,7 +613,7 @@ terminated by ;.")
           (setq climi::+font-sizes+
                 (loop
                   for (type size) on default-sizes by #'cddr
-                  append (list type (* size 1.5)))))))))
+                  append (list type (* size font-scale)))))))))
 
 (defun maxima-client ()
   (let ((fonts-location (or *font-directory*
@@ -767,6 +767,13 @@ terminated by ;.")
 (clim:define-presentation-to-command-translator select-maxima-expression-latex
     (maxima-native-expr copy-expression-as-latex expression-commands
                         :echo nil :documentation "Copy expression as LaTeX")
+    (obj)
+  (list obj))
+
+(clim:define-presentation-to-command-translator select-symbol-to-watcher
+    (maxima-native-symbol cmd-watch-variable expression-commands
+                          :echo nil
+                          :documentation "Watch Variable")
     (obj)
   (list obj))
 

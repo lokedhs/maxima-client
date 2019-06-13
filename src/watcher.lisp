@@ -28,26 +28,28 @@
     (loop
       for var in (watcher-pane/vars stream)
       for highlight = t then (not highlight)
-      when (boundp var)
-        do (let ((symbol-expr (make-instance 'maxima-native-expr :expr var))
-                 (value-expr (make-instance 'maxima-native-expr :expr (symbol-value var)))
-                 (highlight-colour (clim:make-rgb-color 0.9 0.9 0.9)))
-             (labels ((render-row ()
-                        (clim:formatting-row (stream)
-                          (clim:formatting-cell (stream :align-y :center)
-                            (render-maxima-native-expr-toplevel stream symbol-expr))
-                          (clim:formatting-cell (stream :align-y :center)
-                            (format stream " "))
-                          (clim:formatting-cell (stream :align-y :center)
-                            (render-maxima-native-expr-toplevel stream value-expr))
-                          (clim:formatting-cell (stream)
-                            (format stream " ")))))
-               (if highlight
-                   (clim:surrounding-output-with-border (stream :background highlight-colour
-                                                                :line-thickness 0
-                                                                :ink clim:+transparent-ink+)
-                     (render-row))
-                   (render-row)))))))
+      do (let ((symbol-expr (make-instance 'maxima-native-expr :expr var))
+               (highlight-colour (clim:make-rgb-color 0.9 0.9 0.9)))
+           (labels ((render-row ()
+                      (clim:formatting-row (stream)
+                        (clim:formatting-cell (stream :align-y :center)
+                          (render-maxima-native-expr-toplevel stream symbol-expr))
+                        (clim:formatting-cell (stream :align-y :center)
+                          (format stream " "))
+                        (clim:formatting-cell (stream :align-y :center)
+                          (if (boundp var)
+                              (let ((value-expr (make-instance 'maxima-native-expr :expr (symbol-value var))))
+                                (render-maxima-native-expr-toplevel stream value-expr))
+                              ;; ELSE: Not bound, render a "not assigned" message
+                              (format stream "Not assigned")))
+                        (clim:formatting-cell (stream)
+                          (format stream " ")))))
+             (if highlight
+                 (clim:surrounding-output-with-border (stream :background highlight-colour
+                                                              :line-thickness 0
+                                                              :ink clim:+transparent-ink+)
+                   (render-row))
+                 (render-row)))))))
 
 (defun make-watcher-pane ()
   (clim:make-clim-stream-pane :type 'watcher-pane
@@ -64,3 +66,7 @@
     ((varname maxima-native-symbol :prompt "Variable"))
   (let ((watcher-pane (find-or-create-watcher-pane)))
     (pushnew varname (watcher-pane/vars watcher-pane))))
+
+(defun symbol-in-watcher-p (symbol)
+  (let ((watcher-pane (find-or-create-watcher-pane)))
+    (member symbol (watcher-pane/vars watcher-pane))))
