@@ -15,7 +15,6 @@
   :components ((:module src
                         :serial t
                         :components ((:file "package")
-                                     #+nil(:file "clipboard")
                                      (:file "workbench")
                                      (:file "util")
                                      (:file "renderer-util")
