@@ -1,8 +1,8 @@
 @node Main
 
-@section Introduction to maxima-client
+@section Introduction to Climaxima
 
-This is the documentation for the CLIM-based frontend to Maxima.
+This is the documentation for Climaxima, a CLIM-based frontend to Maxima.
 
 More information about Maxima can be found here:
 @url{http://maxima.sourceforge.net/}.
@@ -20,11 +20,6 @@ missing. These are the most important ones:
 
 @itemize @bullet
 @item
-Copy&paste does not work. This is because McCLIM currently does
-not implement it completely. Once McCLIM has a new implementation of
-copy&paste, this application will be able to take advantage of it.
-
-@item
 The documentation isn't always rendered correctly. This is because it
 doesn't use the native Texinfo implementation, but rather reimplements a
 more limited version of Texinfo that is able to render the Maxima
@@ -33,6 +28,10 @@ incorrect rendering in some places.
 
 @item
 There needs to be a way to save a session and load it back later.
+
+@item
+Using multiple commands on a single line doesn't work. For example, the
+command @code{a:10;b:20} will ignore the assignment to @code{b}.
 @end itemize
 
 @subsection Input
@@ -53,6 +52,11 @@ character typed)}
 
 @item @key{TAB} complete the currently typed word
 @end itemize
+
+Text can be copied using the regular Emacs keys (@key{Control-w},
+@key{Control-y}, etc) or by right-clicking on an expression and
+selecting @b{Copy expression as text} (copy the Maxima commands) or
+@b{Copy expression as LaTeX} (copy a LaTeX version of the selection).
 
 @subsection Commands
 

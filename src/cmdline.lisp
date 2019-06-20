@@ -555,6 +555,19 @@ terminated by ;.")
 (defun handle-lisp-error (stream condition)
   (format stream "Maxima encountered a Lisp error:~%~a~%" condition))
 
+(defmacro maybe-catch-errors (handler-form &body body)
+  (alexandria:with-gensyms (fn condition)
+    `(flet ((,fn () ,@body))
+       (if *catch-errors*
+           (handler-bind ,@(loop
+                             for (error-sym condition-sym error-form) in handler-form
+                             collect `((,error-sym (lambda (,condition)
+                                                     (let ((,condition-sym ,condition))
+                                                       (declare (ignorable ,condition-sym))
+                                                       ,error-form)))))
+             (,fn))
+           (,fn)))))
+
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
   (let ((eval-ret (catch 'maxima::macsyma-quit
                     (catch 'eval-expr-error
@@ -564,10 +577,8 @@ terminated by ;.")
                              (*debug-io* maxima-stream)
                              (*standard-input* maxima-stream)
                              (*use-clim-retrieve* t))
-                        (handler-bind ((error (lambda (condition)
-                                                (when *catch-errors*
-                                                  (throw 'eval-expr-error (list :lisp-error condition))))))
-                          (with-maxima-package
+                        (with-maxima-package
+                          (maybe-catch-errors ((error condition (throw 'eval-expr-error (list :lisp-error condition))))
                             (maxima::continue :stream maxima-stream :one-shot t))))))))
     (cond ((eq eval-ret 'maxima::maxima-error)
            #+nil(present-to-stream (make-instance 'maxima-error
@@ -850,6 +861,6 @@ terminated by ;.")
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil
-                         :menu '(("Maxima-Client Introduction" :command (show-documentation-frame-command))
+                         :menu '(("Introduction" :command (show-documentation-frame-command))
                                  ("Maxima Documentation" :command (cmd-show-maxima-manual))
                                  ("Symbol Help" :command info-command)))
