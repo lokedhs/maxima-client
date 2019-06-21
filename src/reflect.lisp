@@ -1,12 +1,20 @@
 (in-package :maxima-client)
 
-(defun arglist-from-function (name)
+(defun retrieve-arglist-from-function (name)
+  (let ((arglist (get name 'maxima::arg-list)))
+    (when arglist
+      (return-from retrieve-arglist-from-function arglist)))
   (let ((arg-list (trivial-arguments:arglist name)))
     ;; In some cases, TRIVIAL-ARGUMENTS:ARGLIST returns an improper
     ;; list. I suspect this is a problem with trivial-arguments. Until
     ;; it has been investigated, we'll just skip that case.
-    (unless (listp (cdr (last arg-list)))
-      (return-from arglist-from-function nil))
+    (unless (alexandria:proper-list-p arg-list)
+      (log:warn "Improper list returned from TRIVIAL-ARGUMENTS:ARGLIST")
+      (return-from retrieve-arglist-from-function nil))
+    arg-list))
+
+(defun format-arglist-from-function (name)
+  (let ((arg-list (retrieve-arglist-from-function name)))
     (with-output-to-string (out)
       (format out "(")
       (when (listp arg-list)
@@ -49,7 +57,7 @@
               finally (collect-optional)))))
       (format out ")"))))
 
-(defun arglist-from-maxima-function (name)
+(defun format-arglist-from-maxima-function (name)
   (labels ((format-list-entry (v)
              (etypecase v
                (symbol (format-sym-name v :any-sym t))
@@ -72,6 +80,6 @@
 (defun function-signature (name)
   (check-type name symbol)
   (if (fboundp name)
-      (arglist-from-function name)
+      (format-arglist-from-function name)
       ;; ELSE: Possibly a Maxima function?
-      (arglist-from-maxima-function name)))
+      (format-arglist-from-maxima-function name)))
