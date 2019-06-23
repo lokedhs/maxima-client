@@ -77,9 +77,26 @@
             (t
              "variable")))))
 
+(defun resolve-name-alias (name)
+  "Return the proper name for a Maxima function."
+  (let ((prev nil))
+    (loop
+      with curr = name
+      for v = (get curr 'maxima::alias)
+      while v
+      when (member v prev)
+        do (progn
+             (log:warn "Circular alias structure")
+             (return name))
+      do (progn
+           (push curr prev)
+           (setq curr v))
+      finally (return curr))))
+
 (defun function-signature (name)
   (check-type name symbol)
-  (if (fboundp name)
-      (format-arglist-from-function name)
-      ;; ELSE: Possibly a Maxima function?
-      (format-arglist-from-maxima-function name)))
+  (let ((resolved (resolve-name-alias name)))
+    (if (fboundp resolved)
+        (format-arglist-from-function resolved)
+        ;; ELSE: Possibly a Maxima function?
+        (format-arglist-from-maxima-function resolved))))
