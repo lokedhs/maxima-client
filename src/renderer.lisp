@@ -5,12 +5,14 @@
 (defvar *font-italic* '("MathJax_Main" "Italic"))
 (defvar *font-italic-math* '("MathJax_Math" "Italic"))
 (defvar *font-fixed* '("Source Code Pro" "Regular"))
-(defvar *font-sigma* '("MathJax_Main" "Regular"))
 (defvar *font-integrate-size1* '("MathJax_Size1" "Regular"))
+(defvar *font-integrate-size1-scale* 0.8)
 (defvar *font-integrate-size2* '("MathJax_Size2" "Regular"))
-(defvar *font-product* '("MathJax_Main" "Regular"))
+(defvar *font-integrate-size2-scale* 0.54)
 (defvar *font-paren-size3* '("MathJax_Size3" "Regular"))
+(defvar *font-paren-size3-scale* 0.40)
 (defvar *font-paren-size4* '("MathJax_Size4" "Regular"))
+(defvar *font-paren-size4-scale* 0.35)
 (defvar *draw-boxes* nil)
 
 (defvar *rop*)
@@ -661,20 +663,22 @@
 (defun find-integrate-font (size)
   (let ((adjusted-size (+ size 10)))
     (cond ((< adjusted-size 65)
-           (list *font-integrate-size1* (* adjusted-size 0.7)))
+           (list *font-integrate-size1* (* adjusted-size *font-integrate-size1-scale*)))
           (t
-           (list *font-integrate-size2* (* adjusted-size 0.4))))))
+           (list *font-integrate-size2* (* adjusted-size *font-integrate-size2-scale*))))))
 
 (defun render-sum (stream f var from to)
   (render-intsum stream f var (if from (expr-as-fn from) nil) to
-                 #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
+                 #\N-ARY_SUMMATION nil (lambda (size) (list *font-integrate-size1*
+                                                            (* (max size 40) *font-integrate-size1-scale*)))))
 
 (defun render-integrate (stream f var from to)
   (render-intsum stream f nil (if from (expr-as-fn from) nil) to #\INTEGRAL var #'find-integrate-font))
 
 (defun render-product (stream f var from to)
   (render-intsum stream f var (if from (expr-as-fn from) nil) to
-                 #\GREEK_CAPITAL_LETTER_PI nil (lambda (size) (list  *font-product* (max size 40)))))
+                 #\N-ARY_PRODUCT nil (lambda (size) (list  *font-integrate-size1*
+                                                           (* (max size 40) *font-integrate-size1-scale*)))))
 
 (defun render-mlist-one-line (stream rec-list)
   "Render an mlist on a single line."
@@ -965,11 +969,11 @@ Each element should be an output record."
   (flet ((draw (font y m)
            (loop
              for size from 12 to 80 by 4
-             for x = 10 then (+ x (* size 1.5))
+             for x = 10 then (+ x (* size 2.5))
              do (with-font (stream font (* size m))
-                  (clim:draw-text* stream "(" x y))
+                  (clim:draw-text* stream (format nil "(~c~c" #\GREEK_CAPITAL_LETTER_SIGMA #\N-ARY_SUMMATION) x y))
              do (with-font (stream *font-roman* size)
-                  (clim:draw-text* stream "A" (+ x (char-width stream)) y)))))
+                  (clim:draw-text* stream "A" (+ x (* 2 (char-width stream))) y)))))
     (draw *font-roman* 10 1)
     (draw *font-integrate-size1* 60 0.7)
     (draw *font-integrate-size2* 120 0.45)
@@ -1051,7 +1055,9 @@ Each element should be an output record."
                      (render-aligned-string "in")
                      (aligned-spacing 0.2)
                      (render-aligned () (render-maxima-expression stream list))))
-                 nil #\GREEK_CAPITAL_LETTER_SIGMA nil (lambda (size) (list *font-sigma* (max size 40)))))
+                 nil #\N-ARY_SUMMATION nil (lambda (size)
+                                             (list *font-integrate-size1*
+                                                   (* (max size 40) *font-integrate-size1-scale*)))))
 
 (defun render-bigfloat (stream value)
   (render-formatted stream "~a" (map 'string (lambda (v)
