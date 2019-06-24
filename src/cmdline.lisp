@@ -638,9 +638,13 @@ terminated by ;.")
   ;;
   (compute-font-dpi)
   ;;
-  (let ((s (getf climi::+font-sizes+ :normal)))
-    (setq maxima::$font_size s)
-    (setq *font-size* s))
+  (let ((s (getf climi::+font-sizes+ :normal))
+        (adjustment 1.16))
+    ;; The maths font is smaller than the standard font by some fixed
+    ;; ratio, so we simply adjust the default size to accommodate
+    ;; this.
+    (setq maxima::$font_size (* s adjustment))
+    (setq *font-size* (* s adjustment)))
   (let ((frame (clim:make-application-frame 'maxima-main-frame
                                             :width 900
                                             :height 600)))
