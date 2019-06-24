@@ -76,22 +76,26 @@
 
 ;;; render function
 
-(defmacro define-render-function ((name symbol stream-sym args-sym &key inhibit-presentation) &body body)
+(defmacro define-render-function ((name symbol stream-sym args-sym &key inhibit-presentation op-args) &body body)
   (check-type name symbol)
   (check-type stream-sym symbol)
   (check-type args-sym symbol)
-  (let ((symbol-list (etypecase symbol
-                       (symbol (list symbol))
-                       (list
-                        (unless (every #'symbolp symbol)
-                          (error "All elements must be symbols"))
-                        symbol))))
-    `(progn
-       (defun ,name (,stream-sym ,args-sym)
-         ,@body)
-       ,@(mapcar (lambda (v)
-                   `(setf (gethash ',v *render-functions*) (list ',name ,(if inhibit-presentation t nil))))
-                 symbol-list))))
+  (alexandria:with-gensyms (op-args-sym)
+    (let ((symbol-list (etypecase symbol
+                         (symbol (list symbol))
+                         (list
+                          (unless (every #'symbolp symbol)
+                            (error "All elements must be symbols"))
+                          symbol))))
+      `(progn
+         (defun ,name (,stream-sym ,op-args-sym ,args-sym)
+           (declare (ignorable ,op-args-sym))
+           ,(if op-args
+                `(let ((,op-args ,op-args-sym)) ,@body)
+                `(progn ,@body)))
+         ,@(mapcar (lambda (v)
+                     `(setf (gethash ',v *render-functions*) (list ',name ,(if inhibit-presentation t nil))))
+                   symbol-list)))))
 
 ;;; view definitions
 
@@ -222,11 +226,21 @@
           (clim:draw-line* stream 0 centre max-width centre))))))
 
 (defun render-quotient (stream top-expr bottom-expr)
-  (%render-quotient stream
-                    (lambda (stream)
-                      (render-maxima-expression stream top-expr))
-                    (lambda (stream)
-                      (render-maxima-expression stream bottom-expr))))
+      (%render-quotient stream
+                        (lambda (stream)
+                          (render-maxima-expression stream top-expr))
+                        (lambda (stream)
+                          (render-maxima-expression stream bottom-expr))))
+
+(define-render-function (render-mquotient maxima::mquotient stream args)
+  (destructuring-bind (top-expr bottom-expr)
+      args
+    (render-quotient stream top-expr bottom-expr)))
+
+(define-render-function (render-rat maxima::rat stream args)
+  (destructuring-bind (top-expr bottom-expr)
+      args
+    (render-quotient stream top-expr bottom-expr)))
 
 (defun render-number (stream n)
   (with-char-margins (stream)
@@ -307,34 +321,40 @@
                       (render-maxima-expression stream expr))
                     spacing))
 
-(defun render-plus (stream exprs truncated-p)
-  (with-aligned-rendering (stream)
-    (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
-      (unless first
-        (aligned-spacing 0.2))
-      (cond ((and (listp expr)
-                  (alexandria:length= (length expr) 2)
-                  (listp (car expr))
-                  (eq (caar expr) 'maxima::mminus))
-             (render-aligned () (render-negation stream (second expr))))
-            (t
-             (unless first
-               (render-aligned-string "+")
-               (aligned-spacing 0.2))
-             (render-aligned () (render-maxima-expression stream expr)))))
-    ;; If this is a truncated expression, render the ... part
-    (when truncated-p
-      (aligned-spacing 0.2)
-      (render-aligned-string "+")
-      (loop
-        repeat 3
-        do (progn
-             (aligned-spacing 0.2)
-             (render-aligned-string "."))))))
+(define-render-function (process-render-negation maxima::mminus stream args)
+  (destructuring-bind (expr)
+      args
+    (render-negation stream expr)))
 
-(defun render-times (stream exprs)
+(define-render-function (render-plus maxima::mplus stream args :op-args op-args)
+  (let ((truncated-p (member 'maxima::trunc (cdr op-args))))
+    (with-aligned-rendering (stream)
+      (iterate-exprs (expr args 'maxima::mplus :first-sym first)
+        (unless first
+          (aligned-spacing 0.2))
+        (cond ((and (listp expr)
+                    (alexandria:length= (length expr) 2)
+                    (listp (car expr))
+                    (eq (caar expr) 'maxima::mminus))
+               (render-aligned () (render-negation stream (second expr))))
+              (t
+               (unless first
+                 (render-aligned-string "+")
+                 (aligned-spacing 0.2))
+               (render-aligned () (render-maxima-expression stream expr)))))
+      ;; If this is a truncated expression, render the ... part
+      (when truncated-p
+        (aligned-spacing 0.2)
+        (render-aligned-string "+")
+        (loop
+          repeat 3
+          do (progn
+               (aligned-spacing 0.2)
+               (render-aligned-string ".")))))))
+
+(define-render-function (render-times maxima::mtimes stream args)
   (with-aligned-rendering (stream)
-    (iterate-exprs (expr exprs 'maxima::mtimes :first-sym first)
+    (iterate-exprs (expr args 'maxima::mtimes :first-sym first)
       (unless first
         (aligned-spacing 0.4))
       (render-aligned () (render-maxima-expression stream expr)))))
@@ -386,6 +406,12 @@
         (render-aligned-string "~a" displayed-sym)
         (aligned-spacing 0.2))
       (render-aligned () (render-maxima-expression stream expr)))))
+
+(define-render-function (render-mand maxima::mand stream args)
+  (render-op-list stream 'maxima::mand (format nil "~c" #\LOGICAL_AND) args))
+
+(define-render-function (render-mor maxima::mor stream args)
+  (render-op-list stream 'maxima::mor (format nil "~c" #\LOGICAL_OR) args))
 
 (defun render-plain (stream fun symbol a b &key (spacing 0.4))
   (with-aligned-rendering (stream)
@@ -667,18 +693,23 @@
           (t
            (list *font-integrate-size2* (* adjusted-size *font-integrate-size2-scale*))))))
 
-(defun render-sum (stream f var from to)
-  (render-intsum stream f var (if from (expr-as-fn from) nil) to
-                 #\N-ARY_SUMMATION nil (lambda (size) (list *font-integrate-size1*
-                                                            (* (max size 40) *font-integrate-size1-scale*)))))
+(define-render-function (render-sum (maxima::%sum maxima::$sum) stream args)
+  (destructuring-bind (f var from to)
+      args
+    (render-intsum stream f var (if from (expr-as-fn from) nil) to
+                   #\N-ARY_SUMMATION nil (lambda (size) (list *font-integrate-size1*
+                                                              (* (max size 40) *font-integrate-size1-scale*))))))
+(define-render-function (render-integrate (maxima::%integrate maxima::$integrate) stream args)
+  (destructuring-bind (f var from to)
+      args
+    (render-intsum stream f nil (if from (expr-as-fn from) nil) to #\INTEGRAL var #'find-integrate-font)))
 
-(defun render-integrate (stream f var from to)
-  (render-intsum stream f nil (if from (expr-as-fn from) nil) to #\INTEGRAL var #'find-integrate-font))
-
-(defun render-product (stream f var from to)
-  (render-intsum stream f var (if from (expr-as-fn from) nil) to
-                 #\N-ARY_PRODUCT nil (lambda (size) (list  *font-integrate-size1*
-                                                           (* (max size 40) *font-integrate-size1-scale*)))))
+(define-render-function (render-product (maxima::%product maxima::$product) stream args)
+  (destructuring-bind (f var from to)
+      args
+    (render-intsum stream f var (if from (expr-as-fn from) nil) to
+                   #\N-ARY_PRODUCT nil (lambda (size) (list  *font-integrate-size1*
+                                                             (* (max size 40) *font-integrate-size1-scale*))))))
 
 (defun render-mlist-one-line (stream rec-list)
   "Render an mlist on a single line."
@@ -774,45 +805,47 @@ Each element should be an output record."
       (aligned-spacing 0.5)
       (render-aligned () (render-maxima-expression stream definition)))))
 
-(defun render-limit (stream expr sym to direction)
-  (log:trace "rendering limit: expr=~s, sym=~s, to=~s, direction=~s" expr sym to direction)
-  (multiple-value-bind (top top-ascent top-descent)
-      (with-roman-text-style (stream)
-        (render-and-measure-string stream "lim"))
-    (declare (ignore top-ascent))
-    (let* ((bottom (clim:with-output-to-output-record (stream)
-                     (with-font-size-change (stream 0.8)
-                       (with-aligned-rendering (stream)
-                         (render-aligned () (render-maxima-expression stream sym))
-                         (aligned-spacing 0.5)
-                         (render-aligned-string "~c" #\RIGHTWARDS_ARROW)
-                         (aligned-spacing 0.5)
-                         (render-aligned () (render-maxima-expression stream to))
-                         (when direction
-                           (render-aligned-string (case direction
-                                                    (maxima::$plus "+")
-                                                    (maxima::$minus (format nil "~c" #\MINUS_SIGN))
-                                                    (t (format nil "~a" direction))))))))))
-      (dimension-bind (top :width top-width)
-        (dimension-bind (bottom :width bottom-width)
-          (let ((lim-rec (clim:with-output-to-output-record (stream)
-                           (let ((horiz-centre (/ (max top-width bottom-width) 2)))
-                             (set-rec-position top (- horiz-centre (/ top-width 2)) nil)
-                             (set-rec-position bottom (- horiz-centre (/ bottom-width 2)) top-descent))
-                           (clim:stream-add-output-record stream top)
-                           (clim:stream-add-output-record stream bottom)))
-                (rec (clim:with-output-to-output-record (stream)
-                       (render-maxima-expression stream expr))))
-            (dimension-bind (lim-rec :right lim-rec-right)
-              (clim:stream-add-output-record stream lim-rec)
-              (move-rec rec (+ lim-rec-right (/ (char-width stream) 2)) 0)
-              (clim:stream-add-output-record stream rec))))))))
+(define-render-function (render-limit (maxima::%limit maxima::$limit) stream args)
+  (destructuring-bind (expr &optional sym to direction)
+      args
+    (log:trace "rendering limit: expr=~s, sym=~s, to=~s, direction=~s" expr sym to direction)
+    (multiple-value-bind (top top-ascent top-descent)
+        (with-roman-text-style (stream)
+          (render-and-measure-string stream "lim"))
+      (declare (ignore top-ascent))
+      (let* ((bottom (clim:with-output-to-output-record (stream)
+                       (with-font-size-change (stream 0.8)
+                         (with-aligned-rendering (stream)
+                           (render-aligned () (render-maxima-expression stream sym))
+                           (aligned-spacing 0.5)
+                           (render-aligned-string "~c" #\RIGHTWARDS_ARROW)
+                           (aligned-spacing 0.5)
+                           (render-aligned () (render-maxima-expression stream to))
+                           (when direction
+                             (render-aligned-string (case direction
+                                                      (maxima::$plus "+")
+                                                      (maxima::$minus (format nil "~c" #\MINUS_SIGN))
+                                                      (t (format nil "~a" direction))))))))))
+        (dimension-bind (top :width top-width)
+          (dimension-bind (bottom :width bottom-width)
+            (let ((lim-rec (clim:with-output-to-output-record (stream)
+                             (let ((horiz-centre (/ (max top-width bottom-width) 2)))
+                               (set-rec-position top (- horiz-centre (/ top-width 2)) nil)
+                               (set-rec-position bottom (- horiz-centre (/ bottom-width 2)) top-descent))
+                             (clim:stream-add-output-record stream top)
+                             (clim:stream-add-output-record stream bottom)))
+                  (rec (clim:with-output-to-output-record (stream)
+                         (render-maxima-expression stream expr))))
+              (dimension-bind (lim-rec :right lim-rec-right)
+                (clim:stream-add-output-record stream lim-rec)
+                (move-rec rec (+ lim-rec-right (/ (char-width stream) 2)) 0)
+                (clim:stream-add-output-record stream rec)))))))))
 
-(defun render-matrix (stream rows)
+(define-render-function (render-matrix maxima::$matrix stream args)
   (let ((rec (clim:with-output-to-output-record (stream)
                (clim:formatting-table (stream :x-spacing (char-width stream) :y-spacing (char-height stream))
                  (loop
-                   for row in rows
+                   for row in args
                    do (clim:formatting-row (stream)
                         (loop
                           for col in (maxima-list-to-list row)
@@ -1237,24 +1270,14 @@ Each element should be an output record."
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (alexandria:if-let ((handler-info (gethash (caar fixed) *render-functions*)))
-               (funcall (first handler-info) stream (cdr fixed))
+               (funcall (first handler-info) stream (car fixed) (cdr fixed))
                ;; ELSE: Explicit check
                (case (caar fixed)
                  (maxima::mlist (render-mlist stream (cdr fixed)))
-                 (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
-                 (maxima::rat (render-quotient stream (second fixed) (third fixed)))
-                 (maxima::mplus (render-plus stream (cdr fixed) (member 'maxima::trunc (cdar fixed))))
-                 (maxima::mminus (render-negation stream (second fixed)))
-                 (maxima::mtimes (render-times stream (cdr fixed)))
                  (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                  (maxima::mdefine (render-mdefine stream (second fixed) (third fixed) ":="))
                  (maxima::mdefmacro (render-mdefine stream (second fixed) (third fixed) "::="))
-                 ((maxima::%sum maxima::$sum) (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-                 ((maxima::%integrate maxima::$integrate) (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-                 ((maxima::%product maxima::$product) (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                  (maxima::%sqrt (render-sqrt stream (second fixed)))
-                 ((maxima::%limit maxima::$limit) (render-limit stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-                 (maxima::$matrix (render-matrix stream (cdr fixed)))
                  (maxima::mprog (render-function stream '(maxima::$block) (cdr fixed)))
                  (maxima::msetq (render-msetq stream (second fixed) (third fixed)))
                  (maxima::mabs (render-mabs stream (second fixed)))
@@ -1262,8 +1285,6 @@ Each element should be an output record."
                  (maxima::mqapply (render-function-or-array-ref stream (member 'maxima::array (car fixed)) t (second fixed) (cddr fixed)))
                  (maxima::mnctimes (render-op-list stream 'maxima::mnctimes (format nil "~c" #\DOT_OPERATOR) (cdr fixed)))
                  (maxima::mncexpt (render-mncexcept stream (second fixed) (third fixed)))
-                 (maxima::mand (render-op-list stream 'maxima::mand (format nil "~c" #\LOGICAL_AND) (cdr fixed)))
-                 (maxima::mor (render-op-list stream 'maxima::mor (format nil "~c" #\LOGICAL_OR) (cdr fixed)))
                  (maxima::|$`| (render-units stream (second fixed) (third fixed)))
                  (maxima::mnot (render-mnot stream (second fixed)))
                  (maxima::mfactorial (render-factorial stream (second fixed)))
