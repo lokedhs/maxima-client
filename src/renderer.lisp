@@ -603,7 +603,7 @@
                          (clim:draw-text* stream (format nil "~c" symbol) 0 0)))))
           (dimension-bind (sigma :width sigma-width :height sigma-height :y sigma-y-orig)
             (let ((centre (+ (/ sigma-height 2)
-                             (/ (char-height stream) 2)
+                             (/ (m-ascent stream) 2)
                              sigma-y-orig)))
               ;; centre is the y coordinate where the baseline should be located, so we move sigma
               ;; it is a negative value indicating the number of pixels above the baseline of the sigma itself
