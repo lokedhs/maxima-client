@@ -700,7 +700,7 @@
                    #\N-ARY_SUMMATION nil (lambda (size) (list *font-integrate-size1*
                                                               (* (max size 40) *font-integrate-size1-scale*))))))
 (define-render-function (render-integrate (maxima::%integrate maxima::$integrate) stream args)
-  (destructuring-bind (f var from to)
+  (destructuring-bind (f var &optional from to)
       args
     (render-intsum stream f nil (if from (expr-as-fn from) nil) to #\INTEGRAL var #'find-integrate-font)))
 
