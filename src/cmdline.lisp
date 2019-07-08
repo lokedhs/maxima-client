@@ -64,12 +64,8 @@ terminated by ;.")
                               :text-margins '(:left (:absolute 2)
                                               :right (:relative 2))))
 
-(clim:define-application-frame maxima-main-frame ()
-  ((history      :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
-                 :reader maxima-main-frame/history)
-   (history-pos  :initform 0
-                 :accessor maxima-main-frame/history-pos)
-   (canvas-pane  :initform nil
+(clim:define-application-frame maxima-main-frame (clim:standard-application-frame history-mixin)
+  ((canvas-pane  :initform nil
                  :accessor maxima-main-frame/canvas-pane)
    (watcher-pane :initform nil
                  :accessor maxima-main-frame/watcher-pane))
@@ -499,13 +495,6 @@ terminated by ;.")
     (object)
   (log:trace "Converting to string: ~s" object)
   (format-sym-name object))
-
-(defun push-command-to-history (frame command)
-  (let ((history (maxima-main-frame/history frame)))
-   (unless (and (plusp (length history))
-                (equal (aref history (1- (length history))) command))
-     (vector-push-extend command history)
-     (setf (maxima-main-frame/history-pos frame) (length history)))))
 
 (wrap-function maxima::dbm-read (&optional (stream *standard-input*) (eof-error-p t)
 		                           (eof-value nil) repeat-if-newline)

@@ -2,6 +2,12 @@
 
 (clim:define-command-table maxima-input-editor-table :inherit-from (drei::exclusive-input-editor-table))
 
+(defclass history-mixin ()
+  ((history      :initform (make-array 10 :initial-element nil :adjustable t :fill-pointer 0)
+                 :reader history-mixin/history)
+   (history-pos  :initform 0
+                 :accessor history-mixin/history-pos)))
+
 (defun add-maxima-input-editor-command (gestures function)
   (drei::set-key `(,(lambda (numeric-argument)
                       (funcall function drei::*drei-input-editing-stream*
@@ -14,8 +20,8 @@
 
 (defun maxima-history-yank-next (stream input-buffer gesture numeric-argument)
   (declare (ignorable stream input-buffer gesture numeric-argument))
-  (with-accessors ((history maxima-main-frame/history)
-                   (history-pos maxima-main-frame/history-pos))
+  (with-accessors ((history history-mixin/history)
+                   (history-pos history-mixin/history-pos))
       clim:*application-frame*
     (when (< history-pos (length history))
       (incf history-pos)
@@ -26,8 +32,8 @@
 
 (defun maxima-history-yank-previous (stream input-buffer gesture numeric-argument)
   (declare (ignorable stream input-buffer gesture numeric-argument))
-  (with-accessors ((history maxima-main-frame/history)
-                   (history-pos maxima-main-frame/history-pos))
+  (with-accessors ((history history-mixin/history)
+                   (history-pos history-mixin/history-pos))
       clim:*application-frame*
     (when (plusp history-pos)
       (decf history-pos)
@@ -36,8 +42,8 @@
 
 (defun maxima-history-yank-this (stream input-buffer gesture numeric-argument)
   (declare (ignorable stream input-buffer gesture numeric-argument))
-  (with-accessors ((history maxima-main-frame/history)
-                   (history-pos maxima-main-frame/history-pos))
+  (with-accessors ((history history-mixin/history)
+                   (history-pos history-mixin/history-pos))
       clim:*application-frame*
     (let ((string (aref history history-pos)))
       (clim:presentation-replace-input stream string 'plain-text (clim:stream-default-view stream)))))
@@ -62,3 +68,10 @@
   (let ((drei-area (drei:drei-instance obj)))
     (setf (slot-value drei-area 'drei::%command-table)
           (make-instance 'maxima-interactor-command-table :name 'drei-dispatching-table))))
+
+(defun push-command-to-history (stream command)
+  (let ((history (history-mixin/history stream)))
+    (unless (and (plusp (length history))
+                 (equal (aref history (1- (length history))) command))
+      (vector-push-extend command history))
+    (setf (history-mixin/history-pos stream) (length history))))
