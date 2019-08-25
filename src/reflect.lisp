@@ -95,8 +95,9 @@
 
 (defun function-signature (name)
   (check-type name symbol)
-  (let ((resolved (resolve-name-alias name)))
-    (if (fboundp resolved)
-        (format-arglist-from-function resolved)
+  (let* ((resolved (resolve-name-alias name))
+         (noun-sym (or (get resolved 'maxima::noun) resolved)))
+    (if (fboundp noun-sym)
+        (format-arglist-from-function noun-sym)
         ;; ELSE: Possibly a Maxima function?
-        (format-arglist-from-maxima-function resolved))))
+        (format-arglist-from-maxima-function noun-sym))))
