@@ -751,9 +751,8 @@
             (let* ((dir (asdf:system-relative-pathname (asdf:find-system :maxima-client) #p"infoparser/"))
                    (exec-file (merge-pathnames "maxima-parser.bin" dir))
                    (exec-name (namestring exec-file)))
-              (uiop:run-program (list exec-name "--dynamic-space-size" "3000")
+              (uiop:run-program (list exec-name "--dynamic-space-size" "3000" (namestring (pathname output)))
                                 :input (pathname input)
-                                :output (pathname output)
                                 :error-output (pathname error-out))
               (close output)
               (with-open-file (s (pathname output) :external-format :utf-8)
@@ -791,12 +790,15 @@
                for v in nodes
                if (listp v)
                  collect (if (eq (car v) :demo-code)
-                             (let ((src (cdr (assoc :demo-source (cdr v))))
-                                   (input (cdr (assoc :input (cdr v))))
-                                   (example-info (cdr (assoc :example-info (cdr v)))))
+                             (let* ((src (cdr (assoc :demo-source (cdr v))))
+                                    (input (cdr (assoc :input (cdr v))))
+                                    (example-info (cdr (assoc :example-info (cdr v))))
+                                    (example-output (evaluate-demo-src src input)))
                                `(:demo-code (:demo-source . ,src)
                                             (:example-info . ,example-info)
-                                            (:demo-result . ,(evaluate-demo-src src input))))
+                                            ,@(if (eq (car example-output) :success)
+                                                  (list (cons :demo-result (second example-output)))
+                                                  nil)))
                              (parse-branch v))
                else
                  collect v)))
@@ -919,24 +921,34 @@ corresponding lisp files to the output directory."
 
 (defun resolve-example-code-external ()
   "This function is called from the standalone maxima expression evaluator."
-  (with-maxima-package
-    (maxima::initialize-runtime-globals))
-  (setq *debugger-hook* nil)
-  (let ((src-data (with-standard-io-syntax
-                    (read))))
-    (with-input-from-string (in (make-multiline-string (second src-data)))
-      (let ((*standard-input* in))
-        (let ((result (loop
-                        for v in (first src-data)
-                        collect (let ((res (evaluate-one-demo-src-line v)))
-                                  (if (cl-ppcre:scan "\\$ *$" v)
-                                      ;; If the command ended with a $, don't save the result
-                                      (cons :no-result nil)
-                                      ;; ELSE: Normal command, the result needs to be saved
-                                      (cons :result res))))))
-          (with-standard-io-syntax
-            (let ((*print-circle* t))
-              (print result))))))))
+  (let ((args (unix-opts:argv)))
+    (unless (alexandria:sequence-of-length-p args 2)
+      (error "Missing argument"))
+    (let ((result (handler-case
+                      (progn
+                        (with-maxima-package
+                          (maxima::initialize-runtime-globals))
+                        (setq *debugger-hook* nil)
+                        (let ((src-data (with-standard-io-syntax
+                                          (read))))
+                          (with-input-from-string (in (make-multiline-string (second src-data)))
+                            (let ((*standard-input* in))
+                              (let ((result (loop
+                                              for v in (first src-data)
+                                              collect (let ((res (evaluate-one-demo-src-line v)))
+                                                        (if (cl-ppcre:scan "\\$ *$" v)
+                                                            ;; If the command ended with a $, don't save the result
+                                                            (cons :no-result nil)
+                                                            ;; ELSE: Normal command, the result needs to be saved
+                                                            (cons :result res))))))
+                                (list :success result))))))
+                    (error (condition)
+                      (log:error "Error processing example code: ~a" condition)
+                      (list :error (format nil "~a" condition))))))
+      (with-open-file (s (second args) :direction :output :if-does-not-exist :create :if-exists :supersede)
+        (with-standard-io-syntax
+          (let ((*print-circle* t))
+            (print result s)))))))
 
 (defun copy-file-to-dir (file dir)
   (let ((destination-name (merge-pathnames (format nil "~a.~a" (pathname-name file) (pathname-type file)) dir)))
