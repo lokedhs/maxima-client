@@ -7,8 +7,12 @@ a bit harder than it should be.
 Precompiled binaries
 ====================
 
-The easiest way to run the application is to use the precompiled
-binary that is available from the separate project:
+Currently there are two ways to run a precompiled binary:
+
+There is a Flatpak distribuion available on Flathub:
+https://flathub.org/apps/details/com.dhsdevelopments.Climaxima
+
+An Appimage is also available here:
 https://github.com/lokedhs/docker-maxima-client/
 
 Building
