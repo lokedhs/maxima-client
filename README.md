@@ -24,7 +24,9 @@ satisfied:
   - libfreetype development headers
   - libfontconfig development headers
   - libharfbuzz development headers
-  - ghostscript
+  - mupdf. Specifically, mutool. (there is code to perform image
+    conversion using ghostscript instead, but it's not used by
+    default)
   - Maxima built from source
   - Freetype renderer enabled for McCLIM
 
