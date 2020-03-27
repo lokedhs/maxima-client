@@ -922,8 +922,9 @@ Each element should be an output record."
           (let ((args-rec (clim:with-output-to-output-record (stream)
                             (funcall args-fn stream))))
             (dimension-bind (args-rec :x args-x :y args-y :bottom args-bottom :height args-height)
-              (move-rec args-rec (- x2 args-x)
-                        (if (>= args-height (/ height 2))
+              (move-rec args-rec
+                        (- x2 args-x)
+                        (if (>= args-height (* height 3/4))
                             (- (+ y1 (/ height 2)) args-y)
                             (let ((args-centre (/ (+ args-y args-bottom) 2)))
                               (- y2 args-centre))))
