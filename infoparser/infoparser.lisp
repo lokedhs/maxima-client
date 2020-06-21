@@ -235,7 +235,7 @@
   (member name '("anchor") :test #'equal))
 
 (defun no-latex-tag-p (name)
-  (member name '("anchor" "code" "kbd") :test #'equal))
+  (member name '("anchor" "code" "kbd" "mrefdot") :test #'equal))
 
 (defun parse-paragraph-content (s start recursive-p no-recurse no-latex)
   (collectors:with-collector (coll)
