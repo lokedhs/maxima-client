@@ -10,6 +10,7 @@
                :trivial-arguments
                :lambda-fiddle
                :cl-ppcre
+               :split-sequence
                :clim-listener
                :maxima)
   :components ((:module src
