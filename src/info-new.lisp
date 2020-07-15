@@ -25,6 +25,8 @@
 
 (defparameter +info-content-panel-view+ (make-instance 'info-content-panel-view))
 
+(clim:define-presentation-type info-ref-presentation () :inherit-from t)
+
 (clim:define-presentation-method clim:accept ((type maxima-function-name) stream view &key)
   (clim:with-input-context ('maxima-client.markup:maxima-function-reference :override nil)
       (object type)
@@ -52,6 +54,10 @@
                  (maxima-client.markup:word-wrap-draw-presentation stream p))
                (maxima-client.markup:draw-current-line-and-reset stream)))))))
 
+(clim:define-presentation-method clim:present (obj (type info-ref-presentation) stream view &key)
+  (maxima-client.markup:with-link-drawing-style
+    (format stream "~a" (car obj))))
+
 (defclass info-content-panel (clim:application-pane)
   ())
 
@@ -74,13 +80,15 @@
                                        :activate-callback 'prev-button-pressed))
           (next-button (clim:make-pane 'clim:push-button-pane
                                        :label "Forward"
-                                       :activate-callback 'next-button-pressed)))
+                                       :activate-callback 'next-button-pressed))
+          (adjuster clime:box-adjuster-gadget))
   (:layouts (default (clim:vertically ()
                        (clim:horizontally ()
                          prev-button
                          next-button)
                        (4/5 (clim:scrolling ()
                               info-content))
+                       adjuster
                        (1/5 interaction-pane))))
   (:menu-bar info-menubar-command-table)
   (:command-table (documentation-frame :inherit-from (info-commands))))
@@ -107,7 +115,8 @@
                      (:function (cons 'maxima-client.markup:markup (load-function name)))
                      (:node (cons 'maxima-client.markup:markup (load-node name)))
                      (:file (cons 'maxima-client.markup:markup (load-doc-file name)))
-                     (:category (cons 'category (load-category name))))))
+                     (:category (cons 'category (load-category name)))
+                     (:ref (cons 'maxima-client.markup:markup (load-function-by-ref name))))))
       (when (and (not inhibit-history)
                  (documentation-frame/curr-command frame))
         (push (documentation-frame/curr-command frame) (documentation-frame/prev-commands frame)))
@@ -223,6 +232,20 @@
       (error 'content-load-error :type :function :name name :message "function not found"))
     entry))
 
+(defun load-function-by-ref (ref)
+  (let ((name (first ref)))
+    (destructuring-bind (type file description)
+        (second ref)
+      (declare (ignore description))
+      (let ((file-content (load-doc-file file)))
+        (let ((found (find-if (lambda (definition)
+                                (and (eq (car definition) type)
+                                     (equal (second (second definition)) name)))
+                              file-content)))
+          (unless found
+            (error "symbol found in index but not in file: ~s type: ~s" name type))
+          (list :paragraph found))))))
+
 (defun load-function (name)
   (load-index)
   (let ((entry (let* ((definition (find-index-entry-function name))
@@ -231,16 +254,7 @@
                      (find-index-entry-function (cadr v))
                      definition))))
     (with-doc-file-cache
-      (loop
-        for (type file description) in (cdr entry)
-        collect (let ((file-content (load-doc-file file)))
-                  (let ((found (find-if (lambda (definition)
-                                          (and (eq (car definition) type)
-                                               (equal (second (second definition)) (car entry))))
-                                        file-content)))
-                    (unless found
-                      (error "symbol found in index but not in file: ~s type: ~s" (car entry) type))
-                    (list :paragraph found)))))))
+      (mapcar (lambda (v) (load-function-by-ref (list (car entry) v))) (cdr entry)))))
 
 (defun load-category (name)
   (load-index)
@@ -248,6 +262,24 @@
     (unless entry
       (error 'content-load-error :type :cateogry :name name :message "category not found"))
     (list name (cdr entry))))
+
+(defun contains-keywords-p (fn-content keywords)
+  (let ((string (string-downcase (maxima-client.markup:stringify-markup fn-content))))
+    (loop
+      for word in keywords
+      unless (search (string-downcase word) string)
+        return nil
+      finally (return t))))
+
+(defun find-functions-by-keyword (keyword-list)
+  (with-doc-file-cache
+    (loop
+      for entry in *index-symbols*
+      append (loop
+               for ref in (remove-if-not #'listp (cdr entry))
+               for fn-content = (load-function-by-ref (list (car entry) ref))
+               when (contains-keywords-p fn-content keyword-list)
+                 collect entry))))
 
 (define-documentation-frame-command (cmd-add-code :name "code")
     ()
@@ -315,6 +347,10 @@
     ((name 'maxima-function-name :prompt "Name"))
   (process-doc-command-and-redisplay clim:*application-frame* :function name))
 
+(clim:define-command (cmd-open-ref :name "Open Reference" :menu nil :command-table info-commands)
+    ((ref 'info-ref-presentation :prompt "Reference"))
+  (process-doc-command-and-redisplay clim:*application-frame* :ref ref))
+
 (define-documentation-frame-command (cmd-doc-introduction :name "Intro")
     ()
   (process-doc-command-and-redisplay clim:*application-frame* :file "maxima-client"))
@@ -341,12 +377,30 @@
     (obj)
   (list obj))
 
+(clim:define-presentation-to-command-translator select-info-ref-presentation
+    (info-ref-presentation cmd-open-ref info-commands)
+    (obj)
+  (list obj))
+
 (clim:define-command (show-category-command :name "Category" :menu t :command-table info-commands)
     ((category '(or string maxima-client.markup:category-reference) :prompt "Category"))
   (let ((name (etypecase category
                 (string category)
                 (maxima-client.markup:category-reference (maxima-client.markup:named-reference/destination category)))))
     (process-doc-command-and-redisplay clim:*application-frame* :category name)))
+
+(clim:define-command (find-in-info-command :name "Find" :menu t :command-table info-commands)
+    ((keywords string :prompt "Keywords"))
+  (let* ((words (split-sequence:split-sequence #\Space keywords :remove-empty-subseqs t))
+         (fn-list (find-functions-by-keyword words))
+         (stream (find-interaction-pane)))
+    (if fn-list
+        (mapc (lambda (v)
+                (clim:present v 'info-ref-presentation :stream stream)
+                (format stream " ~a~%" "xx"))
+              fn-list)
+        ;; ELSE: No results found
+        (format stream "No results~%"))))
 
 (clim:define-presentation-to-command-translator select-category
     (maxima-client.markup:category-reference show-category-command info-commands)
@@ -372,4 +426,5 @@
                          :errorp nil
                          :menu '(("Maxima-Client Introduction" :command cmd-doc-introduction)
                                  ("Maxima Documentation" :command cmd-doc-maxima-manual)
-                                 ("Describe Function or Variable" :command cmd-open-help-function)))
+                                 ("Describe Function or Variable" :command cmd-open-help-function)
+                                 ("Search" :command find-in-info-command)))

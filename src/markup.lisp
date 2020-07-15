@@ -14,8 +14,13 @@
 
 (defgeneric text-link/description (obj))
 
+(defmacro with-link-drawing-style (&body body)
+  "Set up drawing options such that the content is drawn in the style of a link"
+  `(clim:with-drawing-options (stream :ink clim:+blue+)
+     ,@body))
+
 (clim:define-presentation-method clim:present (obj (type text-link) stream (view markup-text-view) &key)
-  (clim:with-drawing-options (stream :ink clim:+blue+)
+  (with-link-drawing-style
     (clim:draw-text* stream (text-link/description obj) 0 0)))
 
 (clim:define-presentation-method clim:present (obj (type text-link) stream (view clim:textual-view) &key)
@@ -442,6 +447,30 @@
              (:chapter nil)))
           ((listp content)
            (display-markup-list stream content)))))
+
+(defun stringify-tagged-list (stream content)
+  (let ((tag (car content)))
+    (check-type tag keyword)
+    (let ((args (cdr content)))
+      (case (car content)
+        ((:bold :italic :code :pre :verbatim :section :subsection :p :paragraph :var)
+         (mapc (lambda (element)
+                 (stringify-markup-int stream element))
+               args))
+        ((:deffn)
+         (let ((declaration (first args))
+               (body (second args)))
+           (format stream " ~a " (second declaration))
+           (stringify-markup-int stream body)))))))
+
+(defun stringify-markup-int (stream content)
+  (etypecase content
+    (string (write-string content stream))
+    (list (stringify-tagged-list stream content))))
+
+(defun stringify-markup (content)
+  (with-output-to-string (out)
+    (stringify-markup-int out content)))
 
 (defun display-markup-int (stream content)
   (etypecase content

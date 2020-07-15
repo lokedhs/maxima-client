@@ -95,7 +95,11 @@
            #:word-wrap-draw-presentation
            #:draw-current-line-and-reset
            #:add-vspacing
-           #:font-char-width))
+           #:font-char-width
+           #:stringify-markup
+           #:with-draw-as-link
+           #:with-link-style
+           #:with-link-drawing-style))
 
 (defpackage :maxima-client.clipboard
   (:use :cl)
