@@ -66,7 +66,6 @@
 (defmethod maxima-client.gui-tools:get-element-filter-name ((value char-popup-element))
   (char-popup-element/description value))
 
-
 (clim:define-command (select-char :name "Select character" :command-table maxima-table)
     ()
   "Display the character picker"

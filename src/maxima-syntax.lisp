@@ -108,6 +108,12 @@
                        (insert-completed-symbol point (completion-popup-element/name result)))))))))))
   nil)
 
+(clim:define-command (maxima-newline :name "Insert a newline into the commandline" :command-table maxima-table)
+    ()
+  "Insert newline into the commandline"
+  (let ((point (drei:point)))
+    (drei-buffer:insert-sequence point (string #\Newline) #+nil#(:maxima-submit))))
+
 (drei::set-key 'complete-maxima-function
                'maxima-table
                '((#\Tab)))
@@ -115,3 +121,7 @@
 (drei::set-key 'select-char
                'maxima-table
                '((#\s :meta)))
+
+(drei::set-key 'maxima-newline
+               'maxima-table
+               '((:return :shift)))

@@ -14,11 +14,6 @@
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
   '())
 
-(defvar maxima::$submit_on_return t
-  "If true, pressing return will terminate input, and shift-return is
-needed in order to add a newline. If false, a command needs to be
-terminated by ;.")
-
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
@@ -326,8 +321,7 @@ terminated by ;.")
           ;; Lisp objects and put them into the input buffer as literal
           ;; objects.
           for gesture = (labels ((insert-into-editor (object)
-                                   (drei:performing-drei-operations (drei :with-undo t
-                                                                          :redisplay t)
+                                   (drei:performing-drei-operations (drei :with-undo t :redisplay t)
                                      (clim:presentation-replace-input
                                       stream object type (clim:view drei)
                                       :buffer-start (clim:stream-insertion-pointer stream)
@@ -362,13 +356,10 @@ terminated by ;.")
           ;; #\Newline characters in the input will not cause premature
           ;; activation.
           until (and (clim:activation-gesture-p gesture)
-                     (and freshly-inserted
-                          (or (and maxima::$submit_on_return
-                                   (let ((gesture-event (climi::last-gesture (clim::encapsulating-stream-stream stream))))
-                                     (and (typep gesture-event 'clim:keyboard-event)
-                                          (not (gesture-modifier-p gesture-event :shift)))))
-                              (and (not maxima::$submit_on_return)
-                                   (submit-command-p current-command)))))
+                     freshly-inserted
+                     ;; TODO: check that we don't have any unclosed parens here
+                     )
+
           ;; We only want to process the gesture if it is fresh,
           ;; because if it isn't, it has already been processed at
           ;; some point in the past.
@@ -728,16 +719,6 @@ terminated by ;.")
   (setq maxima::$font_size size)
   (format t "~%Maths font size changed to ~a~%~%" size))
 
-(clim:define-command (enable-submit-on-return-command :name "Enable submit on return" :menu t :command-table maxima-commands)
-    ()
-  (setq maxima::$submit_on_return t)
-  (format t "~%Statements are terminated by typing RETURN.~%~%"))
-
-(clim:define-command (disable-submit-on-return-command :name "Enable submit on return" :menu t :command-table maxima-commands)
-    ()
-  (setq maxima::$submit_on_return nil)
-  (format t "~%Statements must be terminated by a semicolon.~%~%"))
-
 (clim:define-command (show-documentation-frame-command :name "Show Documentation Frame" :menu t :command-table maxima-commands)
     ()
   (maxima-client.doc-new:open-documentation-frame '(:file "maxima-client")))
@@ -837,15 +818,9 @@ terminated by ;.")
                                  ("20" :command (font-size-command 20))
                                  ("24" :command (font-size-command 24))))
 
-(clim:make-command-table 'submit-options-command-table
-                         :errorp nil
-                         :menu '(("Submit on return" :command enable-submit-on-return-command)
-                                 ("Require closing symbol" :command disable-submit-on-return-command)))
-
 (clim:make-command-table 'maxima-interaction-command-table
                          :errorp nil
-                         :menu '(("Font size" :menu font-size-command-table)
-                                 ("Submit style" :menu submit-options-command-table)))
+                         :menu '(("Font size" :menu font-size-command-table)))
 
 (clim:make-command-table 'maxima-watcher-command-table
                          :errorp nil
