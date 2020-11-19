@@ -139,4 +139,5 @@
   (:use :cl :maxima-client.common)
   (:export #:canvas
            #:make-canvas-pane
-           #:canvas-pane))
+           #:canvas-pane
+           #:canvas-commands))

@@ -8,7 +8,8 @@
   :inherit-from (maxima-client.markup:text-commands
                  expression-commands
                  maxima-client.workbench:workbench-commands
-                 watcher-commands))
+                 watcher-commands
+                 maxima-client.canvas:canvas-commands))
 
 #+nil
 (defmethod clim:additional-command-tables append ((drei drei:drei-pane) (command-table maxima-table))
@@ -75,15 +76,6 @@
                        workbench-pane
                        doc))))
 
-(defun init-canvas-pane ()
-  (let ((frame clim:*application-frame*))
-    (unless (maxima-main-frame/canvas-pane frame)
-      (let ((w (find-workbench-pane)))
-        (multiple-value-bind (outer inner)
-            (maxima-client.canvas:make-canvas-pane 'canvas-pane)
-          (setf (maxima-main-frame/canvas-pane frame) inner)
-          (maxima-client.workbench:add-top-pane w outer inner))))))
-
 (defun init-watcher-pane ()
   (let ((frame clim:*application-frame*))
     (unless (maxima-main-frame/watcher-pane frame)
@@ -114,8 +106,17 @@
       (maxima::merror "Frame does not contain requested pane"))
     pane))
 
+(defun init-canvas-pane ()
+  (let ((frame clim:*application-frame*))
+    (unless (maxima-main-frame/canvas-pane frame)
+      (let ((w (find-workbench-pane)))
+        (multiple-value-bind (outer inner)
+            (maxima-client.canvas:make-canvas-pane 'canvas-pane)
+          (setf (maxima-main-frame/canvas-pane frame) inner)
+          (maxima-client.workbench:add-top-pane w outer inner))))))
+
 (defun find-canvas-pane (&key (error-p t))
-  (find-pane-in-application-frame 'canvas-app-pane error-p))
+  (find-pane-in-application-frame 'canvas-pane error-p))
 
 (defun find-or-create-watcher-pane ()
   (let ((watcher-pane (maxima-main-frame/watcher-pane clim:*application-frame*)))
@@ -606,6 +607,8 @@
                   for (type size) on default-sizes by #'cddr
                   append (list type (* size font-scale)))))))))
 
+(defvar *maxima-main-frame* nil)
+
 (defun maxima-client ()
   (let ((fonts-location (or *font-directory*
                             (merge-pathnames #p"fonts/tex/" (asdf:component-pathname (asdf:find-system :maxima-client))))))
@@ -628,6 +631,7 @@
   (let ((frame (clim:make-application-frame 'maxima-main-frame
                                             :width 900
                                             :height 600)))
+    (setq *maxima-main-frame* frame)
     (clim:run-frame-top-level frame)))
 
 (defvar *catch-errors* t)
@@ -655,7 +659,10 @@
 (clim:define-command (cmd-show-canvas :name "Show Canvas" :menu t :command-table maxima-commands)
     ()
   (init-canvas-pane)
-  (maxima-client.workbench:show-top-pane (find-workbench-pane) t))
+  (maxima-client.workbench:show-top-pane (find-workbench-pane) t)
+  (maxima-client.canvas::cmd-canvas-add-circle (string-to-native-expr "50")
+                                               (string-to-native-expr "x")
+                                               (string-to-native-expr "y")))
 
 (clim:define-command (cmd-hide-canvas :name "Hide Canvas" :menu t :command-table maxima-commands)
     ()
