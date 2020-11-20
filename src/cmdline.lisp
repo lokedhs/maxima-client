@@ -660,6 +660,7 @@
     ()
   (init-canvas-pane)
   (maxima-client.workbench:show-top-pane (find-workbench-pane) t)
+  #+nil
   (maxima-client.canvas::cmd-canvas-add-circle (string-to-native-expr "50")
                                                (string-to-native-expr "x")
                                                (string-to-native-expr "y")))
