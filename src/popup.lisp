@@ -177,7 +177,7 @@ maximum size according to FRAME)."
                         (popup-menu-clickable-element (return-from control-loop
                                                         (list :result (popup-menu-clickable-element/value object)))))
         if (characterp gesture)
-          do (cond ((or (eql gesture #\Newline)
+          do (cond ((or (eql gesture #\Return)
                         (eql gesture #\Tab))
                     (return-from control-loop
                       (list :result (popup-menu-element/value (aref entries selected-index)))))

@@ -628,9 +628,12 @@
     ;; this.
     (setq maxima::$font_size (* s adjustment))
     (setq *font-size* (* s adjustment)))
-  (let ((frame (clim:make-application-frame 'maxima-main-frame
-                                            :width 900
-                                            :height 600)))
+  (let* ((graft (clim:find-graft))
+         (w (clim:graft-width graft))
+         (h (clim:graft-height graft))
+         (frame (clim:make-application-frame 'maxima-main-frame
+                                            :width (truncate (* w 0.7))
+                                            :height (truncate (* h 0.7)))))
     (setq *maxima-main-frame* frame)
     (clim:run-frame-top-level frame)))
 
