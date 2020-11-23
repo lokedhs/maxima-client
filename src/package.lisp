@@ -59,12 +59,15 @@
            #:dimension-bind-new
            #:print-unreadable-safely
            #:eval-maxima-expression-to-float
-           #:find-subpane-named))
+           #:find-subpane-named
+           #:maxima-native-symbol))
 
 (defpackage :maxima-client
   (:use :cl :maxima-client.common)
   (:documentation "CLIM Maxima client")
-  (:export #:maxima-client))
+  (:export #:maxima-client
+           #:maxima-native-symbol
+           #:render-maxima-native-expr-toplevel))
 
 
 (defpackage :maxima-client.gui-tools
@@ -140,4 +143,5 @@
   (:export #:canvas
            #:make-canvas-pane
            #:canvas-pane
-           #:canvas-commands))
+           #:canvas-commands
+           #:maxima-native-exp))
