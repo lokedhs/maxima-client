@@ -67,7 +67,8 @@
   (:documentation "CLIM Maxima client")
   (:export #:maxima-client
            #:maxima-native-symbol
-           #:render-maxima-native-expr-toplevel))
+           #:render-maxima-native-expr-toplevel
+           #:find-pane-in-application-frame))
 
 
 (defpackage :maxima-client.gui-tools
@@ -144,4 +145,6 @@
            #:make-canvas-pane
            #:canvas-pane
            #:canvas-commands
-           #:maxima-native-exp))
+           #:maxima-native-exp
+           #:maxima-canvas-command-table
+           #:find-canvas-pane))

@@ -58,7 +58,8 @@
                               :display-function 'display-cmdline-content
                               :incremental-redisplay t
                               :text-margins '(:left (:absolute 2)
-                                              :right (:relative 2))))
+                                              :right (:relative 2))
+                              :scroll-bars :both))
 
 (clim:define-application-frame maxima-main-frame (clim:standard-application-frame history-mixin)
   ((canvas-pane  :initform nil
@@ -89,7 +90,7 @@
   (let ((w (find-workbench-pane)))
     ;;
     (multiple-value-bind (outer inner)
-        (maxima-client.canvas:make-canvas-pane 'canvas-pane)
+        (maxima-client.canvas:make-canvas-pane)
       (setf (maxima-main-frame/canvas-pane w) inner)
       (maxima-client.workbench:add-top-pane w outer inner))
     ;;
@@ -111,12 +112,9 @@
     (unless (maxima-main-frame/canvas-pane frame)
       (let ((w (find-workbench-pane)))
         (multiple-value-bind (outer inner)
-            (maxima-client.canvas:make-canvas-pane 'canvas-pane)
+            (maxima-client.canvas:make-canvas-pane)
           (setf (maxima-main-frame/canvas-pane frame) inner)
           (maxima-client.workbench:add-top-pane w outer inner))))))
-
-(defun find-canvas-pane (&key (error-p t))
-  (find-pane-in-application-frame 'canvas-pane error-p))
 
 (defun find-or-create-watcher-pane ()
   (let ((watcher-pane (maxima-main-frame/watcher-pane clim:*application-frame*)))
@@ -149,6 +147,7 @@
   (:method (presentation x y)
     nil))
 
+#+nil
 (defmethod clim-internals::frame-input-context-track-pointer ((frame maxima-main-frame)
                                                               input-context
                                                               stream
@@ -631,9 +630,10 @@
   (let* ((graft (clim:find-graft))
          (w (clim:graft-width graft))
          (h (clim:graft-height graft))
+         (size-fraction 0.8)
          (frame (clim:make-application-frame 'maxima-main-frame
-                                            :width (truncate (* w 0.7))
-                                            :height (truncate (* h 0.7)))))
+                                             :width (* w size-fraction)
+                                             :height (* h size-fraction))))
     (setq *maxima-main-frame* frame)
     (clim:run-frame-top-level frame)))
 
@@ -805,6 +805,7 @@
                                  ("Lisp" :menu maxima-lisp-command-table)
                                  ("Display" :menu maxima-interaction-command-table)
                                  ("Watcher" :menu maxima-watcher-command-table)
+                                 ("Canvas" :menu maxima-client.canvas:maxima-canvas-command-table)
                                  ("Help" :menu maxima-help-command-table)))
 
 (clim:make-command-table 'maxima-file-command-table
@@ -813,7 +814,11 @@
 
 (clim:make-command-table 'maxima-plot-command-table
                          :errorp nil
-                         :menu '(("Discrete" :command plot2d-with-range)
+                         :menu `(("Discrete" :command (plot2d-with-range
+                                                       ,clim:*unsupplied-argument-marker*
+                                                       ,clim:*unsupplied-argument-marker*
+                                                       ,clim:*unsupplied-argument-marker*
+                                                       ,clim:*unsupplied-argument-marker*))
                                  ("Parametric" :command plot2d-with-range)
                                  ("Plot example" :command plot2d-demo)))
 

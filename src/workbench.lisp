@@ -42,7 +42,8 @@
                (clim:reorder-sheets vrack-pane (list root-pane adjuster pane))))
             ((and (not show-p) (= length 3))
              (clim:sheet-disown-child vrack-pane (second children))
-             (clim:sheet-disown-child vrack-pane (third children)))))))
+             (clim:sheet-disown-child vrack-pane (third children)))))
+    (clim:redisplay-frame-panes (clim:pane-frame workbench-pane))))
 
 (defun add-right-pane (workbench-pane outer inner)
   (when (workbench-pane/right-panel workbench-pane)
