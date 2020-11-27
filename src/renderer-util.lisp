@@ -46,7 +46,7 @@
   (with-aligned-rendering (stream)
     (apply #'render-aligned-string fmt args)))
 
-(defun char-height (stream)
+(defun char-height (stream &key text-style)
   (multiple-value-bind (width height)
       (clim:text-size stream "M")
     (declare (ignore width))

@@ -68,7 +68,8 @@
   (:export #:maxima-client
            #:maxima-native-symbol
            #:render-maxima-native-expr-toplevel
-           #:find-pane-in-application-frame))
+           #:find-pane-in-application-frame
+           #:char-height))
 
 
 (defpackage :maxima-client.gui-tools

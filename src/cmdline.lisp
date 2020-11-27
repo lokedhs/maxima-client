@@ -631,9 +631,10 @@
          (w (clim:graft-width graft))
          (h (clim:graft-height graft))
          (size-fraction 0.8)
+         (new-height (* (min w h) size-fraction))
          (frame (clim:make-application-frame 'maxima-main-frame
-                                             :width (* w size-fraction)
-                                             :height (* h size-fraction))))
+                                             :width (min (* new-height 1.4) w)
+                                             :height new-height)))
     (setq *maxima-main-frame* frame)
     (clim:run-frame-top-level frame)))
 

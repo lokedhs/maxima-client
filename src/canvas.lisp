@@ -58,29 +58,38 @@
 
 (defun eval-param (pane expr)
   (check-type pane canvas-pane)
-  (let ((wrapped (alexandria:if-let ((params (canvas-pane/params pane)))
-                   `((maxima::$at)
-                     ,expr
-                     ((maxima::mlist)
-                      ,@(loop
-                          for p in params
-                          collect `((maxima::mequal) ,(param/name p) ,(param/current-value p)))))
-                   expr)))
+  (let* ((params (canvas-pane/params pane))
+         (wrapped `((maxima::$at)
+                    ,expr
+                    ((maxima::mlist)
+                     ,@(append (loop
+                                 for p in params
+                                 collect `((maxima::mequal) ,(param/name p) ,(param/current-value p)))
+                               `(((maxima::mequal) maxima::$t ,(canvas-pane/curr-time pane))
+                                 ((maxima::mequal) maxima::$dt ,(canvas-pane/step-size pane))))))))
     (maxima::meval wrapped)))
 
 (defclass canvas-pane (clim:clim-stream-pane)
-  ((objects   :initarg :objects
-              :initform nil
-              :accessor canvas-pane/objects
-              :documentation "A list of objects on the canvas")
-   (params    :initarg :params
-              :initform nil
-              :accessor canvas-pane/params
-              :documentation "A list of dependent variables")
-   (curr-time :initform 0
-              :accessor canvas-pane/curr-time)
-   (step-size :initform 0.00001
-              :accessor canvas-pane/step-size)))
+  ((objects         :initarg :objects
+                    :initform nil
+                    :accessor canvas-pane/objects
+                    :documentation "A list of objects on the canvas")
+   (params          :initarg :params
+                    :initform nil
+                    :accessor canvas-pane/params
+                    :documentation "A list of dependent variables")
+   (curr-time       :initform 0
+                    :accessor canvas-pane/curr-time)
+   (step-size       :initform 0.001
+                    :accessor canvas-pane/step-size)
+   (animation-state :initform :stopped
+                    :accessor canvas-pane/animation-state)
+   (scale           :initform 1
+                    :accessor canvas-pane/scale)
+   (x-offset        :initform 0
+                    :accessor canvas-pane/x-offset)
+   (y-offset        :initform 0
+                    :accessor canvas-pane/y-offset)))
 
 (defclass variables-list-pane (clim:clim-stream-pane)
   ())
@@ -175,6 +184,20 @@
                  :initform (alexandria:required-argument :y)
                  :reader canvas-object/y)))
 
+(defclass canvas-two-coord-mixin ()
+  ((x1 :initarg :x1
+       :initform (alexandria:required-argument :x1)
+       :reader canvas-object/x1)
+   (y1 :initarg :y1
+       :initform (alexandria:required-argument :y1)
+       :reader canvas-object/y1)
+   (x2 :initarg :x2
+       :initform (alexandria:required-argument :x2)
+       :reader canvas-object/x2)
+   (y2 :initarg :y2
+       :initform (alexandria:required-argument :y2)
+       :reader canvas-object/y2)))
+
 (defclass canvas-circle (canvas-object canvas-object-position-mixin)
   ((size :initarg :size
          :initform 5
@@ -187,13 +210,47 @@
     (when (and (realp x)
                (realp y)
                (realp size))
-      (clim:draw-circle* pane x y size :filled nil :ink clim:+black+))))
+      (clim:draw-circle* pane (scale-x pane x) (scale-y pane y) size :filled nil :ink clim:+black+))))
 
 (defmethod draw-graphic-object-info (pane (obj canvas-circle))
   (format pane "Position: ~a,~a, size: ~a"
           (canvas-object/x obj)
           (canvas-object/y obj)
           (canvas-circle/size obj)))
+
+(defun scale-x (pane x)
+  (let ((scale (canvas-pane/scale pane)))
+    (+ (* x scale) (canvas-pane/x-offset pane))))
+
+(defun scale-y (pane y)
+  (let ((scale (canvas-pane/scale pane)))
+    (+ (* (- y) scale) (canvas-pane/y-offset pane))))
+
+(defclass canvas-line (canvas-object canvas-two-coord-mixin)
+  ())
+
+(defmethod draw-canvas-object (pane (obj canvas-line))
+  (let ((x1 (eval-param pane (canvas-object/x1 obj)))
+        (y1 (eval-param pane (canvas-object/y1 obj)))
+        (x2 (eval-param pane (canvas-object/x2 obj)))
+        (y2 (eval-param pane (canvas-object/y2 obj))))
+    (when (and (realp x1)
+               (realp y1)
+               (realp x2)
+               (realp y2))
+      (clim:draw-line* pane
+                       (scale-x pane x1)
+                       (scale-y pane y1)
+                       (scale-x pane x2)
+                       (scale-y pane y2)
+                       :ink clim:+black+))))
+
+(defmethod draw-graphic-object-info (pane (obj canvas-line))
+  (format pane "(~s,~s) to (~s,~s)"
+          (canvas-object/x1 obj)
+          (canvas-object/y1 obj)
+          (canvas-object/x2 obj)
+          (canvas-object/y2 obj)))
 
 (defun parse-colour-definition (name)
   (labels ((parse-value (s)
@@ -227,15 +284,31 @@
     (string (parse-colour-definition name))
     (t clim:+black+)))
 
-(defun canvas-button-callback (name fn)
+(defun canvas-button-callback (fn)
   (lambda (button)
     (let* ((frame (clim:pane-frame button))
-           (pane (clim:find-pane-named frame name)))
+           (pane (clim:find-pane-named frame 'canvas-pane)))
       (funcall fn pane))))
 
-(defvar *animation-state* :stopped)
+(defun reset-variables (pane)
+  (setf (canvas-pane/curr-time pane) 0)
+  (loop
+    for param in (canvas-pane/params pane)
+    do (setf (param/current-value param) (param/start-value param)))
+  (redisplay-variables-list-pane))
+
+(defun update-variables (pane)
+  (let ((step-size (canvas-pane/step-size pane)))
+    (incf (canvas-pane/curr-time pane) step-size)
+    (loop
+      for param in (canvas-pane/params pane)
+      for expr = (param/expression param)
+      when expr
+        do (let ((new-value (eval-param pane expr)))
+             (setf (param/current-value param) new-value)))))
 
 (defun canvas-step (pane)
+  (update-variables pane)
   (let ((rec-list nil))
     (labels ((recurse (rec)
                (if (typep rec 'canvas-object-record)
@@ -262,36 +335,52 @@
                  (setq updated-region (clim:region-union updated-region new-rec)))))
         (clim:repaint-sheet pane updated-region)))))
 
+(defun canvas-step-one (pane)
+  (canvas-step pane)
+  (redisplay-variables-list-pane))
+
 (defun schedule-next-frame (pane)
   (clim-internals::schedule-timer-event pane 'animation-step 0.02))
 
 (defun canvas-animate (pane)
-  (ecase *animation-state*
-    (:stopped
-     (setq *animation-state* :started)
-     (schedule-next-frame pane))
-    (:started
-     (setq *animation-state* :stopping))
-    (:stopping
-     nil)))
+  (with-accessors ((animation-state canvas-pane/animation-state)) pane
+   (ecase animation-state
+     (:stopped
+      (setq animation-state :started)
+      (update-animation-button-text pane)
+      (schedule-next-frame pane))
+     (:started
+      (setq animation-state :stopping))
+     (:stopping
+      nil))))
 
 (defmethod clim:handle-event ((pane canvas-pane) (event clim:timer-event))
   (canvas-step pane)
-  (ecase *animation-state*
-    (:stopped
-     nil)
-    (:started
-     (if (clim:sheet-grafted-p pane)
-         (schedule-next-frame pane)
-         (setq *animation-state* :stopped)))
-    (:stopping
-     (setq *animation-state* :stopped))))
+  (with-accessors ((animation-state canvas-pane/animation-state)) pane
+    (ecase animation-state
+      (:stopped
+       nil)
+      (:started
+       (if (clim:sheet-grafted-p pane)
+           (schedule-next-frame pane)
+           (setq animation-state :stopped)))
+      (:stopping
+       (setq animation-state :stopped)
+       (update-animation-button-text pane)
+       (redisplay-variables-list-pane)))))
 
 (defun find-canvas-pane (&key (error-p t))
   (maxima-client:find-pane-in-application-frame 'canvas-pane error-p))
 
 (defun find-variable-list-pane (&key (error-p t))
   (maxima-client:find-pane-in-application-frame 'variables-list error-p))
+
+(defun update-animation-button-text (pane)
+  (let ((label (ecase (canvas-pane/animation-state pane)
+                 ((:started :starting) "Stop Animation")
+                 (:stopped "Start Animation"))))
+    (let ((button (clim:find-pane-named (clim:pane-frame pane) 'animate-button)))
+      (setf (clim:gadget-label button) label))))
 
 (defun make-canvas-pane ()
   (multiple-value-bind (outer inner)
@@ -306,11 +395,13 @@
               (clim:vertically ()
                 (:fill outer)
                 (clim:horizontally ()
-                  (clim:make-pane 'clim:push-button :label "Reset")
+                  (clim:make-pane 'clim:push-button :label "Reset"
+                                                    :activate-callback (canvas-button-callback #'reset-variables))
                   (clim:make-pane 'clim:push-button :label "Forward"
-                                                    :activate-callback (canvas-button-callback 'canvas-pane #'canvas-step))
-                  (clim:make-pane 'clim:push-button :label "Animate"
-                                                    :activate-callback (canvas-button-callback 'canvas-pane #'canvas-animate))))
+                                                    :activate-callback (canvas-button-callback #'canvas-step-one))
+                  (clim:make-pane 'clim:push-button :name 'animate-button
+                                                    :label "Start Animation"
+                                                    :activate-callback (canvas-button-callback #'canvas-animate))))
               (clim:make-pane 'clime:box-adjuster-gadget)
               (clim:make-clim-stream-pane :type 'variables-list-pane
                                           :name 'variables-list
@@ -321,8 +412,41 @@
                                           :borders t))
             inner)))
 
+(defun draw-grid (pane)
+  (let* ((scale (canvas-pane/scale pane))
+         (x-offset (canvas-pane/x-offset pane))
+         (y-offset (canvas-pane/y-offset pane))
+         (viewport (clim:pane-viewport-region pane))
+         (w (clim:rectangle-width viewport))
+         (h (clim:rectangle-height viewport))
+         (style (clim:make-text-style :sals-serif :normal :small))
+         (char-height (multiple-value-bind (width height) (clim:text-size pane "M" :text-style style)
+                        (declare (ignore width))
+                        height)))
+    (let ((left (/ (- x-offset) scale))
+          (right (/ (- w x-offset) scale)))
+      (maxima-client::draw-tick-marks left right 10
+                                      (lambda (pos num-decimals)
+                                        (let ((x (scale-x pane pos))
+                                              (string (maxima-client::format-with-decimals pos num-decimals)))
+                                          (clim:draw-line* pane x 0 x h :ink clim:+blue+)
+                                          (clim:draw-text* pane string (+ x 5) (- h 5)
+                                                           :text-style style)))))
+    (let ((top (/ y-offset scale))
+          (bottom (/ (- y-offset h) scale)))
+      (log:info "top=~s  bottom=~s" top bottom)
+      (when (< bottom top)
+        (rotatef top bottom))
+      (maxima-client::draw-tick-marks top bottom 10
+                                      (lambda (pos num-decimals)
+                                        (let ((y (scale-y pane pos))
+                                              (string (maxima-client::format-with-decimals pos num-decimals)))
+                                          (clim:draw-line* pane 0 y w y :ink clim:+blue+)
+                                          (clim:draw-text* pane string 5 (+ y char-height 5) :text-style style)))))))
+
 (defun repaint-canvas (frame pane)
   (declare (ignore frame))
+  (draw-grid pane)
   (loop
     for obj in (canvas-pane/objects pane)
     do (clim:with-output-as-presentation (pane obj (clim:presentation-type-of obj)
@@ -353,6 +477,20 @@
                              :x (maxima-native-expr/expr x)
                              :y (maxima-native-expr/expr y)
                              :size (maxima-native-expr/expr size))))
+    (push obj (canvas-pane/objects pane))
+    (redisplay-variables-list-pane)))
+
+(clim:define-command (cmd-canvas-add-line :name "Add Line" :menu t :command-table canvas-commands)
+    ((x1 'maxima-native-expr :prompt "Left")
+     (y1 'maxima-native-expr :prompt "Top")
+     (x2 'maxima-native-expr :prompt "Right")
+     (y2 'maxima-native-expr :prompt "Bottom"))
+  (let ((pane (find-canvas-pane))
+        (obj (make-instance 'canvas-line
+                            :x1 (maxima-native-expr/expr x1)
+                            :y1 (maxima-native-expr/expr y1)
+                            :x2 (maxima-native-expr/expr x2)
+                            :y2 (maxima-native-expr/expr y2))))
     (push obj (canvas-pane/objects pane))
     (redisplay-variables-list-pane)))
 
@@ -414,13 +552,53 @@
         (setq updated-expr (clim:accept 'maxima-native-expr
                                          :stream stream
                                          :prompt "Expression"
-                                         :default (param/expression obj)))))
+                                         :default (alexandria:if-let ((expression (param/expression obj)))
+                                                    (make-instance 'maxima-native-expr :expr expression)
+                                                    nil)))))
     (setf (param/start-value obj) updated-start-value)
     (setf (param/current-value obj) updated-current-value)
     (setf (param/expression obj) (if updated-expr (maxima-native-expr/expr updated-expr) nil))
     (redisplay-variables-list-pane)))
 
+(clim:define-command (cmd-update-step-size :name "Set step size" :menu nil :command-table canvas-commands)
+    ((step-size 'number :prompt "Step size"))
+  (cond ((< step-size 0)
+         (format t "Step size must be positive"))
+        (t
+         (let ((pane (find-canvas-pane)))
+           (setf (canvas-pane/step-size pane) step-size)
+           (redisplay-variables-list-pane)))))
+
+(clim:define-command (cmd-update-offset :name "Set offset" :menu nil :command-table canvas-commands)
+    ((x-offset 'number :prompt "X-Offset")
+     (y-offset 'number :prompt "Y-Offset"))
+  (let ((pane (find-canvas-pane)))
+    (setf (canvas-pane/x-offset pane) x-offset)
+    (setf (canvas-pane/y-offset pane) y-offset)))
+
+(clim:define-command (cmd-update-x-offset :name "Set X offset" :menu nil :command-table canvas-commands)
+    ((x-offset 'number :prompt "X-Offset"))
+  (let ((pane (find-canvas-pane)))
+    (setf (canvas-pane/x-offset pane) x-offset)))
+
+(clim:define-command (cmd-update-y-offset :name "Set Y offset" :menu nil :command-table canvas-commands)
+    ((y-offset 'number :prompt "Y-Offset"))
+  (let ((pane (find-canvas-pane)))
+    (setf (canvas-pane/y-offset pane) y-offset)))
+
+(clim:define-command (cmd-update-scale :name "Set scale" :menu nil :command-table canvas-commands)
+    ((scale 'number :prompt "Scale"))
+  (let ((pane (find-canvas-pane)))
+    (setf (canvas-pane/scale pane) scale)))
+
+(clim:make-command-table 'object-command-table
+                         :errorp nil
+                         :menu '(("Circle" :command cmd-canvas-add-circle)
+                                 ("Line" :command cmd-canvas-add-line)))
+
 (clim:make-command-table 'maxima-canvas-command-table
                          :errorp nil
                          :menu '(("Toggle canvas" :command maxima-client::cmd-toggle-canvas)
-                                 ("Add dependent variable" :command cmd-add-variable)))
+                                 ("Change step size" :command cmd-update-step-size)
+                                 ("Add dependent variable" :command cmd-add-variable)
+                                 ("Add object" :menu object-command-table)))
