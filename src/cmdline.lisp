@@ -389,7 +389,7 @@
                          (values object
                                  (if (clim:presentation-subtypep ptype 'maxima-input-expression)
                                      ptype 'maxima-input-expression-expr))))
-                   (maxima-native-error (condition)
+                   (maxima-expr-parse-error (condition)
                      (return-from control-loop
                        (values (make-instance 'maxima-input-error
                                               :command string
@@ -401,9 +401,13 @@
                                               (view clim:textual-view)
                                               &key)
   (let ((result (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil)))
-    (make-instance 'maxima-native-expr
-                   :expr (third (maxima-input-expression/expr result))
-                   :src (maxima-input-expression/src result))))
+    (etypecase result
+      (maxima-native-expr 
+       (make-instance 'maxima-native-expr
+                      :expr (third (maxima-input-expression/expr result))
+                      :src (maxima-input-expression/src result)))
+      (maxima-input-error
+       nil))))
 
 (clim:define-presentation-method clim:accept ((type maxima-lisp-package-form)
                                               stream

@@ -80,32 +80,39 @@
         (clim:transform-position (clim:sheet-delta-transformation (drei:editor-pane drei) nil) x y)
       (values px py))))
 
+(defun safe-buffer-substring (buffer start end)
+  (let ((seq (drei::buffer-sequence buffer start end)))
+    (if (every #'characterp seq)
+        (coerce seq 'string)
+        nil)))
+
 (clim:define-command (complete-maxima-function :name "Complete function" :command-table maxima-table)
     ()
   "Complete the name of the function at the curstor position."
   (let* ((point (drei:point))
          (offset (drei::offset point))
-         (string (drei-buffer:buffer-substring (drei:buffer point) 0 offset)))
-    (multiple-value-bind (match strings)
-        (cl-ppcre:scan-to-strings "([a-zA-Z_][a-zA-Z0-9_]*)$" string)
-      (when match
-        (let ((matches (find-maxima-completions (aref strings 0))))
-          (cond ((null matches)
-                 (esa:display-message "No completions"))
-                ((alexandria:sequence-of-length-p matches 1)
-                 (insert-completed-symbol point (completion-popup-element/name (car matches))))
-                (t
-                 (multiple-value-bind (editor-x editor-y)
-                     (get-screen-position-of-pane (drei:drei-instance))
-                   (let ((result (maxima-client.gui-tools:select-completion-match
-                                  (lambda (prefix)
-                                    (let ((matches (find-maxima-completions prefix)))
-                                      matches))
-                                  :x-pos editor-x
-                                  :y-pos editor-y
-                                  :initial-prefix (aref strings 0))))
-                     (when result
-                       (insert-completed-symbol point (completion-popup-element/name result)))))))))))
+         (string (safe-buffer-substring (drei:buffer point) 0 offset)))
+    (when string
+      (multiple-value-bind (match strings)
+          (cl-ppcre:scan-to-strings "([a-zA-Z_][a-zA-Z0-9_]*)$" string)
+        (when match
+          (let ((matches (find-maxima-completions (aref strings 0))))
+            (cond ((null matches)
+                   (esa:display-message "No completions"))
+                  ((alexandria:sequence-of-length-p matches 1)
+                   (insert-completed-symbol point (completion-popup-element/name (car matches))))
+                  (t
+                   (multiple-value-bind (editor-x editor-y)
+                       (get-screen-position-of-pane (drei:drei-instance))
+                     (let ((result (maxima-client.gui-tools:select-completion-match
+                                    (lambda (prefix)
+                                      (let ((matches (find-maxima-completions prefix)))
+                                        matches))
+                                    :x-pos editor-x
+                                    :y-pos editor-y
+                                    :initial-prefix (aref strings 0))))
+                       (when result
+                         (insert-completed-symbol point (completion-popup-element/name result))))))))))))
   nil)
 
 (clim:define-command (maxima-newline :name "Insert a newline into the commandline" :command-table maxima-table)

@@ -429,19 +429,25 @@
                                       (lambda (pos num-decimals)
                                         (let ((x (scale-x pane pos))
                                               (string (maxima-client::format-with-decimals pos num-decimals)))
-                                          (clim:draw-line* pane x 0 x h :ink clim:+blue+)
+                                          (apply #'clim:draw-line* pane x 0 x h
+                                                 :ink clim:+black+
+                                                 (if (zerop pos)
+                                                     nil
+                                                     '(:line-thickness 1 :line-dashes (1 4) :line-cap-shape :square)))
                                           (clim:draw-text* pane string (+ x 5) (- h 5)
                                                            :text-style style)))))
     (let ((top (/ y-offset scale))
           (bottom (/ (- y-offset h) scale)))
-      (log:info "top=~s  bottom=~s" top bottom)
       (when (< bottom top)
         (rotatef top bottom))
       (maxima-client::draw-tick-marks top bottom 10
                                       (lambda (pos num-decimals)
                                         (let ((y (scale-y pane pos))
                                               (string (maxima-client::format-with-decimals pos num-decimals)))
-                                          (clim:draw-line* pane 0 y w y :ink clim:+blue+)
+                                          (apply #'clim:draw-line* pane 0 y w y
+                                                 (if (zerop pos)
+                                                     nil
+                                                     '(:line-thickness 1 :line-dashes (1 4) :line-cap-shape :square)))
                                           (clim:draw-text* pane string 5 (+ y char-height 5) :text-style style)))))))
 
 (defun repaint-canvas (frame pane)
