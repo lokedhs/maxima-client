@@ -402,7 +402,7 @@
                                               &key)
   (let ((result (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil)))
     (etypecase result
-      (maxima-native-expr 
+      (maxima-input-expression 
        (make-instance 'maxima-native-expr
                       :expr (third (maxima-input-expression/expr result))
                       :src (maxima-input-expression/src result)))

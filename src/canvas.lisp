@@ -67,7 +67,7 @@
                                  collect `((maxima::mequal) ,(param/name p) ,(param/current-value p)))
                                `(((maxima::mequal) maxima::$t ,(canvas-pane/curr-time pane))
                                  ((maxima::mequal) maxima::$dt ,(canvas-pane/step-size pane))))))))
-    (maxima::meval wrapped)))
+    (eval-maxima-expression-to-float wrapped)))
 
 (defclass canvas-pane (clim:clim-stream-pane)
   ((objects         :initarg :objects
@@ -86,10 +86,10 @@
                     :accessor canvas-pane/animation-state)
    (scale           :initform 1
                     :accessor canvas-pane/scale)
-   (x-offset        :initform 0
-                    :accessor canvas-pane/x-offset)
-   (y-offset        :initform 0
-                    :accessor canvas-pane/y-offset)))
+   (x-centre        :initform 0
+                    :accessor canvas-pane/x-centre)
+   (y-centre        :initform 0
+                    :accessor canvas-pane/y-centre)))
 
 (defclass variables-list-pane (clim:clim-stream-pane)
   ())
@@ -103,7 +103,8 @@
 
 (defun repaint-variables-list (frame pane)
   (declare (ignore frame))
-  (let ((canvas-pane (find-canvas-pane)))
+  (let ((canvas-pane (find-canvas-pane))
+        (highlight-colour (clim:make-rgb-color 0.97 0.97 0.97)))
     (clim:with-text-style (pane (clim:make-text-style :sals-serif :bold :very-large))
       (format pane "State~%"))
     (clim:with-text-face (pane :bold)
@@ -133,23 +134,31 @@
             (format pane "Options"))))
       (loop
         for param in (canvas-pane/params canvas-pane)
+        for highlight = t then (not highlight)
         for symbol-expr = (make-instance 'maxima-native-expr :expr (param/name param))
-        do (clim:formatting-row (pane)
-             (clim:formatting-cell (pane)
-               (maxima-client:render-maxima-native-expr-toplevel pane symbol-expr))
-             (clim:formatting-cell (pane)
-               (clim:with-output-as-presentation (pane param 'param-start-value-presentation)
-                 (format pane "~f" (param/start-value param))))
-             (clim:formatting-cell (pane)
-               (alexandria:when-let ((v (param/current-value param)))
-                 (clim:with-text-size (pane :large)
-                   (format pane "~f" v))))
-             (clim:formatting-cell (pane)
-               (alexandria:when-let ((expr (param/expression param)))
-                 (maxima-client:render-maxima-native-expr-toplevel pane (make-instance 'maxima-native-expr :expr expr))))
-             (clim:formatting-cell (pane)
-               (clim:with-output-as-presentation (pane param 'param-presentation)
-                 (format pane "Edit"))))))
+        do (labels ((render-row ()
+                      (clim:formatting-row (pane)
+                        (clim:formatting-cell (pane)
+                          (maxima-client:render-maxima-native-expr-toplevel pane symbol-expr))
+                        (clim:formatting-cell (pane)
+                          (clim:with-output-as-presentation (pane param 'param-start-value-presentation)
+                            (format pane "~f" (param/start-value param))))
+                        (clim:formatting-cell (pane)
+                          (alexandria:when-let ((v (param/current-value param)))
+                            (clim:with-text-size (pane :large)
+                              (format pane "~f" v))))
+                        (clim:formatting-cell (pane)
+                          (alexandria:when-let ((expr (param/expression param)))
+                            (maxima-client:render-maxima-native-expr-toplevel pane (make-instance 'maxima-native-expr :expr expr))))
+                        (clim:formatting-cell (pane)
+                          (clim:with-output-as-presentation (pane param 'param-presentation)
+                            (format pane "Edit"))))))
+             (if highlight
+                 (clim:surrounding-output-with-border (pane :background highlight-colour
+                                                            :line-thickness 0
+                                                            :ink clim:+transparent-ink+)
+                   (render-row))
+                 (render-row)))))
     ;;
     (format pane "~%")
     (clim:with-text-style (pane (clim:make-text-style :sals-serif :bold :very-large))
@@ -220,11 +229,11 @@
 
 (defun scale-x (pane x)
   (let ((scale (canvas-pane/scale pane)))
-    (+ (* x scale) (canvas-pane/x-offset pane))))
+    (+ (* x scale) (compute-x-offset pane))))
 
 (defun scale-y (pane y)
   (let ((scale (canvas-pane/scale pane)))
-    (+ (* (- y) scale) (canvas-pane/y-offset pane))))
+    (+ (* (- y) scale) (compute-y-offset pane))))
 
 (defclass canvas-line (canvas-object canvas-two-coord-mixin)
   ())
@@ -246,6 +255,33 @@
                        :ink clim:+black+))))
 
 (defmethod draw-graphic-object-info (pane (obj canvas-line))
+  (format pane "(~s,~s) to (~s,~s)"
+          (canvas-object/x1 obj)
+          (canvas-object/y1 obj)
+          (canvas-object/x2 obj)
+          (canvas-object/y2 obj)))
+
+(defclass canvas-box (canvas-object canvas-two-coord-mixin)
+  ())
+
+(defmethod draw-canvas-object (pane (obj canvas-box))
+  (let ((x1 (eval-param pane (canvas-object/x1 obj)))
+        (y1 (eval-param pane (canvas-object/y1 obj)))
+        (x2 (eval-param pane (canvas-object/x2 obj)))
+        (y2 (eval-param pane (canvas-object/y2 obj))))
+    (when (and (realp x1)
+               (realp y1)
+               (realp x2)
+               (realp y2))
+      (clim:draw-rectangle* pane
+                       (scale-x pane x1)
+                       (scale-y pane y1)
+                       (scale-x pane x2)
+                       (scale-y pane y2)
+                       :filled nil
+                       :ink clim:+black+))))
+
+(defmethod draw-graphic-object-info (pane (obj canvas-box))
   (format pane "(~s,~s) to (~s,~s)"
           (canvas-object/x1 obj)
           (canvas-object/y1 obj)
@@ -390,7 +426,7 @@
                                   :display-function 'repaint-canvas
                                   :incremental-redisplay nil
                                   :display-time t
-                                  :borders t)
+                                  :borders nil)
     (values (clim:horizontally ()
               (clim:vertically ()
                 (:fill outer)
@@ -409,46 +445,65 @@
                                           :display-function 'repaint-variables-list
                                           :incremental-redisplay nil
                                           :display-time t
-                                          :borders t))
+                                          :borders nil
+                                          :text-margins '(:left (:absolute 2)
+                                                          :right (:relative 2))))
             inner)))
+
+(defun compute-x-offset (pane)
+  (let ((viewport (clim:pane-viewport-region pane)))
+    (+ (canvas-pane/x-centre pane) (/ (clim:rectangle-width viewport) 2))))
+
+(defun compute-y-offset (pane)
+  (let ((viewport (clim:pane-viewport-region pane)))
+    (+ (canvas-pane/y-centre pane) (/ (clim:rectangle-height viewport) 2))))
 
 (defun draw-grid (pane)
   (let* ((scale (canvas-pane/scale pane))
-         (x-offset (canvas-pane/x-offset pane))
-         (y-offset (canvas-pane/y-offset pane))
          (viewport (clim:pane-viewport-region pane))
+         (x-offset (compute-x-offset pane))
+         (y-offset (compute-y-offset pane))
          (w (clim:rectangle-width viewport))
          (h (clim:rectangle-height viewport))
          (style (clim:make-text-style :sals-serif :normal :small))
          (char-height (multiple-value-bind (width height) (clim:text-size pane "M" :text-style style)
                         (declare (ignore width))
                         height)))
-    (let ((left (/ (- x-offset) scale))
-          (right (/ (- w x-offset) scale)))
-      (maxima-client::draw-tick-marks left right 10
-                                      (lambda (pos num-decimals)
-                                        (let ((x (scale-x pane pos))
-                                              (string (maxima-client::format-with-decimals pos num-decimals)))
-                                          (apply #'clim:draw-line* pane x 0 x h
-                                                 :ink clim:+black+
-                                                 (if (zerop pos)
-                                                     nil
-                                                     '(:line-thickness 1 :line-dashes (1 4) :line-cap-shape :square)))
-                                          (clim:draw-text* pane string (+ x 5) (- h 5)
-                                                           :text-style style)))))
-    (let ((top (/ y-offset scale))
+    (let ((spacing 100)
+          (left (/ (- x-offset) scale))
+          (right (/ (- w x-offset) scale))
+          (top (/ y-offset scale))
           (bottom (/ (- y-offset h) scale)))
+      (when (< right left)
+        (rotatef left right))
       (when (< bottom top)
         (rotatef top bottom))
-      (maxima-client::draw-tick-marks top bottom 10
-                                      (lambda (pos num-decimals)
-                                        (let ((y (scale-y pane pos))
-                                              (string (maxima-client::format-with-decimals pos num-decimals)))
-                                          (apply #'clim:draw-line* pane 0 y w y
-                                                 (if (zerop pos)
-                                                     nil
-                                                     '(:line-thickness 1 :line-dashes (1 4) :line-cap-shape :square)))
-                                          (clim:draw-text* pane string 5 (+ y char-height 5) :text-style style)))))))
+      (let* ((multiplier (expt 10
+                               (round (log (/ (- right left)
+                                              (/ w spacing))
+                                           10))))
+             (decimals (max (- (log multiplier 10)) 0)))
+        (flet ((create-line-style (pos)
+                 (append `(:ink ,clim:+black+)
+                         (if (zerop pos)
+                             nil
+                             '(:line-thickness 1 :line-dashes (1 4) :line-cap-shape :square)))))
+          (let ((start (* (ceiling (/ left multiplier)) multiplier))
+                (end (* (floor (/ right multiplier)) multiplier)))
+            (loop
+              for pos from start to end by multiplier
+              do (let ((x (scale-x pane pos))
+                       (string (maxima-client::format-with-decimals pos decimals)))
+                   (apply #'clim:draw-line* pane x 0 x h (create-line-style pos))
+                   (clim:draw-text* pane string (+ x 5) (- h 5) :text-style style))))
+          (let ((start (* (ceiling (/ top multiplier)) multiplier))
+                (end (* (floor (/ bottom multiplier)) multiplier)))
+            (loop
+              for pos from start to end by multiplier
+              do (let ((y (scale-y pane pos))
+                       (string (maxima-client::format-with-decimals pos decimals)))
+                   (apply #'clim:draw-line* pane 0 y w y (create-line-style pos))
+                   (clim:draw-text* pane string 5 (+ y char-height 5) :text-style style)))))))))
 
 (defun repaint-canvas (frame pane)
   (declare (ignore frame))
@@ -493,6 +548,20 @@
      (y2 'maxima-native-expr :prompt "Bottom"))
   (let ((pane (find-canvas-pane))
         (obj (make-instance 'canvas-line
+                            :x1 (maxima-native-expr/expr x1)
+                            :y1 (maxima-native-expr/expr y1)
+                            :x2 (maxima-native-expr/expr x2)
+                            :y2 (maxima-native-expr/expr y2))))
+    (push obj (canvas-pane/objects pane))
+    (redisplay-variables-list-pane)))
+
+(clim:define-command (cmd-canvas-add-box :name "Add Box" :menu t :command-table canvas-commands)
+    ((x1 'maxima-native-expr :prompt "Left")
+     (y1 'maxima-native-expr :prompt "Top")
+     (x2 'maxima-native-expr :prompt "Right")
+     (y2 'maxima-native-expr :prompt "Bottom"))
+  (let ((pane (find-canvas-pane))
+        (obj (make-instance 'canvas-box
                             :x1 (maxima-native-expr/expr x1)
                             :y1 (maxima-native-expr/expr y1)
                             :x2 (maxima-native-expr/expr x2)
@@ -579,18 +648,18 @@
     ((x-offset 'number :prompt "X-Offset")
      (y-offset 'number :prompt "Y-Offset"))
   (let ((pane (find-canvas-pane)))
-    (setf (canvas-pane/x-offset pane) x-offset)
-    (setf (canvas-pane/y-offset pane) y-offset)))
+    (setf (canvas-pane/x-centre pane) x-offset)
+    (setf (canvas-pane/y-centre pane) y-offset)))
 
 (clim:define-command (cmd-update-x-offset :name "Set X offset" :menu nil :command-table canvas-commands)
     ((x-offset 'number :prompt "X-Offset"))
   (let ((pane (find-canvas-pane)))
-    (setf (canvas-pane/x-offset pane) x-offset)))
+    (setf (canvas-pane/x-centre pane) x-offset)))
 
 (clim:define-command (cmd-update-y-offset :name "Set Y offset" :menu nil :command-table canvas-commands)
     ((y-offset 'number :prompt "Y-Offset"))
   (let ((pane (find-canvas-pane)))
-    (setf (canvas-pane/y-offset pane) y-offset)))
+    (setf (canvas-pane/y-centre pane) y-offset)))
 
 (clim:define-command (cmd-update-scale :name "Set scale" :menu nil :command-table canvas-commands)
     ((scale 'number :prompt "Scale"))
@@ -600,7 +669,8 @@
 (clim:make-command-table 'object-command-table
                          :errorp nil
                          :menu '(("Circle" :command cmd-canvas-add-circle)
-                                 ("Line" :command cmd-canvas-add-line)))
+                                 ("Line" :command cmd-canvas-add-line)
+                                 ("Box" :command cmd-canvas-add-box)))
 
 (clim:make-command-table 'maxima-canvas-command-table
                          :errorp nil
