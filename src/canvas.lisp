@@ -12,6 +12,17 @@
 
 (defvar +variables-list-view+ (make-instance 'variables-list-view))
 
+#+nil
+(clim:define-command (com-follow :name "Follow Link" :command-table foo)
+    ((target 'string))
+  (clim:notify-user clim:*application-frame*
+                    (format nil "Going to ~A" target)))
+
+#+nil
+(defun display (frame pane)
+  (clim:with-output-as-presentation (pane '(com-follow "target") '(clim:command :command-table foo))
+    (write-string "goto target" pane)))
+
 (defclass canvas-object-record (clim:standard-presentation)
   ())
 
@@ -53,7 +64,6 @@
                   :initform nil
                   :accessor param/expression)))
 
-(clim:define-presentation-type param-start-value-presentation ())
 (clim:define-presentation-type param-presentation ())
 
 (defun eval-param (pane expr)
@@ -141,18 +151,23 @@
                         (clim:formatting-cell (pane)
                           (maxima-client:render-maxima-native-expr-toplevel pane symbol-expr))
                         (clim:formatting-cell (pane)
-                          (clim:with-output-as-presentation (pane param 'param-start-value-presentation)
+                          (clim:with-output-as-presentation (pane `(cmd-update-start-value ,param)
+                                                                  '(clim:command :command-table canvas-commands))
                             (format pane "~f" (param/start-value param))))
                         (clim:formatting-cell (pane)
-                          (alexandria:when-let ((v (param/current-value param)))
+                          (clim:with-output-as-presentation (pane `(cmd-update-current-value ,param)
+                                                                  '(clim:command :command-table canvas-commands))
                             (clim:with-text-size (pane :large)
-                              (format pane "~f" v))))
+                              (format pane "~:[unset~;~:*~f~]" (param/current-value param)))))
                         (clim:formatting-cell (pane)
                           (alexandria:when-let ((expr (param/expression param)))
-                            (maxima-client:render-maxima-native-expr-toplevel pane (make-instance 'maxima-native-expr :expr expr))))
+                            (maxima-client:render-maxima-native-expr-toplevel pane (make-instance 'maxima-native-expr :expr expr)))
+                          (clim:with-output-as-presentation (pane `(cmd-update-expression ,param)
+                                                                  '(clim:command :command-table canvas-commands))
+                            (format pane "edit")))
                         (clim:formatting-cell (pane)
-                          (clim:with-output-as-presentation (pane param 'param-presentation)
-                            (format pane "Edit"))))))
+                          ;; TODO: Add delete option
+                          ))))
              (if highlight
                  (clim:surrounding-output-with-border (pane :background highlight-colour
                                                             :line-thickness 0
@@ -593,7 +608,6 @@
     (setf (param/start-value obj) updated-value)
     (redisplay-variables-list-pane)))
 
-#+nil
 (clim:define-command (cmd-update-expr :name "Update expression" :menu nil :command-table canvas-commands)
     ((obj 'param :prompt "Expression"))
   (let ((updated-value nil))
@@ -606,6 +620,7 @@
     (setf (param/expression obj) updated-value)
     (redisplay-variables-list-pane)))
 
+#+nil
 (clim:define-command (cmd-update-variable :name "Update variable" :menu nil :command-table canvas-commands)
     ((obj 'param :prompt "Expression"))
   (let ((updated-start-value nil)
@@ -629,7 +644,8 @@
                                          :prompt "Expression"
                                          :default (alexandria:if-let ((expression (param/expression obj)))
                                                     (make-instance 'maxima-native-expr :expr expression)
-                                                    nil)))))
+                                                    nil)
+                                         :insert-default t))))
     (setf (param/start-value obj) updated-start-value)
     (setf (param/current-value obj) updated-current-value)
     (setf (param/expression obj) (if updated-expr (maxima-native-expr/expr updated-expr) nil))
@@ -665,6 +681,42 @@
     ((scale 'number :prompt "Scale"))
   (let ((pane (find-canvas-pane)))
     (setf (canvas-pane/scale pane) scale)))
+
+(clim:define-command (cmd-update-start-value :name "Set Start Value" :menu nil :command-table canvas-commands)
+    ((obj 'param :prompt "Param"))
+  (let* ((pane (find-interactor-pane))
+         (result (clim:accept 'number
+                              :stream pane
+                              :prompt "New value"
+                              :default (param/start-value obj)
+                              :insert-default t)))
+    (setf (param/start-value obj) result)
+    (setf (param/current-value obj) result)
+    (redisplay-variables-list-pane)))
+
+(clim:define-command (cmd-update-current-value :name "Set Curr Value" :menu nil :command-table canvas-commands)
+    ((obj 'param :prompt "Param"))
+  (let* ((pane (find-interactor-pane))
+         (result (clim:accept 'number
+                              :stream pane
+                              :prompt "New value"
+                              :default (param/current-value obj)
+                              :insert-default t)))
+    (setf (param/current-value obj) result)
+    (redisplay-variables-list-pane)))
+
+(clim:define-command (cmd-update-expression :name "Set Expression" :menu nil :command-table canvas-commands)
+    ((obj 'param :prompt "Param"))
+  (let* ((pane (find-interactor-pane))
+         (result (clim:accept 'maxima-native-expr
+                              :stream pane
+                              :prompt "Expression"
+                              :default (alexandria:if-let ((expression (param/expression obj)))
+                                         (make-instance 'maxima-native-expr :expr expression)
+                                         nil)
+                              :insert-default t)))
+    (setf (param/expression obj) (maxima-native-expr/expr result))
+    (redisplay-variables-list-pane)))
 
 (clim:make-command-table 'object-command-table
                          :errorp nil

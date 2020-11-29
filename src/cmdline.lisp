@@ -399,13 +399,25 @@
 (clim:define-presentation-method clim:accept ((type maxima-native-expr)
                                               (stream drei:drei-input-editing-mixin)
                                               (view clim:textual-view)
-                                              &key)
-  (let ((result (clim:accept 'maxima-input-expression :stream stream :view view :prompt nil)))
+                                              &key
+                                              prompt
+                                              default
+                                              insert-default)
+  (let ((result (clim:accept 'maxima-input-expression
+                             :stream stream
+                             :view view
+                             :prompt prompt
+                             :default (if default
+                                          (make-instance 'maxima-input-expression
+                                                         :expr (maxima-native-expr/src default))
+                                          nil)
+                             :insert-default insert-default)))
     (etypecase result
       (maxima-input-expression 
-       (make-instance 'maxima-native-expr
-                      :expr (third (maxima-input-expression/expr result))
-                      :src (maxima-input-expression/src result)))
+       (values (make-instance 'maxima-native-expr
+                              :expr (third (maxima-input-expression/expr result))
+                              :src (maxima-input-expression/src result))
+               'maxima-native-expr))
       (maxima-input-error
        nil))))
 
