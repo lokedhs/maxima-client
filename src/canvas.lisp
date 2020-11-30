@@ -167,8 +167,9 @@
                                                                   '(clim:command :command-table canvas-commands))
                             (format pane "edit")))
                         (clim:formatting-cell (pane)
-                          ;; TODO: Add delete option
-                          ))))
+                          (clim:with-output-as-presentation (pane `(cmd-remove-variable ,param)
+                                                                  '(clim:command :command-table canvas-commands))
+                            (format pane "remove"))))))
              (if highlight
                  (clim:surrounding-output-with-border (pane :background highlight-colour
                                                             :line-thickness 0
@@ -719,6 +720,12 @@
                                          nil)
                               :insert-default t)))
     (setf (param/expression obj) (maxima-native-expr/expr result))
+    (redisplay-variables-list-pane)))
+
+(clim:define-command (cmd-remove-variable :name "Remove Animation Variable" :menu nil :command-table canvas-commands)
+    ((obj 'param :prompt "Param"))
+  (let ((pane (find-canvas-pane)))
+    (setf (canvas-pane/params pane) (remove obj (canvas-pane/params pane)))
     (redisplay-variables-list-pane)))
 
 (clim:make-command-table 'object-command-table
