@@ -680,8 +680,10 @@
 
 (clim:define-command (cmd-update-scale :name "Set scale" :menu nil :command-table canvas-commands)
     ((scale 'number :prompt "Scale"))
-  (let ((pane (find-canvas-pane)))
-    (setf (canvas-pane/scale pane) scale)))
+  (if (and (realp scale) (plusp scale))
+      (let ((pane (find-canvas-pane)))
+        (setf (canvas-pane/scale pane) scale))
+      (format (find-interactor-pane) "Scale must be a positive real~%")))
 
 (clim:define-command (cmd-update-start-value :name "Set Start Value" :menu nil :command-table canvas-commands)
     ((obj 'param :prompt "Param"))
