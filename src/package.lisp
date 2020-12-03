@@ -148,4 +148,5 @@
            #:canvas-commands
            #:maxima-native-exp
            #:maxima-canvas-command-table
-           #:find-canvas-pane))
+           #:find-canvas-pane
+           #:mlist-as-list))

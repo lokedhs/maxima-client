@@ -109,12 +109,6 @@
 
 ;;; renderer stuff
 
-(defun mlist-as-list (mlist)
-  (unless (and (listp mlist)
-               (eq (caar mlist) 'maxima::mlist))
-    (error "Value is not an mlist: ~s" mlist))
-  (cdr mlist))
-
 (defun make-boxed-output-record (stream rec)
   (if *draw-boxes*
       (clim:with-output-to-output-record (stream)

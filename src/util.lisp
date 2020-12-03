@@ -407,3 +407,4 @@
                               (when (eq (clim:pane-name inner) name)
                                 (return-from find-subpane-named inner)))
                             (list pane))))
+
