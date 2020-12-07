@@ -396,9 +396,9 @@
   (with-aligned-rendering (stream)
     (iterate-exprs (expr exprs maxima-sym :first-sym first)
       (unless first
-        (aligned-spacing 0.2)
+        (aligned-spacing 0.5)
         (render-aligned-string "~a" displayed-sym)
-        (aligned-spacing 0.2))
+        (aligned-spacing 0.5))
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (define-render-function (render-mand maxima::mand stream args)
@@ -835,7 +835,7 @@ Each element should be an output record."
                 (move-rec rec (+ lim-rec-right (/ (char-width stream) 2)) 0)
                 (clim:stream-add-output-record stream rec)))))))))
 
-(define-render-function (render-matrix maxima::$matrix stream args)
+(defun %render-matrix (stream args)
   (let ((rec (clim:with-output-to-output-record (stream)
                (clim:formatting-table (stream :x-spacing (char-width stream) :y-spacing (char-height stream))
                  (loop
@@ -847,6 +847,13 @@ Each element should be an output record."
                                (with-paren-op
                                  (render-maxima-expression stream col))))))))))
     (wrap-with-parens stream rec :style :square :left-spacing (char-width stream) :right-spacing (char-width stream))))
+
+(define-render-function (render-matrix maxima::$matrix stream args)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (%render-matrix stream args))))
+    (dimension-bind (rec :height height)
+      (set-rec-position rec nil (- (+ (/ height 2) (/ (char-height stream) 4))))
+      (clim:stream-add-output-record stream rec))))
 
 (defun render-msetq (stream a b)
   (with-aligned-rendering (stream)
@@ -1145,8 +1152,8 @@ Each element should be an output record."
 
 (defun render-inference-result (stream title exprs displayed-rows)
   (let* ((margin 2)
-         (expr-list (mlist-as-list exprs))
-         (disp-rows-list (mlist-as-list displayed-rows))
+         (expr-list (maxima-list-to-list exprs))
+         (disp-rows-list (maxima-list-to-list displayed-rows))
          (rec-list (loop
                      for i in disp-rows-list
                      collect (clim:with-output-to-output-record (stream)
