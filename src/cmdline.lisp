@@ -2,6 +2,11 @@
 
 (defvar maxima::$font_size 16)
 
+(defvar *delay-command* nil
+  "When DMB-READ is called, the user may type a CLIM command. In this case, DBS-READ will return NIL
+after setting this variable to a list of two elements: (OBJECT TYPE) which is return values from
+ACCEPT. The caller can then return this from the toplevel ACCEPT.")
+
 (clim:define-command-table expression-commands)
 
 (clim:define-command-table maxima-commands
@@ -543,7 +548,7 @@
                 (format pane "~a" (maxima-input-error/message object))))
             nil)
            ((and (listp type) (eq (car type) 'clim:command))
-            (clim:execute-frame-command clim:*application-frame* object)
+            (setq *delay-command* (list object type))
             nil)))))
     (t
      (funcall *old-fn-dbm-read* stream eof-error-p eof-value repeat-if-newline))))
@@ -565,31 +570,36 @@
            (,fn)))))
 
 (defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
-  (let ((eval-ret (catch 'maxima::macsyma-quit
-                    (catch 'eval-expr-error
-                      (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
-                             (*current-stream* stream)
-                             (*standard-output* maxima-stream)
-                             (*debug-io* maxima-stream)
-                             (*standard-input* maxima-stream)
-                             (*use-clim-retrieve* t))
-                        (with-maxima-package
-                          (maybe-catch-errors ((error condition (throw 'eval-expr-error (list :lisp-error condition))))
-                            (maxima::continue :stream maxima-stream :one-shot t))))))))
-    (cond ((eq eval-ret 'maxima::maxima-error)
-           #+nil(present-to-stream (make-instance 'maxima-error
-                                                  :cmd cmd
-                                                  :content "Error from maxima")
-                                   stream)
-           (format stream "Error from maxima~%"))
-          ((and (listp eval-ret)
-                (eq (car eval-ret) :lisp-error))
-           #+nil
-           (present-to-stream (make-instance 'maxima-error
-                                             :cmd cmd
-                                             :content "Error from lisp")
-                              stream)
-           (format stream "Error from Lisp: ~a" (cadr eval-ret))))))
+  (let ((*delay-command* nil))
+    (let ((eval-ret (catch 'maxima::macsyma-quit
+                      (catch 'eval-expr-error
+                        (let* ((maxima-stream (make-instance 'maxima-io :clim-stream stream))
+                               (*current-stream* stream)
+                               (*standard-output* maxima-stream)
+                               (*debug-io* maxima-stream)
+                               (*standard-input* maxima-stream)
+                               (*use-clim-retrieve* t))
+                          (with-maxima-package
+                            (maybe-catch-errors ((error condition (throw 'eval-expr-error (list :lisp-error condition))))
+                              (maxima::continue :stream maxima-stream :one-shot t))))))))
+      (cond ((eq eval-ret 'maxima::maxima-error)
+             #+nil(present-to-stream (make-instance 'maxima-error
+                                                    :cmd cmd
+                                                    :content "Error from maxima")
+                                     stream)
+             (format stream "Error from maxima~%")
+             nil)
+            ((and (listp eval-ret)
+                  (eq (car eval-ret) :lisp-error))
+             #+nil
+             (present-to-stream (make-instance 'maxima-error
+                                               :cmd cmd
+                                               :content "Error from lisp")
+                                stream)
+             (format stream "Error from Lisp: ~a" (cadr eval-ret))
+             nil)
+            (*delay-command*
+             (values (car *delay-command*) (cadr *delay-command*)))))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -679,11 +689,7 @@
 (clim:define-command (cmd-show-canvas :name "Show Canvas" :menu t :command-table maxima-commands)
     ()
   (init-canvas-pane)
-  (maxima-client.workbench:show-top-pane (find-workbench-pane) t)
-  #+nil
-  (maxima-client.canvas::cmd-canvas-add-circle (string-to-native-expr "50")
-                                               (string-to-native-expr "x")
-                                               (string-to-native-expr "y")))
+  (maxima-client.workbench:show-top-pane (find-workbench-pane) t))
 
 (clim:define-command (cmd-hide-canvas :name "Hide Canvas" :menu t :command-table maxima-commands)
     ()
