@@ -577,7 +577,8 @@
                                           :display-time t
                                           :borders nil
                                           :text-margins '(:left (:absolute 2)
-                                                          :right (:relative 2))))
+                                                          :right (:relative 2))
+                                          :scroll-bars :both))
             inner)))
 
 (defun compute-x-offset (pane)
