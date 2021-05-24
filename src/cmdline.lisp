@@ -3,7 +3,7 @@
 (defvar maxima::$font_size 16)
 
 (defvar *delay-command* nil
-  "When DMB-READ is called, the user may type a CLIM command. In this case, DBS-READ will return NIL
+  "When DMB-READ is called, the user may type a CLIM command. In this case, DBM-READ will return NIL
 after setting this variable to a list of two elements: (OBJECT TYPE) which is return values from
 ACCEPT. The caller can then return this from the toplevel ACCEPT.")
 
