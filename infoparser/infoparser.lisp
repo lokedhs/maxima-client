@@ -392,7 +392,7 @@
                    (:example-info . ,(remove-group-entries example))))))
 
 (defun parse-arglist (args-string)
-  (if args-string
+  (if (and args-string (plusp (length args-string)))
       (let ((parsed-arglist (with-input-from-string (s args-string)
                               (parse-stream s nil))))
         (unless (and (alexandria:sequence-of-length-p parsed-arglist 1)
@@ -422,6 +422,34 @@
                   (list fname-name parsed-arglist))))
     until completed-p))
 
+(defun parse-fname-entry (string)
+  (multiple-value-bind (match strings)
+      (cl-ppcre:scan-to-strings "^@fname{([^ }]+)} +(.*[^ ]) *$" string)
+    (unless match
+      (error "Unexpected format for @fname row: ~s" string))
+    (let* ((fname-name (aref strings 0))
+           (fname-args (aref strings 1))
+           (parsed-arglist (parse-arglist fname-args)))
+      (list fname-name parsed-arglist))))
+
+(defun parse-fname-list (string)
+  (let ((indexes (loop
+                   with index = 0
+                   for pos = (multiple-value-bind (start end)
+                                 (cl-ppcre:scan "@fname" string :start index)
+                               (when start
+                                 (setq index end)
+                                 start))
+                   while pos
+                   collect pos)))
+    (list (parse-arglist (if indexes
+                             (subseq string 0 (car indexes))
+                             string))
+          (loop
+            for (first . rest) on indexes
+            collect (parse-fname-entry (subseq string first (or (car rest) (length string))))))))
+
+#+nil
 (defun parse-deffn (stream type name args anchors)
   (let ((parsed-arglist (parse-arglist args)))
     (list* :deffn `(,type
@@ -430,6 +458,17 @@
                     ,@(if anchors (list :anchors anchors)))
            (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
 
+(defun parse-deffn (stream type name args anchors)
+  (destructuring-bind (parsed-args fname-list)
+      (parse-fname-list args)
+    (list* :deffn `(,type
+                    ,name
+                    :arglist ,parsed-args
+                    ,@(if fname-list (list :definitions fname-list) nil)
+                    ,@(if anchors (list :anchors anchors) nil))
+           (parse-stream stream (cl-ppcre:create-scanner "^@end +deffn")))))
+
+#+nil
 (defun parse-multiple-deffn (stream type name args anchors)
   (let ((definitions (parse-fnames stream)))
     (list* :deffn `(,type
@@ -446,6 +485,7 @@
                   ,@(if anchors (list :anchors anchors)))
          (parse-stream stream (cl-ppcre:create-scanner "^@end +defvr"))))
 
+#+nil
 (defun parse-multiple-defvr (stream type name args anchors)
   (let ((definitions (parse-fnames stream)))
     (list* :deffn `(,type
@@ -573,7 +613,7 @@
           with injected-s = initial-content
           for line = (if injected-s
                          (prog1 (car injected-s) (setq injected-s (cdr injected-s)))
-                         (read-line stream nil nil))
+                         (read-line-with-continue stream))
           for s = (trim-comment line)
           do (setq terminating-string s)
           until (or (null s)
@@ -621,6 +661,7 @@
                (("^@iftex *$")
                 (skip-block stream "^@end iftex"))
 
+               #+nil
                (("^@deffn *{([^}]+)} +([^ ]+)(?: *(.*[^ ]))? +@ *$" args)
                 (let ((anchors (collect-paragraph)))
                   (info-collector (parse-multiple-deffn stream (aref args 0) (aref args 1) (aref args 2) anchors))))
@@ -629,6 +670,7 @@
                 (let ((anchors (collect-paragraph)))
                   (info-collector (parse-deffn stream (aref args 0) (aref args 1) (aref args 2) anchors))))
 
+               #+nil
                (("^@defvr +{([^}]+)} +(.*[^ ])(?: *(.*[^ ]))? +@ *$" args)
                 (let ((anchors (collect-paragraph)))
                   (info-collector (parse-multiple-defvr stream (aref args 0) (aref args 1) (aref args 2) anchors))))
@@ -975,6 +1017,27 @@ corresponding lisp files to the output directory."
               ("png" (copy-file-to-dir file destination-dir))
               ("pdf" (convert-pdf-to-png file destination-name)))))))))
 
+(defun read-line-with-continue (stream)
+  (let ((first-line (read-line stream nil nil)))
+    (if (null first-line)
+        nil
+        (with-output-to-string (out)
+          (loop
+            with line = first-line
+            for first = t then nil
+            unless first
+              do (format out " ")
+            do (multiple-value-bind (matched strings)
+                   (cl-ppcre:scan-to-strings "^(.*)@ *$" line)
+                 (cond (matched
+                        (format out "~a" (aref strings 0)))
+                       (t
+                        (format out "~a" line)
+                        (return nil)))
+                 (setq line (read-line stream nil nil))
+                 (unless line
+                   (error "Last line is a continuation line"))))))))
+
 (defun parse-toplevel-file (file destination-directory &key skip-example)
   (with-open-file (stream file :direction :input)
     (skip-block stream "^@end titlepage *$")
@@ -989,7 +1052,7 @@ corresponding lisp files to the output directory."
       ;; before the file content.
       (loop
         with current-prefix = nil
-        for s = (read-line stream nil nil)
+        for s = (read-line-with-continue stream)
         while s
         do (multiple-value-bind (match strings)
                (cl-ppcre:scan-to-strings "^@include +([^ ]+) *$" s)
