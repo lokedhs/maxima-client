@@ -506,7 +506,7 @@
   (redisplay-variables-list-pane))
 
 (defun schedule-next-frame (pane)
-  (clim-internals::schedule-timer-event pane 'animation-step 0.02))
+  (clime:schedule-event pane (make-instance 'clim:timer-event :sheet pane) 0.02))
 
 (defun canvas-animate (pane)
   (with-accessors ((animation-state canvas-pane/animation-state)) pane
