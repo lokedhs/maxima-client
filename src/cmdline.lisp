@@ -547,7 +547,7 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
               (clim:with-drawing-options (pane :ink clim:+red+ :text-style (clim:make-text-style :fix :roman size))
                 (format pane "~a" (maxima-input-error/message object))))
             nil)
-           ((and (listp type) (eq (car type) 'clim:command))
+           ((eq type 'clim:command)
             (setq *delay-command* (list object type))
             nil)))))
     (t
