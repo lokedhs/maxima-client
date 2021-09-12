@@ -1,14 +1,17 @@
 (in-package :maxima)
 
+#+nil
 (maxima-client.common::wrap-function check-option-format (option)
   (if (eq (cadr option) '$clim)
       '$clim
       ;; ELSE: Call into the old implementation
       (funcall *OLD-FN-CHECK-OPTION-FORMAT* option)))
 
+#+nil
 (maxima-client.common::wrap-function $plot2d (fun &optional range &rest extra-options)
   (apply #'cplot2d fun range extra-options))
 
+#+nil
 (defun cplot2d (fun &optional range &rest extra-options)
   (let ((orig-fun fun)
         (orig-range range)
