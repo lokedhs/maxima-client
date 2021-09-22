@@ -20,6 +20,7 @@
       (when (listp arg-list)
         (let ((arg-type-state :initial)
               (optionals nil)
+              (key-list nil)
               (first t))
           (labels ((print-arg (arg)
                      (if first
@@ -29,12 +30,16 @@
                        (ecase arg-type-state
                          (:initial (format out "~a" arg-fixed))
                          (:optional (push arg-fixed optionals))
+                         (:key (push arg-fixed key-list))
                          (:rest (format out "...~a" arg-fixed))
                          (:aux nil))))
                    (collect-optional ()
                      (when optionals
                        (format out "[~{~a~^ ~}]" (reverse optionals))
-                       (setf optionals nil))))
+                       (setf optionals nil)))
+                   (collect-key ()
+                     (when key-list
+                       (format out "[keys:~{ ~a~}]" (reverse key-list)))))
             (loop
               for arg in arg-list
               do (cond ((eq arg '&optional)
@@ -46,7 +51,7 @@
                         (collect-optional)
                         (setq arg-type-state :rest))
                        ((eq arg '&key)
-                        (collect-optional)
+                        (collect-key)
                         (setq arg-type-state :key))
                        ((listp arg)
                         (when (eq arg-type-state :initial)
