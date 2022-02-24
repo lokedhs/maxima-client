@@ -737,10 +737,12 @@
 
                (("^@noindent *$") nil)
                (("^@ifnottex *$") nil)
-               (("^@end ifnottex *$"))
+               (("^@end ifnottex *$") nil)
 
                (("^@([a-z]+)(?: +(.*[^ ]))? *$" args)
                 (log:warn "Unknown tag: ~s, args: ~s" (aref args 0) (aref args 1)))
+
+               (("^@opencatbox{[^]]+} *$") (skip-block stream "^@closecatbox"))
 
                (t
                 ;; This is normal content, so we'll collect it into the output string
