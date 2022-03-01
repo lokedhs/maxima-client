@@ -821,13 +821,13 @@
 
 (clim:make-command-table 'object-command-table
                          :errorp nil
-                         :menu '(("Circle" :command cmd-canvas-add-circle)
-                                 ("Line" :command cmd-canvas-add-line)
-                                 ("Box" :command cmd-canvas-add-box)))
+                         :menu '(("Circle" :command (cmd-canvas-add-circle))
+                                 ("Line" :command (cmd-canvas-add-line))
+                                 ("Box" :command (cmd-canvas-add-box))))
 
 (clim:make-command-table 'maxima-canvas-command-table
                          :errorp nil
-                         :menu '(("Toggle canvas" :command maxima-client::cmd-toggle-canvas)
-                                 ("Change step size" :command cmd-update-step-size)
-                                 ("Add dependent variable" :command cmd-add-variable)
+                         :menu '(("Toggle canvas" :command (maxima-client::cmd-toggle-canvas))
+                                 ("Change step size" :command (cmd-update-step-size))
+                                 ("Add dependent variable" :command (cmd-add-variable))
                                  ("Add object" :menu object-command-table)))

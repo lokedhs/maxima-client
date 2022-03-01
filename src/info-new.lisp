@@ -343,7 +343,7 @@
                                (maxima-client.markup:node-reference (maxima-client.markup:named-reference/destination name)))))
     (process-doc-command-and-redisplay clim:*application-frame* :node node-name)))
 
-(clim:define-command (cmd-open-help-function :name "Function" :menu t :command-table info-commands)
+(clim:define-command (cmd-open-help-function :name "Info" :menu t :command-table info-commands)
     ((name 'maxima-function-name :prompt "Name"))
   (process-doc-command-and-redisplay clim:*application-frame* :function name))
 
@@ -390,7 +390,7 @@
     (process-doc-command-and-redisplay clim:*application-frame* :category name)))
 
 (clim:define-command (find-in-info-command :name "Find" :menu t :command-table info-commands)
-    ((keywords string :prompt "Keywords"))
+    ((keywords 'string :prompt "Keywords"))
   (let* ((words (split-sequence:split-sequence #\Space keywords :remove-empty-subseqs t))
          (fn-list (find-functions-by-keyword words))
          (stream (find-interaction-pane)))
@@ -415,16 +415,16 @@
 
 (clim:make-command-table 'info-file-command-table
                          :errorp nil
-                         :menu '(("Close" :command cmd-info-close)))
+                         :menu '(("Close" :command (cmd-info-close))))
 
 (clim:make-command-table 'info-nav-command-table
                          :errorp nil
-                         :menu '(("History Back" :command cmd-prev-screen)
-                                 ("History Forward" :command cmd-next-screen)))
+                         :menu '(("History Back" :command (cmd-prev-screen))
+                                 ("History Forward" :command (cmd-next-screen))))
 
 (clim:make-command-table 'info-doc-command-table
                          :errorp nil
-                         :menu '(("Maxima-Client Introduction" :command cmd-doc-introduction)
-                                 ("Maxima Documentation" :command cmd-doc-maxima-manual)
-                                 ("Describe Function or Variable" :command cmd-open-help-function)
-                                 ("Search" :command find-in-info-command)))
+                         :menu '(("Maxima-Client Introduction" :command (cmd-doc-introduction))
+                                 ("Maxima Documentation" :command (cmd-doc-maxima-manual))
+                                 ("Describe Function or Variable" :command (cmd-open-help-function))
+                                 ("Search" :command (find-in-info-command))))

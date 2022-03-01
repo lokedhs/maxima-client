@@ -672,7 +672,7 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
   (clim:frame-exit clim:*application-frame*))
 
 (clim:define-command (maxima-eval-lisp-expression :name "Lisp" :menu "Eval Lisp form" :command-table maxima-commands)
-    ((form maxima-lisp-package-form :prompt "Form"))
+    ((form 'maxima-lisp-package-form :prompt "Form"))
   (let ((stream (find-interactor-pane))
         (result (with-maxima-package
                   (maxima::eval form))))
@@ -750,7 +750,7 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
     (maxima-client.doc-new:display-function-help string)))
 
 (clim:define-command (font-size-command :name "Set font size" :menu t :command-table maxima-commands)
-    ((size integer :prompt "points"))
+    ((size 'integer :prompt "points"))
   (setq maxima::$font_size size)
   (format t "~%Maths font size changed to ~a~%~%" size))
 
@@ -805,12 +805,12 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
   (list obj))
 
 (clim:define-command (copy-expression-as-maxima-command :name "Copy expression as text" :menu t :command-table expression-commands)
-    ((expr maxima-native-expr :prompt "Expression"))
+    ((expr 'maxima-native-expr :prompt "Expression"))
   (let ((pane (find-interactor-pane)))
     (clim-extensions:publish-selection pane :clipboard (maxima-native-expr/src expr) 'string)))
 
 (clim:define-command (copy-expression-as-latex :name "Copy expression as LaTeX" :menu t :command-table expression-commands)
-    ((expr maxima-native-expr :prompt "Expression"))
+    ((expr 'maxima-native-expr :prompt "Expression"))
   (let ((pane (find-interactor-pane)))
     (clim-extensions:publish-selection pane :clipboard (maxima-expr-to-latex (maxima-native-expr/expr expr)) 'string)))
 
@@ -834,7 +834,7 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
 
 (clim:make-command-table 'maxima-file-command-table
                          :errorp nil
-                         :menu '(("Quit" :command maxima-quit)))
+                         :menu '(("Quit" :command (maxima-quit))))
 
 (clim:make-command-table 'maxima-plot-command-table
                          :errorp nil
@@ -843,13 +843,13 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
                                                        ,clim:*unsupplied-argument-marker*
                                                        ,clim:*unsupplied-argument-marker*
                                                        ,clim:*unsupplied-argument-marker*))
-                                 ("Parametric" :command plot2d-with-range)
-                                 ("Plot example" :command plot2d-demo)))
+                                 ("Parametric" :command (plot2d-with-range))
+                                 ("Plot example" :command (plot2d-demo))))
 
 (clim:make-command-table 'maxima-lisp-command-table
                          :errorp nil
-                         :menu '(("Eval Lisp Form" :command maxima-eval-lisp-expression)
-                                 ("To Lisp" :command maxima-lisp-repl)))
+                         :menu '(("Eval Lisp Form" :command (maxima-eval-lisp-expression))
+                                 ("To Lisp" :command (maxima-lisp-repl))))
 
 (clim:make-command-table 'font-size-command-table
                          :errorp nil
@@ -864,11 +864,18 @@ ACCEPT. The caller can then return this from the toplevel ACCEPT.")
 
 (clim:make-command-table 'maxima-watcher-command-table
                          :errorp nil
-                         :menu '(("Toggle Watcher" :command cmd-toggle-watcher)
-                                 ("Watch Variable" :command cmd-watch-variable)))
+                         :menu '(("Toggle Watcher" :command (cmd-toggle-watcher))
+                                 ("Watch Variable" :command (cmd-watch-variable))))
+
+(clim:define-command (cmd-canvas-xadd-circle :name "Xadd Circle" :menu t :command-table maxima-commands)
+    ((size 'maxima-native-expr :prompt "Size")
+     (x 'maxima-native-expr :prompt "X-Position")
+     (y 'maxima-native-expr :prompt "Y-Position"))
+  (format *debug-io* "foo ~s ~s ~s" size x y))
 
 (clim:make-command-table 'maxima-help-command-table
                          :errorp nil
                          :menu '(("Introduction" :command (show-documentation-frame-command))
                                  ("Maxima Documentation" :command (cmd-show-maxima-manual))
-                                 ("Symbol Help" :command info-command)))
+                                 ("Symbol Help" :command (info-command))
+                                 ("xadd" :command (cmd-canvas-xadd-circle))))
