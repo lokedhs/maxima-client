@@ -596,7 +596,7 @@
          (y-offset (compute-y-offset pane))
          (w (clim:rectangle-width viewport))
          (h (clim:rectangle-height viewport))
-         (style (clim:make-text-style :sals-serif :normal :small))
+         (style (clim:make-text-style :sans-serif :normal :small))
          (char-height (multiple-value-bind (width height) (clim:text-size pane "M" :text-style style)
                         (declare (ignore width))
                         height)))
